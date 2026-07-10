@@ -31,6 +31,16 @@ package_zip() {
   (cd "${DIST_DIR}" && zip -q "${name}.zip" "${name}.exe")
 }
 
+write_checksums() {
+  local files=("$@")
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "${files[@]}"
+    return
+  fi
+
+  shasum -a 256 "${files[@]}"
+}
+
 build darwin arm64
 build darwin amd64
 build linux amd64
@@ -47,7 +57,7 @@ package_zip "${APP_NAME}-windows-arm64"
 
 (
   cd "${DIST_DIR}"
-  shasum -a 256 \
+  write_checksums \
     "${APP_NAME}"-darwin-*.tar.gz \
     "${APP_NAME}"-linux-*.tar.gz \
     "${APP_NAME}"-windows-*.zip \

@@ -62,11 +62,17 @@ Build release packages:
 
 Release artifacts are written to `dist/`.
 
+GitHub Actions:
+
+- `CI` runs on pushes and pull requests.
+- `Release` runs on tags matching `v*` and publishes packaged artifacts to GitHub Releases.
+
 ## Project Layout
 
 ```text
 .
 ├── docs/                 Detailed documentation
+├── .github/workflows/    CI and release workflows
 ├── scripts/              Build and release scripts
 ├── dist/                 Generated release artifacts
 ├── main.go               CLI implementation

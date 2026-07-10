@@ -1,0 +1,53 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Verify formatting
+        run: |
+          gofmt -w main.go
+          git diff --exit-code
+
+      - name: Run tests
+        run: go test ./...
+
+      - name: Run vet
+        run: go vet ./...
+
+      - name: Build local binary
+        run: go build -o obs-agent-connector .
+
+  package-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build release artifacts
+        run: ./scripts/build-release.sh
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-agent-connector-build-artifacts
+          path: dist/
