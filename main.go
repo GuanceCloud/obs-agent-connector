@@ -2,12 +2,18 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 )
 
 const (
@@ -15,7 +21,10 @@ const (
 	fixedType         = "gtrace"
 	defaultAgent      = "all"
 	defaultStaticBase = "https://static.guance.com"
+	releaseRepo       = "GuanceCloud/obs-agent-connector"
 )
+
+var version = "dev"
 
 type plugin struct {
 	Name         string
@@ -42,6 +51,11 @@ type checkResult struct {
 	Check   string
 	Message string
 	Fix     string
+}
+
+type githubRelease struct {
+	TagName string `json:"tag_name"`
+	HTMLURL string `json:"html_url"`
 }
 
 var plugins = map[string]plugin{
@@ -180,6 +194,8 @@ func run(args []string) error {
 		return update(args[1:])
 	case "remove":
 		return remove(args[1:])
+	case "version":
+		return showVersion(args[1:])
 	case "-h", "--help", "help":
 		printUsage()
 		return nil
@@ -200,12 +216,16 @@ Commands:
   install [agent|all]   Install Agent plugins
   update <agent>        Update one installed Agent plugin
   remove [agent|all]    Remove Agent plugins
+  version               Show version and check for updates
+  version               Show current version and check for updates
 
 Examples:
   obs-agent-connector install codex
   obs-agent-connector install qoder-cn
   obs-agent-connector update codex
   obs-agent-connector remove codex
+  obs-agent-connector version
+  obs-agent-connector version
 
 install prompts for:
   Endpoint
@@ -538,6 +558,60 @@ func remove(args []string) error {
 	return nil
 }
 
+func showVersion(args []string) error {
+	fs := flag.NewFlagSet("version", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	offline := fs.Bool("offline", false, "Skip remote release check")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() > 0 {
+		return fmt.Errorf("unrecognized version arguments: %s", strings.Join(fs.Args(), " "))
+	}
+
+	fmt.Printf("Version: %s\n", version)
+	fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+
+	if *offline {
+		return nil
+	}
+
+	release, err := fetchLatestRelease()
+	if err != nil {
+		fmt.Printf("Latest release: unavailable (%v)\n", err)
+		return nil
+	}
+
+	fmt.Printf("Latest release: %s\n", release.TagName)
+	fmt.Printf("Release page: %s\n", release.HTMLURL)
+
+	if version == release.TagName {
+		fmt.Println("Status: up to date")
+		return nil
+	}
+
+	comparison, ok := compareReleaseVersions(version, release.TagName)
+	if ok && comparison >= 0 {
+		fmt.Println("Status: up to date")
+		return nil
+	}
+
+	fmt.Println("Status: update available")
+	command, note, err := buildSelfUpdateCommand(release.TagName)
+	if err != nil {
+		fmt.Printf("Update command: unavailable (%v)\n", err)
+		return nil
+	}
+
+	fmt.Println("Update command:")
+	fmt.Println(command)
+	if note != "" {
+		fmt.Printf("Note: %s\n", note)
+	}
+
+	return nil
+}
+
 func selectPlugins(target string) ([]plugin, error) {
 	target = strings.TrimSpace(strings.ToLower(target))
 	if target == "" {
@@ -662,6 +736,219 @@ func checkInstallerOnline(staticBase string, p plugin) checkResult {
 		Check:   "installer",
 		Message: "installer script is not reachable: " + url,
 		Fix:     "Check network access or use --static-base",
+	}
+}
+
+func fetchLatestRelease() (githubRelease, error) {
+	client := &http.Client{Timeout: 8 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/"+releaseRepo+"/releases/latest", nil)
+	if err != nil {
+		return githubRelease{}, err
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("User-Agent", appName)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return githubRelease{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return fetchLatestReleaseRedirect()
+	}
+
+	var release githubRelease
+	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+		return fetchLatestReleaseRedirect()
+	}
+	if release.TagName == "" {
+		return fetchLatestReleaseRedirect()
+	}
+	return release, nil
+}
+
+func fetchLatestReleaseRedirect() (githubRelease, error) {
+	client := &http.Client{
+		Timeout: 8 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+
+	url := "https://github.com/" + releaseRepo + "/releases/latest"
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return githubRelease{}, err
+	}
+	req.Header.Set("User-Agent", appName)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return githubRelease{}, err
+	}
+	defer resp.Body.Close()
+
+	location := resp.Header.Get("Location")
+	if location == "" {
+		return githubRelease{}, fmt.Errorf("missing redirect location")
+	}
+	if strings.HasSuffix(location, "/releases") {
+		return githubRelease{}, fmt.Errorf("no published releases found")
+	}
+
+	tag := latestTagFromLocation(location)
+	if tag == "" {
+		return githubRelease{}, fmt.Errorf("unable to parse latest release tag")
+	}
+
+	return githubRelease{
+		TagName: tag,
+		HTMLURL: "https://github.com/" + releaseRepo + "/releases/tag/" + tag,
+	}, nil
+}
+
+func latestTagFromLocation(location string) string {
+	marker := "/tag/"
+	index := strings.LastIndex(location, marker)
+	if index < 0 {
+		return ""
+	}
+	return strings.TrimSpace(location[index+len(marker):])
+}
+
+func compareReleaseVersions(current string, latest string) (int, bool) {
+	currentParts, ok := parseVersionParts(current)
+	if !ok {
+		return 0, false
+	}
+	latestParts, ok := parseVersionParts(latest)
+	if !ok {
+		return 0, false
+	}
+
+	maxLen := len(currentParts)
+	if len(latestParts) > maxLen {
+		maxLen = len(latestParts)
+	}
+
+	for i := 0; i < maxLen; i++ {
+		currentValue := 0
+		latestValue := 0
+		if i < len(currentParts) {
+			currentValue = currentParts[i]
+		}
+		if i < len(latestParts) {
+			latestValue = latestParts[i]
+		}
+		switch {
+		case currentValue < latestValue:
+			return -1, true
+		case currentValue > latestValue:
+			return 1, true
+		}
+	}
+
+	return 0, true
+}
+
+func parseVersionParts(value string) ([]int, bool) {
+	trimmed := strings.TrimSpace(strings.TrimPrefix(value, "v"))
+	if trimmed == "" || trimmed == "dev" {
+		return nil, false
+	}
+
+	segments := strings.Split(trimmed, ".")
+	parts := make([]int, 0, len(segments))
+	for _, segment := range segments {
+		if segment == "" {
+			return nil, false
+		}
+		digits := takeLeadingDigits(segment)
+		if digits == "" {
+			return nil, false
+		}
+		number, err := strconv.Atoi(digits)
+		if err != nil {
+			return nil, false
+		}
+		parts = append(parts, number)
+	}
+	return parts, true
+}
+
+func takeLeadingDigits(value string) string {
+	var builder strings.Builder
+	for _, r := range value {
+		if r < '0' || r > '9' {
+			break
+		}
+		builder.WriteRune(r)
+	}
+	return builder.String()
+}
+
+func buildSelfUpdateCommand(tag string) (string, string, error) {
+	executablePath, err := os.Executable()
+	if err != nil {
+		return "", "", err
+	}
+	executablePath, err = filepath.EvalSymlinks(executablePath)
+	if err != nil {
+		return "", "", err
+	}
+
+	packageName, binaryName, _, err := releaseAssetNames()
+	if err != nil {
+		return "", "", err
+	}
+
+	downloadURL := fmt.Sprintf(
+		"https://github.com/%s/releases/download/%s/%s",
+		releaseRepo,
+		tag,
+		packageName,
+	)
+
+	if runtime.GOOS == "windows" {
+		command := fmt.Sprintf(
+			"powershell -Command \"Invoke-WebRequest -Uri %s -OutFile $env:TEMP\\%s; Expand-Archive -Path $env:TEMP\\%s -DestinationPath $env:TEMP\\obs-agent-connector-update -Force; Copy-Item $env:TEMP\\obs-agent-connector-update\\%s %s -Force\"",
+			windowsDoubleQuote(downloadURL),
+			windowsDoubleQuote(packageName),
+			windowsDoubleQuote(packageName),
+			windowsDoubleQuote(binaryName),
+			windowsDoubleQuote(executablePath),
+		)
+		return command, "", nil
+	}
+
+	archivePath := "/tmp/" + packageName
+	extractedPath := "/tmp/" + binaryName
+	command := fmt.Sprintf(
+		"curl -fsSL -o %s %s && tar -xzf %s -C /tmp && install -m 0755 %s %s",
+		shellQuote(archivePath),
+		shellQuote(downloadURL),
+		shellQuote(archivePath),
+		shellQuote(extractedPath),
+		shellQuote(executablePath),
+	)
+
+	note := "If the current executable path requires elevated permissions, prefix the final install step with sudo."
+	return command, note, nil
+}
+
+func releaseAssetNames() (packageName string, binaryName string, extension string, err error) {
+	switch runtime.GOOS {
+	case "darwin", "linux":
+		binaryName = fmt.Sprintf("%s-%s-%s", appName, runtime.GOOS, runtime.GOARCH)
+		extension = ".tar.gz"
+		return binaryName + extension, binaryName, extension, nil
+	case "windows":
+		binaryName = fmt.Sprintf("%s-%s-%s.exe", appName, runtime.GOOS, runtime.GOARCH)
+		extension = ".zip"
+		return strings.TrimSuffix(binaryName, ".exe") + extension, binaryName, extension, nil
+	default:
+		return "", "", "", fmt.Errorf("unsupported platform %s/%s", runtime.GOOS, runtime.GOARCH)
 	}
 }
 
@@ -1054,4 +1341,8 @@ func shellQuote(value string) string {
 		return value
 	}
 	return "'" + strings.ReplaceAll(value, "'", `'\''`) + "'"
+}
+
+func windowsDoubleQuote(value string) string {
+	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
 }

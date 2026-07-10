@@ -12,6 +12,7 @@ The tool provides a single entry point for plugin installation, update, removal,
 - Remove installed plugins while keeping configuration by default.
 - Detect installed plugins and their configuration paths.
 - Diagnose local environment issues with `doctor`.
+- Show the current CLI version and check whether a newer GitHub release is available.
 - Support separate Qoder international and China editions.
 - Build release packages for macOS, Linux, and Windows.
 
@@ -35,6 +36,7 @@ obs-agent-connector install codex
 obs-agent-connector install qoder-cn
 obs-agent-connector update codex
 obs-agent-connector remove codex
+obs-agent-connector version
 ```
 
 During installation, the CLI prompts for:
@@ -61,6 +63,7 @@ Build release packages:
 ```
 
 Release artifacts are written to `dist/`.
+Tagged release builds embed the Git tag as the CLI version.
 
 GitHub Actions:
 

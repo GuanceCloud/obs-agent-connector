@@ -4,8 +4,17 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 DIST_DIR="${ROOT_DIR}/dist"
 APP_NAME="obs-agent-connector"
+VERSION="${VERSION:-}"
 
 mkdir -p "${DIST_DIR}"
+
+if [[ -z "${VERSION}" ]]; then
+  if git -C "${ROOT_DIR}" describe --tags --exact-match >/dev/null 2>&1; then
+    VERSION="$(git -C "${ROOT_DIR}" describe --tags --exact-match)"
+  else
+    VERSION="dev"
+  fi
+fi
 
 build() {
   local goos="$1"
@@ -18,7 +27,7 @@ build() {
   local output="${DIST_DIR}/${APP_NAME}-${goos}-${goarch}${suffix}"
   echo "Building ${goos}/${goarch}"
   GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 \
-    go build -trimpath -ldflags='-s -w' -o "${output}" "${ROOT_DIR}"
+    go build -trimpath -ldflags="-s -w -X main.version=${VERSION}" -o "${output}" "${ROOT_DIR}"
 }
 
 package_tar() {

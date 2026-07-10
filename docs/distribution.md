@@ -20,6 +20,7 @@ The script builds:
 | Windows | ARM64 | `obs-agent-connector-windows-arm64.zip` |
 
 The script also writes `dist/SHA256SUMS`.
+If `VERSION` is set, the script embeds that value into the built binaries.
 
 ## macOS Install Example
 

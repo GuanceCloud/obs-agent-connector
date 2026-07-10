@@ -15,6 +15,7 @@ obs-agent-connector <command> [arguments]
 | `install [agent\|all]` | Install one or more Agent plugins using the remote plugin installer. |
 | `update <agent>` | Update one installed Agent plugin without modifying its current configuration. |
 | `remove [agent\|all]` | Remove installed Agent plugins. Configuration files are kept unless `--purge-config` is used. |
+| `version` | Show the current CLI version, check the latest GitHub release, and print a matching self-update command when a newer release is available. |
 
 ## Install
 
@@ -96,4 +97,18 @@ Check remote installer scripts:
 
 ```bash
 obs-agent-connector doctor --online
+```
+
+## Version
+
+Show the current version and check for a newer release:
+
+```bash
+obs-agent-connector version
+```
+
+Skip the remote release check:
+
+```bash
+obs-agent-connector version --offline
 ```
