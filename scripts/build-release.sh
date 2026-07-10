@@ -1,0 +1,57 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+DIST_DIR="${ROOT_DIR}/dist"
+APP_NAME="obs-agent-connector"
+
+mkdir -p "${DIST_DIR}"
+
+build() {
+  local goos="$1"
+  local goarch="$2"
+  local suffix=""
+  if [[ "${goos}" == "windows" ]]; then
+    suffix=".exe"
+  fi
+
+  local output="${DIST_DIR}/${APP_NAME}-${goos}-${goarch}${suffix}"
+  echo "Building ${goos}/${goarch}"
+  GOOS="${goos}" GOARCH="${goarch}" CGO_ENABLED=0 \
+    go build -trimpath -ldflags='-s -w' -o "${output}" "${ROOT_DIR}"
+}
+
+package_tar() {
+  local name="$1"
+  tar -C "${DIST_DIR}" -czf "${DIST_DIR}/${name}.tar.gz" "${name}"
+}
+
+package_zip() {
+  local name="$1"
+  (cd "${DIST_DIR}" && zip -q "${name}.zip" "${name}.exe")
+}
+
+build darwin arm64
+build darwin amd64
+build linux amd64
+build linux arm64
+build windows amd64
+build windows arm64
+
+package_tar "${APP_NAME}-darwin-arm64"
+package_tar "${APP_NAME}-darwin-amd64"
+package_tar "${APP_NAME}-linux-amd64"
+package_tar "${APP_NAME}-linux-arm64"
+package_zip "${APP_NAME}-windows-amd64"
+package_zip "${APP_NAME}-windows-arm64"
+
+(
+  cd "${DIST_DIR}"
+  shasum -a 256 \
+    "${APP_NAME}"-darwin-*.tar.gz \
+    "${APP_NAME}"-linux-*.tar.gz \
+    "${APP_NAME}"-windows-*.zip \
+    > SHA256SUMS
+)
+
+echo "Release artifacts written to ${DIST_DIR}"

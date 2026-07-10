@@ -1,0 +1,6 @@
+/obs-agent-connector
+/dist/
+.DS_Store
+*.tmp
+*.new
+*.bak

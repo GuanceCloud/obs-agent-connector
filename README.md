@@ -1,0 +1,81 @@
+# obs-agent-connector
+
+`obs-agent-connector` is a command-line tool for installing and managing OBS/GTrace Agent plugins across multiple AI coding agents.
+
+The tool provides a single entry point for plugin installation, update, removal, local status inspection, and environment diagnostics. It delegates the final runtime configuration generation to each Agent plugin installer.
+
+## Features
+
+- Install Agent plugins through the official remote installer scripts.
+- Collect required OBS/GTrace parameters interactively.
+- Update one installed Agent plugin without modifying existing configuration.
+- Remove installed plugins while keeping configuration by default.
+- Detect installed plugins and their configuration paths.
+- Diagnose local environment issues with `doctor`.
+- Support separate Qoder international and China editions.
+- Build release packages for macOS, Linux, and Windows.
+
+## Supported Agents
+
+| Agent | Notes |
+| --- | --- |
+| `claude` | Claude plugin |
+| `codex` | Codex plugin |
+| `hermes` | Hermes plugin |
+| `openclaw` | OpenClaw plugin |
+| `qoder` | Qoder international edition, uses `~/.qoder` |
+| `qoder-cn` | Qoder China edition, uses `~/.qoder-cn` |
+
+## Common Commands
+
+```bash
+obs-agent-connector list
+obs-agent-connector doctor
+obs-agent-connector install codex
+obs-agent-connector install qoder-cn
+obs-agent-connector update codex
+obs-agent-connector remove codex
+```
+
+During installation, the CLI prompts for:
+
+```text
+Endpoint
+X-Token
+Agent ID
+Agent Name
+```
+
+## Build
+
+Build a local binary:
+
+```bash
+go build -o obs-agent-connector .
+```
+
+Build release packages:
+
+```bash
+./scripts/build-release.sh
+```
+
+Release artifacts are written to `dist/`.
+
+## Project Layout
+
+```text
+.
+├── docs/                 Detailed documentation
+├── scripts/              Build and release scripts
+├── dist/                 Generated release artifacts
+├── main.go               CLI implementation
+├── go.mod
+└── README.md
+```
+
+## Documentation
+
+- [Command reference](docs/commands.md)
+- [Plugin matrix](docs/plugins.md)
+- [Distribution guide](docs/distribution.md)
