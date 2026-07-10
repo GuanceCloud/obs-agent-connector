@@ -68,6 +68,7 @@ Tagged release builds embed the Git tag as the CLI version.
 GitHub Actions:
 
 - `CI` runs on pushes and pull requests.
+- `Package` runs manually and uploads packaged artifacts as a workflow artifact.
 - `Release` runs on tags matching `v*` and publishes packaged artifacts to GitHub Releases.
 
 ## Project Layout

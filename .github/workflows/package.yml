@@ -1,0 +1,35 @@
+name: Package
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Optional version embedded into binaries, for example v0.1.1"
+        required: false
+        type: string
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Build release artifacts
+        env:
+          VERSION: ${{ inputs.version }}
+        run: ./scripts/build-release.sh
+
+      - name: Upload packaged artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: obs-agent-connector-${{ inputs.version || github.sha }}
+          path: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS

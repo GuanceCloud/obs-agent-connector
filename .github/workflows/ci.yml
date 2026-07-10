@@ -45,9 +45,3 @@ jobs:
 
       - name: Build release artifacts
         run: ./scripts/build-release.sh
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: obs-agent-connector-build-artifacts
-          path: dist/

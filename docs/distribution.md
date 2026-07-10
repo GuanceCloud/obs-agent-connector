@@ -22,6 +22,23 @@ The script builds:
 The script also writes `dist/SHA256SUMS`.
 If `VERSION` is set, the script embeds that value into the built binaries.
 
+## Build with GitHub Actions
+
+Use the `Package` workflow when you want GitHub Actions to produce release packages without publishing a GitHub Release.
+
+1. Open `Actions` in the GitHub repository.
+2. Select the `Package` workflow.
+3. Run the workflow.
+4. Optionally set the `version` input, such as `v0.1.1`.
+5. Download the generated artifact from the workflow run summary.
+
+The workflow uploads:
+
+- macOS tarballs
+- Linux tarballs
+- Windows zip packages
+- `SHA256SUMS`
+
 ## macOS Install Example
 
 Apple Silicon:
