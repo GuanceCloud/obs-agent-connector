@@ -11,10 +11,10 @@ obs-agent-connector <command> [arguments]
 | Command | Purpose |
 | --- | --- |
 | `list` | List installed Agent plugins detected on the local machine. |
-| `doctor [agent\|all]` | Diagnose missing commands, missing plugin files, missing config files, and optional remote installer reachability. |
-| `install [agent\|all]` | Install one or more Agent plugins using the remote plugin installer. |
+| `doctor [agent]` | Diagnose missing commands, missing plugin files, missing config files, and optional remote installer reachability. If no agent is provided, all supported agents are checked. |
+| `install <agent>` | Install one Agent plugin using the remote plugin installer. |
 | `update <agent>` | Update one installed Agent plugin without modifying its current configuration. |
-| `remove [agent\|all]` | Remove installed Agent plugins. Configuration files are kept unless `--purge-config` is used. |
+| `remove <agent>` | Remove one installed Agent plugin. Configuration files are kept unless `--purge-config` is used. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print a matching self-update command when a newer release is available. |
 
 ## Install
@@ -55,7 +55,7 @@ Update one installed plugin:
 obs-agent-connector update codex
 ```
 
-`update` intentionally requires a single Agent name. It does not support `all`, to avoid updating multiple runtime environments by accident.
+`update` intentionally requires a single Agent name.
 
 Plugin updates preserve existing configuration by passing `--no-config` to the plugin installer.
 

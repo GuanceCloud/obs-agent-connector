@@ -19,7 +19,6 @@ import (
 const (
 	appName           = "obs-agent-connector"
 	fixedType         = "gtrace"
-	defaultAgent      = "all"
 	defaultStaticBase = "https://static.guance.com"
 	releaseRepo       = "GuanceCloud/obs-agent-connector"
 )
@@ -215,10 +214,10 @@ Usage:
 
 Commands:
   list                  List installed Agent plugins
-  doctor [agent|all]    Diagnose environment and plugin issues
-  install [agent|all]   Install Agent plugins
+  doctor [agent]        Diagnose environment and plugin issues
+  install <agent>       Install an Agent plugin
   update <agent>        Update one installed Agent plugin
-  remove [agent|all]    Remove Agent plugins
+  remove <agent>        Remove an Agent plugin
   version               Show version and check for updates
   version               Show current version and check for updates
 
@@ -271,7 +270,7 @@ func doctor(args []string) error {
 	online := fs.Bool("online", false, "Check whether remote installer scripts are reachable")
 	staticBaseFlag := fs.String("static-base", "", "Installer script and OSS package base URL. Default: https://static.guance.com")
 
-	target := defaultAgent
+	target := ""
 	flagArgs := args
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		target = args[0]
@@ -294,7 +293,7 @@ func doctor(args []string) error {
 	results = append(results, checkCommand("system", "bash", "bash is required to run plugin installer scripts", "Install bash and retry"))
 
 	staticBase := staticBaseURL(*staticBaseFlag)
-	explicitTarget := strings.TrimSpace(strings.ToLower(target)) != "" && strings.TrimSpace(strings.ToLower(target)) != defaultAgent
+	explicitTarget := strings.TrimSpace(strings.ToLower(target)) != ""
 	for _, p := range selected {
 		p = resolvedPlugin(p)
 		results = append(results, checkCommand(p.Name, p.AgentCommand, "Agent command was not found", "Install "+p.AgentCommand+" or check PATH"))
@@ -336,7 +335,7 @@ func install(args []string) error {
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without installing")
 
-	target := defaultAgent
+	target := ""
 	flagArgs := args
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		target = args[0]
@@ -348,6 +347,9 @@ func install(args []string) error {
 	}
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unrecognized install arguments: %s", strings.Join(fs.Args(), " "))
+	}
+	if strings.TrimSpace(target) == "" {
+		return fmt.Errorf("install requires a single agent, for example: install codex")
 	}
 
 	selected, err := selectPlugins(target)
@@ -432,14 +434,11 @@ func updatePlugins(args []string) error {
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without updating")
 
-	target := defaultAgent
+	target := ""
 	flagArgs := args
 	if len(args) > 0 && !strings.HasPrefix(args[0], "-") {
 		target = args[0]
 		flagArgs = args[1:]
-	}
-	if target == defaultAgent {
-		return fmt.Errorf("update does not support all; specify a single agent, for example: update codex")
 	}
 	if err := fs.Parse(flagArgs); err != nil {
 		return err
@@ -627,10 +626,6 @@ func showVersion(args []string) error {
 func selectPlugins(target string) ([]plugin, error) {
 	target = strings.TrimSpace(strings.ToLower(target))
 	if target == "" {
-		target = defaultAgent
-	}
-
-	if target == "all" {
 		names := pluginNames()
 		out := make([]plugin, 0, len(names))
 		for _, name := range names {
@@ -641,7 +636,7 @@ func selectPlugins(target string) ([]plugin, error) {
 
 	p, ok := plugins[target]
 	if !ok {
-		return nil, fmt.Errorf("unknown agent %q; available agents: %s, all", target, strings.Join(pluginNames(), ", "))
+		return nil, fmt.Errorf("unknown agent %q; available agents: %s", target, strings.Join(pluginNames(), ", "))
 	}
 	return []plugin{p}, nil
 }
@@ -660,7 +655,7 @@ func selectInstalledPlugins(target string) ([]plugin, error) {
 			out = append(out, p)
 			continue
 		}
-		if normalizedTarget != "all" && normalizedTarget != "" {
+		if normalizedTarget != "" {
 			return nil, fmt.Errorf("%s plugin is not installed; cannot update it", p.Name)
 		}
 	}
