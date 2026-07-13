@@ -46,7 +46,7 @@ For Qoder installs, `obs-agent-connector` detects the local layout and uses:
 - `--variant global` with `~/.qoder` when the global layout is detected
 
 For plugin installation, `obs-agent-connector` also derives the default installer base from `--endpoint`.
-For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
+The CLI extracts the root domain from `--endpoint` and maps it to `https://static.<root-domain>`.
 Use `--static-base` to override this behavior.
 
 Compatibility note:
