@@ -39,6 +39,21 @@ The workflow uploads:
 - Windows zip packages
 - `SHA256SUMS`
 
+## Publish a GitHub Release
+
+Use a Git tag to publish a release from the same packaging workflow definition.
+
+```bash
+git tag v0.1.1
+git push origin v0.1.1
+```
+
+The `Release` workflow:
+
+1. Calls the reusable `Package` workflow with the tag name as `version`
+2. Downloads the packaged artifacts
+3. Publishes them to GitHub Releases
+
 ## macOS Install Example
 
 Apple Silicon:

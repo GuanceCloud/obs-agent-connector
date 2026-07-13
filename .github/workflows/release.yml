@@ -9,19 +9,20 @@ permissions:
   contents: write
 
 jobs:
+  package:
+    uses: ./.github/workflows/package.yml
+    with:
+      version: ${{ github.ref_name }}
+
   release:
     runs-on: ubuntu-latest
+    needs: package
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
+      - name: Download packaged artifacts
+        uses: actions/download-artifact@v4
         with:
-          go-version-file: go.mod
-
-      - name: Build release artifacts
-        run: VERSION="${GITHUB_REF_NAME}" ./scripts/build-release.sh
+          name: obs-agent-connector-package
+          path: dist
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
