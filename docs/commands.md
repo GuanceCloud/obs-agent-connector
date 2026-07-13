@@ -113,7 +113,7 @@ Show the current version and check for a newer release:
 obs-agent-connector version
 ```
 
-`version` reads release metadata from `OBS_AGENT_CONNECTOR_CONFIG` when that variable is set by the installer wrapper. The standard installer writes brand-specific config under `~/.obs-agent-connector/<brand>/config.json`.
+`version` reads CLI download metadata from `~/.obs-agent-connector/config.json`. The standard installer writes `download_base_url` there, and later self-update commands use the same address.
 
 Skip the remote release check:
 

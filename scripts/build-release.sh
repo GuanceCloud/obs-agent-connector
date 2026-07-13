@@ -6,6 +6,7 @@ DIST_DIR="${ROOT_DIR}/dist"
 APP_NAME="obs-agent-connector"
 VERSION="${VERSION:-}"
 
+rm -rf "${DIST_DIR}"
 mkdir -p "${DIST_DIR}"
 
 if [[ -z "${VERSION}" ]]; then
@@ -57,7 +58,7 @@ build linux arm64
 build windows amd64
 build windows arm64
 
-install -m 0755 "${ROOT_DIR}/scripts/install-obs-agent-connector.sh" "${DIST_DIR}/install-obs-agent-connector.sh"
+install -m 0755 "${ROOT_DIR}/scripts/install.sh" "${DIST_DIR}/install.sh"
 
 package_tar "${APP_NAME}-darwin-arm64"
 package_tar "${APP_NAME}-darwin-amd64"
@@ -66,10 +67,18 @@ package_tar "${APP_NAME}-linux-arm64"
 package_zip "${APP_NAME}-windows-amd64"
 package_zip "${APP_NAME}-windows-arm64"
 
+cat > "${DIST_DIR}/latest.json" <<EOF
+{
+  "tag_name": "${VERSION}",
+  "html_url": "https://static.guance.com/obs-agent-connector/"
+}
+EOF
+
 (
   cd "${DIST_DIR}"
   write_checksums \
-    "install-obs-agent-connector.sh" \
+    "install.sh" \
+    "latest.json" \
     "${APP_NAME}"-darwin-*.tar.gz \
     "${APP_NAME}"-linux-*.tar.gz \
     "${APP_NAME}"-windows-*.zip \

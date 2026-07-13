@@ -39,5 +39,6 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
             dist/*.sh
+            dist/*.json
             dist/SHA256SUMS
           body_path: dist/RELEASE_NOTES.md

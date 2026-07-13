@@ -5,7 +5,8 @@
 - `qoder-cn` is still accepted as a legacy compatibility target
 
 ## Packages
-- Installer: `install-obs-agent-connector.sh`
+- Installer: `install.sh`
+- Metadata: `latest.json`
 - macOS: `darwin-amd64`, `darwin-arm64`
 - Linux: `linux-amd64`, `linux-arm64`
 - Windows: `windows-amd64`, `windows-arm64`
