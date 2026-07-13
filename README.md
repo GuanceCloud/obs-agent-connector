@@ -43,6 +43,10 @@ For Qoder installs, `obs-agent-connector` detects the local layout and uses:
 - `--variant cn` with `~/.qoder-cn` when the CN layout is detected
 - `--variant global` with `~/.qoder` when the global layout is detected
 
+For plugin installation, `obs-agent-connector` also derives the default installer base from `--endpoint`.
+For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
+Use `--static-base` to override this behavior.
+
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.

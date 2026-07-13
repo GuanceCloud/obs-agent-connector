@@ -5,7 +5,9 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -292,7 +294,7 @@ func doctor(args []string) error {
 	results = append(results, checkCommand("system", "curl", "curl is required to download installer scripts", "Install curl and retry"))
 	results = append(results, checkCommand("system", "bash", "bash is required to run plugin installer scripts", "Install bash and retry"))
 
-	staticBase := staticBaseURL(*staticBaseFlag)
+	staticBase := staticBaseURL(*staticBaseFlag, "")
 	explicitTarget := strings.TrimSpace(strings.ToLower(target)) != ""
 	for _, p := range selected {
 		p = resolvedPlugin(p)
@@ -367,7 +369,7 @@ func install(args []string) error {
 		return err
 	}
 
-	staticBase := staticBaseURL(*staticBaseFlag)
+	staticBase := staticBaseURL(*staticBaseFlag, input.Endpoint)
 	fmt.Println()
 	fmt.Println("Install plan:")
 	for _, p := range selected {
@@ -456,7 +458,7 @@ func updatePlugins(args []string) error {
 		return nil
 	}
 
-	staticBase := staticBaseURL(*staticBaseFlag)
+	staticBase := staticBaseURL(*staticBaseFlag, "")
 	fmt.Println("Update plan. Configuration files will not be modified:")
 	for _, p := range selected {
 		p = resolvedPlugin(p)
@@ -1237,15 +1239,67 @@ func downloadFile(url string, target string) error {
 	return cmd.Run()
 }
 
-func staticBaseURL(value string) string {
+func staticBaseURL(value string, endpoint string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
 		value = strings.TrimSpace(os.Getenv("GTRACE_AGENT_STATIC_BASE"))
 	}
 	if value == "" {
+		value = derivedStaticBaseFromEndpoint(endpoint)
+	}
+	if value == "" {
 		value = defaultStaticBase
 	}
 	return strings.TrimRight(value, "/")
+}
+
+func derivedStaticBaseFromEndpoint(endpoint string) string {
+	host := endpointHost(endpoint)
+	if host == "" {
+		return ""
+	}
+
+	rootDomain := registeredDomain(host)
+	if rootDomain == "" {
+		return ""
+	}
+
+	return "https://static." + rootDomain
+}
+
+func endpointHost(endpoint string) string {
+	endpoint = strings.TrimSpace(endpoint)
+	if endpoint == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(endpoint)
+	if err != nil {
+		return ""
+	}
+
+	host := strings.TrimSpace(parsed.Hostname())
+	if host == "" {
+		return ""
+	}
+
+	return strings.ToLower(host)
+}
+
+func registeredDomain(host string) string {
+	if host == "" {
+		return ""
+	}
+	if net.ParseIP(host) != nil {
+		return ""
+	}
+
+	parts := strings.Split(host, ".")
+	if len(parts) < 2 {
+		return ""
+	}
+
+	return parts[len(parts)-2] + "." + parts[len(parts)-1]
 }
 
 func pluginNames() []string {

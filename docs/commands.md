@@ -36,6 +36,10 @@ obs-agent-connector install codex \
   --yes
 ```
 
+By default, `install` derives the installer base from `--endpoint`.
+For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
+Use `--static-base` when you need to override the derived installer base.
+
 Preview only:
 
 ```bash
