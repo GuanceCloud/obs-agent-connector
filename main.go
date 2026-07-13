@@ -224,7 +224,7 @@ Commands:
 
 Examples:
   obs-agent-connector install codex
-  obs-agent-connector install qoder-cn
+  obs-agent-connector install qoder
   obs-agent-connector update codex
   obs-agent-connector remove codex
   obs-agent-connector version

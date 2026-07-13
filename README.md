@@ -25,7 +25,7 @@ The tool provides a single entry point for plugin installation, update, removal,
 | `hermes` | Hermes plugin |
 | `openclaw` | OpenClaw plugin |
 | `qoder` | Qoder plugin. The CLI auto-detects CN vs global layout and passes the matching `--variant` value. |
-| `qoder-cn` | Qoder China edition compatibility target. Forces the CN layout. |
+| `qoder-cn` | Legacy compatibility target. Forces the CN layout. Prefer `qoder`. |
 
 ## Common Commands
 
