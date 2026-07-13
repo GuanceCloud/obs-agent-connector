@@ -11,7 +11,6 @@
 | `hermes` | Hermes | `https://static.guance.com/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `openclaw` | OpenClaw | `https://static.guance.com/openclaw-otel-plugin/install.sh` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
 | `qoder` | Qoder with automatic CN/global detection | `https://static.guance.com/qoder-otel-plugin/install.sh` | `~/.qoder/gtrace.json` or `~/.qoder-cn/gtrace.json` | `~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin` or `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
-| `qoder-cn` | Legacy compatibility target for Qoder CN | `https://static.guance.com/qoder-otel-plugin/install.sh` | `~/.qoder-cn/gtrace.json` | `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
 
 ## Qoder Variants
 

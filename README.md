@@ -25,7 +25,6 @@ The tool provides a single entry point for plugin installation, update, removal,
 | `hermes` | Hermes plugin |
 | `openclaw` | OpenClaw plugin |
 | `qoder` | Qoder plugin. The CLI auto-detects CN vs global layout and passes the matching `--variant` value. |
-| `qoder-cn` | Legacy compatibility target. Forces the CN layout. Prefer `qoder`. |
 
 ## Common Commands
 
@@ -43,6 +42,10 @@ For Qoder installs, `obs-agent-connector` detects the local layout and uses:
 
 - `--variant cn` with `~/.qoder-cn` when the CN layout is detected
 - `--variant global` with `~/.qoder` when the global layout is detected
+
+Compatibility note:
+
+- `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
 
 During installation, the CLI prompts for:
 

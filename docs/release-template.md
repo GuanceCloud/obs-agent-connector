@@ -18,7 +18,9 @@ The CLI uses each official plugin installer and writes the final runtime configu
 - hermes
 - openclaw
 - qoder
-- qoder-cn (legacy compatibility target)
+
+## Compatibility
+- `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout
 
 ## Download
 Choose the package that matches your operating system and CPU architecture:
