@@ -67,18 +67,13 @@ package_tar "${APP_NAME}-linux-arm64"
 package_zip "${APP_NAME}-windows-amd64"
 package_zip "${APP_NAME}-windows-arm64"
 
-cat > "${DIST_DIR}/latest.json" <<EOF
-{
-  "tag_name": "${VERSION}",
-  "html_url": "https://static.guance.com/obs-agent-connector/"
-}
-EOF
+printf '%s\n' "${VERSION}" > "${DIST_DIR}/latest.txt"
 
 (
   cd "${DIST_DIR}"
   write_checksums \
     "install.sh" \
-    "latest.json" \
+    "latest.txt" \
     "${APP_NAME}"-darwin-*.tar.gz \
     "${APP_NAME}"-linux-*.tar.gz \
     "${APP_NAME}"-windows-*.zip \

@@ -38,7 +38,7 @@ The workflow uploads:
 - Linux tarballs
 - Windows zip packages
 - `install.sh`
-- `latest.json`
+- `latest.txt`
 - `SHA256SUMS`
 
 ## Publish a GitHub Release
@@ -83,7 +83,7 @@ sh install.sh \
 ```
 
 The generated config file contains the CLI download base URL used later by `version` and self-update commands.
-That download base should also expose `latest.json`.
+That download base should also expose `latest.txt`.
 
 ## macOS Manual Install Example
 

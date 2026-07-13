@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"net/url"
@@ -58,8 +59,8 @@ type checkResult struct {
 }
 
 type githubRelease struct {
-	TagName string `json:"tag_name"`
-	HTMLURL string `json:"html_url"`
+	TagName string
+	HTMLURL string
 }
 
 type connectorConfig struct {
@@ -783,12 +784,14 @@ func fetchLatestRelease(cfg connectorConfig) (githubRelease, error) {
 		return githubRelease{}, fmt.Errorf("latest metadata is not reachable: %s", latestMetadataURL(cfg))
 	}
 
-	var release githubRelease
-	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
 		return githubRelease{}, err
 	}
+	tag := strings.TrimSpace(string(body))
+	release := githubRelease{TagName: tag}
 	if release.TagName == "" {
-		return githubRelease{}, fmt.Errorf("latest metadata is missing tag_name")
+		return githubRelease{}, fmt.Errorf("latest metadata is empty")
 	}
 	if release.HTMLURL == "" {
 		release.HTMLURL = strings.TrimRight(cfg.DownloadBaseURL, "/") + "/"
@@ -1264,7 +1267,7 @@ func loadConnectorConfig() (connectorConfig, string, error) {
 }
 
 func latestMetadataURL(cfg connectorConfig) string {
-	return strings.TrimRight(cfg.DownloadBaseURL, "/") + "/latest.json"
+	return strings.TrimRight(cfg.DownloadBaseURL, "/") + "/latest.txt"
 }
 
 func derivedStaticBaseFromEndpoint(endpoint string) string {

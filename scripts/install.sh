@@ -37,16 +37,14 @@ fi
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL%/}"
 
 latest_version() {
-  curl -fsSL "${DOWNLOAD_BASE_URL}/latest.json" \
-    | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-    | head -n 1
+  curl -fsSL "${DOWNLOAD_BASE_URL}/latest.txt" | tr -d '\r' | head -n 1
 }
 
 current_version="$VERSION"
 if [ "$current_version" = "latest" ]; then
   current_version="$(latest_version)"
   if [ -z "$current_version" ]; then
-    echo "Failed to resolve latest version from ${DOWNLOAD_BASE_URL}/latest.json" >&2
+    echo "Failed to resolve latest version from ${DOWNLOAD_BASE_URL}/latest.txt" >&2
     exit 1
   fi
 fi
