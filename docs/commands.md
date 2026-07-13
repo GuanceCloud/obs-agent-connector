@@ -59,6 +59,8 @@ obs-agent-connector update codex
 
 Plugin updates preserve existing configuration by passing `--no-config` to the plugin installer.
 
+For `qoder`, the CLI also detects the local layout and passes the matching `--variant cn` or `--variant global` flag before running the installer.
+
 ## Remove
 
 Remove a plugin and keep configuration files:

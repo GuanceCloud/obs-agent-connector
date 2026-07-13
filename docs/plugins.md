@@ -10,17 +10,17 @@
 | `codex` | Codex | `https://static.guance.com/codex-otel-plugin/install.sh` | `~/.codex/gtrace.json` | `~/.codex/plugin-sources/codex-otel-plugin/plugins/tracing` |
 | `hermes` | Hermes | `https://static.guance.com/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `openclaw` | OpenClaw | `https://static.guance.com/openclaw-otel-plugin/install.sh` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
-| `qoder` | Qoder international edition | `https://static.guance.com/qoder-otel-plugin/install.sh` | `~/.qoder/gtrace.json` | `~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-probe` |
-| `qoder-cn` | Qoder China edition | `https://static.guance.com/qoder-otel-plugin/install.sh` | `~/.qoder-cn/gtrace.json` | `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-probe` |
+| `qoder` | Qoder with automatic CN/global detection | `https://static.guance.com/qoder-otel-plugin/install.sh` | `~/.qoder/gtrace.json` or `~/.qoder-cn/gtrace.json` | `~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin` or `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
+| `qoder-cn` | Qoder China edition compatibility target | `https://static.guance.com/qoder-otel-plugin/install.sh` | `~/.qoder-cn/gtrace.json` | `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
 
 ## Qoder Variants
 
-Both `qoder` and `qoder-cn` use the same plugin installer, but `obs-agent-connector` sets different `QODER_HOME` values:
+Both `qoder` and `qoder-cn` use the same plugin installer:
 
-| Agent | `QODER_HOME` |
+| Agent | Behavior |
 | --- | --- |
-| `qoder` | `~/.qoder` |
-| `qoder-cn` | `~/.qoder-cn` |
+| `qoder` | Detects the local layout, sets `QODER_HOME`, and passes `--variant cn` or `--variant global` |
+| `qoder-cn` | Forces the CN layout with `QODER_HOME=~/.qoder-cn` and `--variant cn` |
 
 This prevents the international and China editions from overwriting each other's plugin files and configuration.
 

@@ -24,8 +24,8 @@ The tool provides a single entry point for plugin installation, update, removal,
 | `codex` | Codex plugin |
 | `hermes` | Hermes plugin |
 | `openclaw` | OpenClaw plugin |
-| `qoder` | Qoder international edition, uses `~/.qoder` |
-| `qoder-cn` | Qoder China edition, uses `~/.qoder-cn` |
+| `qoder` | Qoder plugin. The CLI auto-detects CN vs global layout and passes the matching `--variant` value. |
+| `qoder-cn` | Qoder China edition compatibility target. Forces the CN layout. |
 
 ## Common Commands
 
@@ -33,11 +33,16 @@ The tool provides a single entry point for plugin installation, update, removal,
 obs-agent-connector list
 obs-agent-connector doctor
 obs-agent-connector install codex
-obs-agent-connector install qoder-cn
+obs-agent-connector install qoder
 obs-agent-connector update codex
 obs-agent-connector remove codex
 obs-agent-connector version
 ```
+
+For Qoder installs, `obs-agent-connector` detects the local layout and uses:
+
+- `--variant cn` with `~/.qoder-cn` when the CN layout is detected
+- `--variant global` with `~/.qoder` when the global layout is detected
 
 During installation, the CLI prompts for:
 

@@ -31,6 +31,7 @@ type plugin struct {
 	PluginName   string
 	AgentCommand string
 	Env          []string
+	InstallArgs  []string
 	Markers      []string
 	ConfigFiles  []string
 	Dependencies []string
@@ -140,9 +141,9 @@ var plugins = map[string]plugin{
 		Name:         "qoder",
 		PluginName:   "qoder-otel-plugin",
 		AgentCommand: "qoder",
-		Env:          []string{"QODER_HOME=~/.qoder"},
 		Markers: []string{
 			"~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-probe",
+			"~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin",
 		},
 		ConfigFiles: []string{"~/.qoder/gtrace.json"},
 		Dependencies: []string{
@@ -150,15 +151,16 @@ var plugins = map[string]plugin{
 		},
 		RemovePaths: []string{
 			"~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-probe",
+			"~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin",
 		},
 	},
 	"qoder-cn": {
 		Name:         "qoder-cn",
 		PluginName:   "qoder-otel-plugin",
 		AgentCommand: "qoder-cn",
-		Env:          []string{"QODER_HOME=~/.qoder-cn"},
 		Markers: []string{
 			"~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-probe",
+			"~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin",
 		},
 		ConfigFiles: []string{"~/.qoder-cn/gtrace.json"},
 		Dependencies: []string{
@@ -166,6 +168,7 @@ var plugins = map[string]plugin{
 		},
 		RemovePaths: []string{
 			"~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-probe",
+			"~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin",
 		},
 	},
 }
@@ -240,7 +243,7 @@ func listPlugins() error {
 	rows := [][]string{}
 	found := false
 	for _, name := range pluginNames() {
-		p := plugins[name]
+		p := resolvedPlugin(plugins[name])
 		installedAt, ok := installedMarker(p)
 		if !ok {
 			continue
@@ -293,6 +296,7 @@ func doctor(args []string) error {
 	staticBase := staticBaseURL(*staticBaseFlag)
 	explicitTarget := strings.TrimSpace(strings.ToLower(target)) != "" && strings.TrimSpace(strings.ToLower(target)) != defaultAgent
 	for _, p := range selected {
+		p = resolvedPlugin(p)
 		results = append(results, checkCommand(p.Name, p.AgentCommand, "Agent command was not found", "Install "+p.AgentCommand+" or check PATH"))
 		results = append(results, checkPluginInstalled(p, explicitTarget))
 		results = append(results, checkConfig(p))
@@ -365,6 +369,7 @@ func install(args []string) error {
 	fmt.Println()
 	fmt.Println("Install plan:")
 	for _, p := range selected {
+		p = resolvedPlugin(p)
 		fmt.Printf("  - %s (%s)\n", p.Name, installerURL(staticBase, p))
 	}
 	fmt.Printf("OSS_ENDPOINT: %s\n", staticBase)
@@ -378,6 +383,7 @@ func install(args []string) error {
 		fmt.Println()
 		fmt.Println("Command preview:")
 		for _, p := range selected {
+			p = resolvedPlugin(p)
 			fmt.Println(renderInstallCommand(staticBase, p, input))
 		}
 		return nil
@@ -395,6 +401,7 @@ func install(args []string) error {
 	}
 
 	for _, p := range selected {
+		p = resolvedPlugin(p)
 		if err := installOne(staticBase, p, input); err != nil {
 			return err
 		}
@@ -453,6 +460,7 @@ func updatePlugins(args []string) error {
 	staticBase := staticBaseURL(*staticBaseFlag)
 	fmt.Println("Update plan. Configuration files will not be modified:")
 	for _, p := range selected {
+		p = resolvedPlugin(p)
 		fmt.Printf("  - %s (%s)\n", p.Name, installerURL(staticBase, p))
 	}
 
@@ -460,6 +468,7 @@ func updatePlugins(args []string) error {
 		fmt.Println()
 		fmt.Println("Command preview:")
 		for _, p := range selected {
+			p = resolvedPlugin(p)
 			fmt.Println(renderPluginUpdateCommand(staticBase, p))
 		}
 		return nil
@@ -477,6 +486,7 @@ func updatePlugins(args []string) error {
 	}
 
 	for _, p := range selected {
+		p = resolvedPlugin(p)
 		if err := updatePluginOne(staticBase, p); err != nil {
 			return err
 		}
@@ -518,6 +528,7 @@ func remove(args []string) error {
 
 	fmt.Println("Remove plan:")
 	for _, p := range selected {
+		p = resolvedPlugin(p)
 		fmt.Printf("  - %s\n", p.Name)
 		for _, cmd := range p.RemoveCmds {
 			fmt.Printf("    command: %s\n", strings.Join(cmd, " "))
@@ -551,6 +562,7 @@ func remove(args []string) error {
 	}
 
 	for _, p := range selected {
+		p = resolvedPlugin(p)
 		if err := removeOne(p, *purgeConfig); err != nil {
 			return err
 		}
@@ -643,6 +655,7 @@ func selectInstalledPlugins(target string) ([]plugin, error) {
 
 	out := make([]plugin, 0, len(selected))
 	for _, p := range selected {
+		p = resolvedPlugin(p)
 		if _, ok := installedMarker(p); ok {
 			out = append(out, p)
 			continue
@@ -1036,7 +1049,7 @@ func installOne(staticBase string, p plugin, input installInput) error {
 		return fmt.Errorf("failed to download %s installer: %w", p.Name, err)
 	}
 
-	args := buildInstallArgs(scriptPath, input)
+	args := buildInstallArgs(scriptPath, p, input)
 	fmt.Printf("Running: %s\n", renderBashCommand(args))
 
 	cmd := exec.Command("bash", args...)
@@ -1063,7 +1076,7 @@ func updatePluginOne(staticBase string, p plugin) error {
 		return fmt.Errorf("failed to download %s installer: %w", p.Name, err)
 	}
 
-	args := buildPluginUpdateArgs(scriptPath)
+	args := buildPluginUpdateArgs(scriptPath, p)
 	fmt.Printf("Running: %s\n", renderBashCommand(args))
 
 	cmd := exec.Command("bash", args...)
@@ -1128,8 +1141,8 @@ func removeOne(p plugin, purgeConfig bool) error {
 	return nil
 }
 
-func buildInstallArgs(scriptPath string, input installInput) []string {
-	return []string{
+func buildInstallArgs(scriptPath string, p plugin, input installInput) []string {
+	args := []string{
 		scriptPath,
 		"latest",
 		"--type", fixedType,
@@ -1138,14 +1151,18 @@ func buildInstallArgs(scriptPath string, input installInput) []string {
 		"--tag", "agent_id=" + input.AgentID,
 		"--tag", "agent_name=" + input.AgentName,
 	}
+	args = append(args, p.InstallArgs...)
+	return args
 }
 
-func buildPluginUpdateArgs(scriptPath string) []string {
-	return []string{
+func buildPluginUpdateArgs(scriptPath string, p plugin) []string {
+	args := []string{
 		scriptPath,
 		"latest",
 		"--no-config",
 	}
+	args = append(args, p.InstallArgs...)
+	return args
 }
 
 func renderInstallCommand(staticBase string, p plugin, input installInput) string {
@@ -1155,7 +1172,7 @@ func renderInstallCommand(staticBase string, p plugin, input installInput) strin
 		shellQuote(scriptPath),
 		shellQuote(installerURL(staticBase, p)),
 		renderEnvAssignments(staticBase, p),
-		renderBashCommand(buildInstallArgs(scriptPath, input)),
+		renderBashCommand(buildInstallArgs(scriptPath, p, input)),
 	)
 }
 
@@ -1166,7 +1183,7 @@ func renderPluginUpdateCommand(staticBase string, p plugin) string {
 		shellQuote(scriptPath),
 		shellQuote(installerURL(staticBase, p)),
 		renderEnvAssignments(staticBase, p),
-		renderBashCommand(buildPluginUpdateArgs(scriptPath)),
+		renderBashCommand(buildPluginUpdateArgs(scriptPath, p)),
 	)
 }
 
@@ -1243,6 +1260,67 @@ func pluginNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func resolvedPlugin(p plugin) plugin {
+	switch p.Name {
+	case "qoder":
+		return withQoderVariant(p, detectQoderVariant("auto"))
+	case "qoder-cn":
+		return withQoderVariant(p, detectQoderVariant("cn"))
+	default:
+		return p
+	}
+}
+
+func withQoderVariant(p plugin, variant string) plugin {
+	resolved := p
+	home := "~/.qoder"
+	if variant == "cn" {
+		home = "~/.qoder-cn"
+	}
+	resolved.Env = []string{"QODER_HOME=" + home}
+	resolved.InstallArgs = []string{"--variant", variant}
+	resolved.Markers = []string{
+		home + "/plugins/cache/qoder-marketplace/qoder-otel-probe",
+		home + "/plugins/cache/qoder-marketplace/qoder-otel-plugin",
+	}
+	resolved.ConfigFiles = []string{home + "/gtrace.json"}
+	resolved.RemovePaths = []string{
+		home + "/plugins/cache/qoder-marketplace/qoder-otel-probe",
+		home + "/plugins/cache/qoder-marketplace/qoder-otel-plugin",
+	}
+	return resolved
+}
+
+func detectQoderVariant(fallback string) string {
+	qoderHome := strings.TrimSpace(os.Getenv("QODER_HOME"))
+	if qoderHome != "" {
+		base := strings.ToLower(filepath.Base(qoderHome))
+		switch base {
+		case ".qoder-cn", "qoder-cn":
+			return "cn"
+		case ".qoder", "qoder":
+			return "global"
+		}
+	}
+
+	home, err := os.UserHomeDir()
+	if err == nil {
+		hasGlobal := pathExists(filepath.Join(home, ".qoder"))
+		hasCN := pathExists(filepath.Join(home, ".qoder-cn"))
+		switch {
+		case hasGlobal && !hasCN:
+			return "global"
+		case hasCN:
+			return "cn"
+		}
+	}
+
+	if strings.EqualFold(fallback, "global") {
+		return "global"
+	}
+	return "cn"
 }
 
 func installedMarker(p plugin) (string, bool) {
