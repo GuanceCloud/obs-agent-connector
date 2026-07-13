@@ -1,17 +1,5 @@
-## Highlights
-- Manage OBS/GTrace plugins from one CLI
-- Install plugins interactively
-- Update one installed plugin without overwriting config
-- Remove one installed plugin with optional config cleanup
-- Detect installed plugins with `list`
-- Diagnose local environment and plugin issues with `doctor`
-
-## Agents
-- claude
-- codex
-- hermes
-- openclaw
-- qoder
+## Changes
+{{CHANGES}}
 
 ## Compatibility
 - `qoder-cn` is still accepted as a legacy compatibility target
