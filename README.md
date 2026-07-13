@@ -14,6 +14,8 @@ The tool provides a single entry point for plugin installation, update, removal,
 - Diagnose local environment issues with `doctor`.
 - Show the current CLI version and check whether a newer GitHub release is available.
 - Support separate Qoder international and China editions.
+- Install the CLI through a dedicated installer script.
+- Keep brand-specific release metadata in `~/.obs-agent-connector/<brand>/config.json`.
 - Build release packages for macOS, Linux, and Windows.
 
 ## Supported Agents
@@ -79,6 +81,9 @@ Tagged release builds embed the Git tag as the CLI version.
 
 On macOS, do not double-click the extracted binary in Finder.
 Finder launches command-line executables through Terminal and appends `; exit;` automatically. Run the binary from Terminal instead.
+
+Preferred CLI installation uses the release installer script.
+The installer writes `~/.obs-agent-connector/<brand>/config.json` and launches the binary through a wrapper that pins `OBS_AGENT_CONNECTOR_CONFIG`, so `version` and self-update flows stay isolated per brand.
 
 GitHub Actions:
 

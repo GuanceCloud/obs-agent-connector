@@ -37,6 +37,7 @@ The workflow uploads:
 - macOS tarballs
 - Linux tarballs
 - Windows zip packages
+- `install-obs-agent-connector.sh`
 - `SHA256SUMS`
 
 ## Publish a GitHub Release
@@ -55,7 +56,40 @@ The `Release` workflow:
 3. Renders release notes from `docs/release-template.md`
 4. Publishes the artifacts and generated notes to GitHub Releases
 
-## macOS Install Example
+## Preferred Install Method
+
+Use the installer script instead of opening the binary directly.
+The installer:
+
+- downloads the correct package for the current platform
+- installs a wrapper command into a bin directory
+- stores the real binary under `~/.obs-agent-connector/<brand>/bin/`
+- writes `~/.obs-agent-connector/<brand>/config.json`
+- keeps release/update metadata isolated per brand
+
+Example:
+
+```bash
+curl -fsSL -O https://github.com/GuanceCloud/obs-agent-connector/releases/download/v0.1.1/install-obs-agent-connector.sh
+sh install-obs-agent-connector.sh --version v0.1.1 --brand guance
+```
+
+For another brand, point the installer at a different release source:
+
+```bash
+sh install-obs-agent-connector.sh \
+  --brand truewatch \
+  --release-repo GuanceCloud/obs-agent-connector \
+  --release-api-url https://api.github.com/repos/GuanceCloud/obs-agent-connector/releases/latest \
+  --release-latest-url https://github.com/GuanceCloud/obs-agent-connector/releases/latest \
+  --release-page-base-url https://github.com/GuanceCloud/obs-agent-connector/releases/tag \
+  --release-download-base-url https://github.com/GuanceCloud/obs-agent-connector/releases/download
+```
+
+The generated config file contains the release/download endpoints used later by `version` and self-update commands.
+The wrapper command exports `OBS_AGENT_CONNECTOR_CONFIG`, so different brands do not share release metadata accidentally.
+
+## macOS Manual Install Example
 
 Do not double-click the extracted binary in Finder.
 When Finder opens a command-line executable, macOS Terminal appends `; exit;` automatically. This is macOS behavior, not CLI output.

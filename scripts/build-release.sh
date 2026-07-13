@@ -57,6 +57,8 @@ build linux arm64
 build windows amd64
 build windows arm64
 
+install -m 0755 "${ROOT_DIR}/scripts/install-obs-agent-connector.sh" "${DIST_DIR}/install-obs-agent-connector.sh"
+
 package_tar "${APP_NAME}-darwin-arm64"
 package_tar "${APP_NAME}-darwin-amd64"
 package_tar "${APP_NAME}-linux-amd64"
@@ -67,6 +69,7 @@ package_zip "${APP_NAME}-windows-arm64"
 (
   cd "${DIST_DIR}"
   write_checksums \
+    "install-obs-agent-connector.sh" \
     "${APP_NAME}"-darwin-*.tar.gz \
     "${APP_NAME}"-linux-*.tar.gz \
     "${APP_NAME}"-windows-*.zip \

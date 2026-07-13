@@ -38,4 +38,5 @@ jobs:
           path: |
             dist/*.tar.gz
             dist/*.zip
+            dist/*.sh
             dist/SHA256SUMS

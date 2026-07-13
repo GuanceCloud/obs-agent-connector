@@ -23,6 +23,8 @@ const (
 	fixedType         = "gtrace"
 	defaultStaticBase = "https://static.guance.com"
 	releaseRepo       = "GuanceCloud/obs-agent-connector"
+	configDirName     = ".obs-agent-connector"
+	configFileName    = "config.json"
 )
 
 var version = "dev"
@@ -58,6 +60,15 @@ type checkResult struct {
 type githubRelease struct {
 	TagName string `json:"tag_name"`
 	HTMLURL string `json:"html_url"`
+}
+
+type connectorConfig struct {
+	Brand                  string `json:"brand"`
+	ReleaseRepo            string `json:"release_repo"`
+	ReleaseAPIURL          string `json:"release_api_url"`
+	ReleaseLatestURL       string `json:"release_latest_url"`
+	ReleasePageBaseURL     string `json:"release_page_base_url"`
+	ReleaseDownloadBaseURL string `json:"release_download_base_url"`
 }
 
 var plugins = map[string]plugin{
@@ -585,11 +596,21 @@ func showVersion(args []string) error {
 	fmt.Printf("Version: %s\n", version)
 	fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 
+	cfg, cfgPath, cfgErr := loadConnectorConfig()
+	if cfgErr == nil && cfgPath != "" {
+		fmt.Printf("Channel: %s\n", cfg.Brand)
+	}
+
 	if *offline {
+		if cfgErr != nil {
+			fmt.Printf("Config: unavailable (%v)\n", cfgErr)
+		} else if cfgPath != "" {
+			fmt.Printf("Config: %s\n", displayPath(cfgPath))
+		}
 		return nil
 	}
 
-	release, err := fetchLatestRelease()
+	release, err := fetchLatestRelease(cfg)
 	if err != nil {
 		fmt.Printf("Latest release: unavailable (%v)\n", err)
 		return nil
@@ -610,7 +631,7 @@ func showVersion(args []string) error {
 	}
 
 	fmt.Println("Status: update available")
-	command, note, err := buildSelfUpdateCommand(release.TagName)
+	command, note, err := buildSelfUpdateCommand(release.TagName, cfg)
 	if err != nil {
 		fmt.Printf("Update command: unavailable (%v)\n", err)
 		return nil
@@ -749,9 +770,9 @@ func checkInstallerOnline(staticBase string, p plugin) checkResult {
 	}
 }
 
-func fetchLatestRelease() (githubRelease, error) {
+func fetchLatestRelease(cfg connectorConfig) (githubRelease, error) {
 	client := &http.Client{Timeout: 8 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, "https://api.github.com/repos/"+releaseRepo+"/releases/latest", nil)
+	req, err := http.NewRequest(http.MethodGet, cfg.ReleaseAPIURL, nil)
 	if err != nil {
 		return githubRelease{}, err
 	}
@@ -765,20 +786,23 @@ func fetchLatestRelease() (githubRelease, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return fetchLatestReleaseRedirect()
+		return fetchLatestReleaseRedirect(cfg)
 	}
 
 	var release githubRelease
 	if err := json.NewDecoder(resp.Body).Decode(&release); err != nil {
-		return fetchLatestReleaseRedirect()
+		return fetchLatestReleaseRedirect(cfg)
 	}
 	if release.TagName == "" {
-		return fetchLatestReleaseRedirect()
+		return fetchLatestReleaseRedirect(cfg)
+	}
+	if release.HTMLURL == "" {
+		release.HTMLURL = strings.TrimRight(cfg.ReleasePageBaseURL, "/") + "/" + release.TagName
 	}
 	return release, nil
 }
 
-func fetchLatestReleaseRedirect() (githubRelease, error) {
+func fetchLatestReleaseRedirect(cfg connectorConfig) (githubRelease, error) {
 	client := &http.Client{
 		Timeout: 8 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
@@ -786,8 +810,7 @@ func fetchLatestReleaseRedirect() (githubRelease, error) {
 		},
 	}
 
-	url := "https://github.com/" + releaseRepo + "/releases/latest"
-	req, err := http.NewRequest(http.MethodGet, url, nil)
+	req, err := http.NewRequest(http.MethodGet, cfg.ReleaseLatestURL, nil)
 	if err != nil {
 		return githubRelease{}, err
 	}
@@ -814,7 +837,7 @@ func fetchLatestReleaseRedirect() (githubRelease, error) {
 
 	return githubRelease{
 		TagName: tag,
-		HTMLURL: "https://github.com/" + releaseRepo + "/releases/tag/" + tag,
+		HTMLURL: strings.TrimRight(cfg.ReleasePageBaseURL, "/") + "/" + tag,
 	}, nil
 }
 
@@ -898,7 +921,7 @@ func takeLeadingDigits(value string) string {
 	return builder.String()
 }
 
-func buildSelfUpdateCommand(tag string) (string, string, error) {
+func buildSelfUpdateCommand(tag string, cfg connectorConfig) (string, string, error) {
 	executablePath, err := os.Executable()
 	if err != nil {
 		return "", "", err
@@ -913,12 +936,7 @@ func buildSelfUpdateCommand(tag string) (string, string, error) {
 		return "", "", err
 	}
 
-	downloadURL := fmt.Sprintf(
-		"https://github.com/%s/releases/download/%s/%s",
-		releaseRepo,
-		tag,
-		packageName,
-	)
+	downloadURL := strings.TrimRight(cfg.ReleaseDownloadBaseURL, "/") + "/" + tag + "/" + packageName
 
 	if runtime.GOOS == "windows" {
 		command := fmt.Sprintf(
@@ -1251,6 +1269,73 @@ func staticBaseURL(value string, endpoint string) string {
 		value = defaultStaticBase
 	}
 	return strings.TrimRight(value, "/")
+}
+
+func defaultConnectorConfig() connectorConfig {
+	repo := releaseRepo
+	return connectorConfig{
+		Brand:                  "guance",
+		ReleaseRepo:            repo,
+		ReleaseAPIURL:          "https://api.github.com/repos/" + repo + "/releases/latest",
+		ReleaseLatestURL:       "https://github.com/" + repo + "/releases/latest",
+		ReleasePageBaseURL:     "https://github.com/" + repo + "/releases/tag",
+		ReleaseDownloadBaseURL: "https://github.com/" + repo + "/releases/download",
+	}
+}
+
+func connectorConfigPath() (string, error) {
+	value := strings.TrimSpace(os.Getenv("OBS_AGENT_CONNECTOR_CONFIG"))
+	if value != "" {
+		return value, nil
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(home, configDirName, configFileName), nil
+}
+
+func loadConnectorConfig() (connectorConfig, string, error) {
+	cfg := defaultConnectorConfig()
+	path, err := connectorConfigPath()
+	if err != nil {
+		return cfg, "", err
+	}
+
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return cfg, path, nil
+		}
+		return cfg, path, err
+	}
+
+	var disk connectorConfig
+	if err := json.Unmarshal(data, &disk); err != nil {
+		return cfg, path, err
+	}
+
+	if strings.TrimSpace(disk.Brand) != "" {
+		cfg.Brand = strings.TrimSpace(disk.Brand)
+	}
+	if strings.TrimSpace(disk.ReleaseRepo) != "" {
+		cfg.ReleaseRepo = strings.TrimSpace(disk.ReleaseRepo)
+	}
+	if strings.TrimSpace(disk.ReleaseAPIURL) != "" {
+		cfg.ReleaseAPIURL = strings.TrimSpace(disk.ReleaseAPIURL)
+	}
+	if strings.TrimSpace(disk.ReleaseLatestURL) != "" {
+		cfg.ReleaseLatestURL = strings.TrimSpace(disk.ReleaseLatestURL)
+	}
+	if strings.TrimSpace(disk.ReleasePageBaseURL) != "" {
+		cfg.ReleasePageBaseURL = strings.TrimSpace(disk.ReleasePageBaseURL)
+	}
+	if strings.TrimSpace(disk.ReleaseDownloadBaseURL) != "" {
+		cfg.ReleaseDownloadBaseURL = strings.TrimSpace(disk.ReleaseDownloadBaseURL)
+	}
+
+	return cfg, path, nil
 }
 
 func derivedStaticBaseFromEndpoint(endpoint string) string {
