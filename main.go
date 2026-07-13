@@ -20,12 +20,11 @@ import (
 )
 
 const (
-	appName                = "obs-agent-connector"
-	fixedType              = "gtrace"
-	defaultStaticBase      = "https://static.guance.com"
-	defaultDownloadBaseURL = "https://static.guance.com/obs-agent-connector"
-	configDirName          = ".obs-agent-connector"
-	configFileName         = "config.json"
+	appName           = "obs-agent-connector"
+	fixedType         = "gtrace"
+	defaultStaticBase = "https://static.guance.com"
+	configDirName     = ".obs-agent-connector"
+	configFileName    = "config.json"
 )
 
 var version = "dev"
@@ -593,7 +592,7 @@ func showVersion(args []string) error {
 	fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
 
 	cfg, cfgPath, cfgErr := loadConnectorConfig()
-	if cfgErr == nil && cfgPath != "" {
+	if cfgErr == nil && cfgPath != "" && strings.TrimSpace(cfg.DownloadBaseURL) != "" {
 		fmt.Printf("Download Base: %s\n", cfg.DownloadBaseURL)
 	}
 
@@ -767,8 +766,13 @@ func checkInstallerOnline(staticBase string, p plugin) checkResult {
 }
 
 func fetchLatestRelease(cfg connectorConfig) (githubRelease, error) {
+	metadataURL := latestMetadataURL(cfg)
+	if metadataURL == "" {
+		return githubRelease{}, fmt.Errorf("download_base_url is not configured")
+	}
+
 	client := &http.Client{Timeout: 8 * time.Second}
-	req, err := http.NewRequest(http.MethodGet, latestMetadataURL(cfg), nil)
+	req, err := http.NewRequest(http.MethodGet, metadataURL, nil)
 	if err != nil {
 		return githubRelease{}, err
 	}
@@ -781,7 +785,7 @@ func fetchLatestRelease(cfg connectorConfig) (githubRelease, error) {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return githubRelease{}, fmt.Errorf("latest metadata is not reachable: %s", latestMetadataURL(cfg))
+		return githubRelease{}, fmt.Errorf("latest metadata is not reachable: %s", metadataURL)
 	}
 
 	body, err := io.ReadAll(resp.Body)
@@ -871,6 +875,10 @@ func takeLeadingDigits(value string) string {
 }
 
 func buildSelfUpdateCommand(tag string, cfg connectorConfig) (string, string, error) {
+	if strings.TrimSpace(cfg.DownloadBaseURL) == "" {
+		return "", "", fmt.Errorf("download_base_url is not configured")
+	}
+
 	executablePath, err := os.Executable()
 	if err != nil {
 		return "", "", err
@@ -1221,9 +1229,7 @@ func staticBaseURL(value string, endpoint string) string {
 }
 
 func defaultConnectorConfig() connectorConfig {
-	return connectorConfig{
-		DownloadBaseURL: defaultDownloadBaseURL,
-	}
+	return connectorConfig{}
 }
 
 func connectorConfigPath() (string, error) {
@@ -1267,6 +1273,9 @@ func loadConnectorConfig() (connectorConfig, string, error) {
 }
 
 func latestMetadataURL(cfg connectorConfig) string {
+	if strings.TrimSpace(cfg.DownloadBaseURL) == "" {
+		return ""
+	}
 	return strings.TrimRight(cfg.DownloadBaseURL, "/") + "/latest.txt"
 }
 

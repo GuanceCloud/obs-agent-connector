@@ -70,8 +70,8 @@ The installer:
 Example:
 
 ```bash
-curl -fsSL -O https://static.guance.com/obs-agent-connector/install.sh
-sh install.sh --download-base-url https://static.guance.com/obs-agent-connector
+curl -fsSL -O <download-base-url>/install.sh
+sh install.sh --download-base-url <download-base-url>
 ```
 
 If you want to install a specific version:
@@ -79,7 +79,7 @@ If you want to install a specific version:
 ```bash
 sh install.sh \
   --version v0.1.1 \
-  --download-base-url https://static.guance.com/obs-agent-connector
+  --download-base-url <download-base-url>
 ```
 
 The generated config file contains the CLI download base URL used later by `version` and self-update commands.

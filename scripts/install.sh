@@ -5,7 +5,7 @@ APP_NAME="obs-agent-connector"
 VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-}"
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.obs-agent-connector}"
-DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL:-https://static.guance.com/obs-agent-connector}"
+DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL:-}"
 
 usage() {
   cat <<EOF
@@ -32,6 +32,11 @@ if [ -z "${INSTALL_DIR}" ]; then
   else
     INSTALL_DIR="$HOME/.local/bin"
   fi
+fi
+
+if [ -z "${DOWNLOAD_BASE_URL}" ]; then
+  echo "download_base_url is required; pass --download-base-url <url> or set DOWNLOAD_BASE_URL" >&2
+  exit 2
 fi
 
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL%/}"
