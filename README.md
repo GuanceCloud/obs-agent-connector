@@ -69,7 +69,7 @@ GitHub Actions:
 
 - `CI` runs on pushes and pull requests.
 - `Package` runs manually and uploads packaged artifacts as a workflow artifact.
-- `Release` runs on tags matching `v*`, reuses the `Package` workflow, and publishes the same artifacts to GitHub Releases.
+- `Release` runs on tags matching `v*`, reuses the `Package` workflow, renders release notes from the repository template, and publishes the same artifacts to GitHub Releases.
 
 ## Project Layout
 

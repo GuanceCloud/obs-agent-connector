@@ -52,7 +52,8 @@ The `Release` workflow:
 
 1. Calls the reusable `Package` workflow with the tag name as `version`
 2. Downloads the packaged artifacts
-3. Publishes them to GitHub Releases
+3. Renders release notes from `docs/release-template.md`
+4. Publishes the artifacts and generated notes to GitHub Releases
 
 ## macOS Install Example
 
