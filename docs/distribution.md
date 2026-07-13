@@ -57,6 +57,10 @@ The `Release` workflow:
 
 ## macOS Install Example
 
+Do not double-click the extracted binary in Finder.
+When Finder opens a command-line executable, macOS Terminal appends `; exit;` automatically. This is macOS behavior, not CLI output.
+Run the binary from an existing Terminal session, or move it into `PATH` first.
+
 Apple Silicon:
 
 ```bash
@@ -77,6 +81,12 @@ If macOS blocks the binary because of quarantine metadata:
 
 ```bash
 xattr -d com.apple.quarantine /usr/local/bin/obs-agent-connector
+```
+
+Then run:
+
+```bash
+obs-agent-connector version
 ```
 
 ## Linux Install Example

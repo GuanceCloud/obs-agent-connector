@@ -77,6 +77,9 @@ Build release packages:
 Release artifacts are written to `dist/`.
 Tagged release builds embed the Git tag as the CLI version.
 
+On macOS, do not double-click the extracted binary in Finder.
+Finder launches command-line executables through Terminal and appends `; exit;` automatically. Run the binary from Terminal instead.
+
 GitHub Actions:
 
 - `CI` runs on pushes and pull requests.
