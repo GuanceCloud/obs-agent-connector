@@ -70,16 +70,24 @@ The installer:
 Example:
 
 ```bash
-curl -fsSL -O <download-base-url>/install.sh
-sh install.sh --download-base-url <download-base-url>
+export OBS_AGENT_CONNECTOR_OSS_ENDPOINT=<download-base-url>
+curl -fsSL -O $OBS_AGENT_CONNECTOR_OSS_ENDPOINT/install.sh
+sh install.sh
 ```
 
 If you want to install a specific version:
 
 ```bash
+export OBS_AGENT_CONNECTOR_OSS_ENDPOINT=<download-base-url>
+curl -fsSL -O $OBS_AGENT_CONNECTOR_OSS_ENDPOINT/install.sh
 sh install.sh \
-  --version v0.1.1 \
-  --download-base-url <download-base-url>
+  --version v0.1.2
+```
+
+You can still pass the source explicitly:
+
+```bash
+sh install.sh --download-base-url <download-base-url>
 ```
 
 The generated config file contains the CLI download base URL used later by `version` and self-update commands.

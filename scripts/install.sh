@@ -5,7 +5,7 @@ APP_NAME="obs-agent-connector"
 VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-}"
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.obs-agent-connector}"
-DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL:-}"
+DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL:-${OBS_AGENT_CONNECTOR_OSS_ENDPOINT:-${OBS_AGENT_CONNECTOR_OSS_ENPOINT:-}}}"
 
 usage() {
   cat <<EOF
@@ -35,7 +35,7 @@ if [ -z "${INSTALL_DIR}" ]; then
 fi
 
 if [ -z "${DOWNLOAD_BASE_URL}" ]; then
-  echo "download_base_url is required; pass --download-base-url <url> or set DOWNLOAD_BASE_URL" >&2
+  echo "download_base_url is required; pass --download-base-url <url> or set DOWNLOAD_BASE_URL / OBS_AGENT_CONNECTOR_OSS_ENDPOINT" >&2
   exit 2
 fi
 
