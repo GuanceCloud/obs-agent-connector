@@ -38,6 +38,7 @@ The workflow uploads:
 - Linux tarballs
 - Windows zip packages
 - `install.sh`
+- `install.ps1`
 - `latest.txt`
 - `SHA256SUMS`
 
@@ -90,6 +91,38 @@ You can still pass the source explicitly:
 sh install.sh --download-base-url <download-base-url>
 ```
 
+## Windows Preferred Install Method
+
+Use the PowerShell installer on Windows.
+The installer:
+
+- downloads the correct Windows zip package
+- installs `obs-agent-connector.exe` into a user-local bin directory
+- writes `%USERPROFILE%\.obs-agent-connector\config.json`
+- updates the user `PATH` by default
+
+Example:
+
+```powershell
+$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT = "<download-base-url>"
+Invoke-WebRequest -Uri "$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT/install.ps1" -OutFile "install.ps1"
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+```
+
+If you want to install a specific version:
+
+```powershell
+$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT = "<download-base-url>"
+Invoke-WebRequest -Uri "$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT/install.ps1" -OutFile "install.ps1"
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version v0.1.2
+```
+
+You can still pass the source explicitly:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -DownloadBaseUrl <download-base-url>
+```
+
 The generated config file contains the CLI download base URL used later by `version` and self-update commands.
 That download base should also expose `latest.txt`.
 
@@ -137,9 +170,9 @@ sudo mv obs-agent-connector-linux-amd64 /usr/local/bin/obs-agent-connector
 
 For ARM64 Linux, use `obs-agent-connector-linux-arm64.tar.gz`.
 
-## Windows Install Example
+## Windows Manual Install Example
 
-Unzip the package:
+If you do not want to use the installer, unzip the package:
 
 ```powershell
 Expand-Archive .\obs-agent-connector-windows-amd64.zip -DestinationPath .
@@ -151,4 +184,4 @@ Run:
 .\obs-agent-connector-windows-amd64.exe doctor
 ```
 
-You can optionally rename the executable to `obs-agent-connector.exe` and add its directory to `PATH`.
+You can optionally rename the executable to `obs-agent-connector.exe`, place it in a stable directory, and add that directory to `PATH`.

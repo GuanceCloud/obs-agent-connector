@@ -6,6 +6,23 @@ VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-}"
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.obs-agent-connector}"
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL:-${OBS_AGENT_CONNECTOR_OSS_ENDPOINT:-}}"
+SCRIPT_PATH=""
+
+case "${0:-}" in
+  ""|"-"|sh|*/sh) ;;
+  /*)
+    if [ -f "$0" ]; then
+      SCRIPT_PATH="$0"
+    fi
+    ;;
+  *)
+    if [ -f "./$0" ]; then
+      SCRIPT_PATH="./$0"
+    elif [ -f "$0" ]; then
+      SCRIPT_PATH="$0"
+    fi
+    ;;
+esac
 
 usage() {
   cat <<EOF
@@ -96,3 +113,7 @@ case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *) printf 'Add %s to PATH if needed.\n' "$INSTALL_DIR" ;;
 esac
+
+if [ -n "$SCRIPT_PATH" ] && [ -f "$SCRIPT_PATH" ]; then
+  rm -f "$SCRIPT_PATH"
+fi

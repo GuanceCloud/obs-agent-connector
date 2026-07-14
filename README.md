@@ -15,6 +15,7 @@ The tool provides a single entry point for plugin installation, update, removal,
 - Show the current CLI version and check whether a newer GitHub release is available.
 - Support separate Qoder international and China editions.
 - Install the CLI through a dedicated installer script.
+- Use native installers for Unix shell and Windows PowerShell.
 - Keep CLI download metadata in `~/.obs-agent-connector/config.json`.
 - Build release packages for macOS, Linux, and Windows.
 
@@ -84,6 +85,7 @@ Finder launches command-line executables through Terminal and appends `; exit;` 
 
 Preferred CLI installation uses the release installer script.
 The installer writes `~/.obs-agent-connector/config.json`, and `version` / self-update use that file to resolve the CLI download source.
+Use `install.sh` on macOS/Linux and `install.ps1` on Windows.
 
 GitHub Actions:
 

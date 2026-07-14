@@ -5,7 +5,7 @@
 - `qoder-cn` is still accepted as a legacy compatibility target
 
 ## Packages
-- Installer: `install.sh`
+- Installers: `install.sh`, `install.ps1`
 - Metadata: `latest.txt`
 - macOS: `darwin-amd64`, `darwin-arm64`
 - Linux: `linux-amd64`, `linux-arm64`

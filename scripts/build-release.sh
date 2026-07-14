@@ -59,6 +59,7 @@ build windows amd64
 build windows arm64
 
 install -m 0755 "${ROOT_DIR}/scripts/install.sh" "${DIST_DIR}/install.sh"
+install -m 0644 "${ROOT_DIR}/scripts/install.ps1" "${DIST_DIR}/install.ps1"
 
 package_tar "${APP_NAME}-darwin-arm64"
 package_tar "${APP_NAME}-darwin-amd64"
@@ -73,6 +74,7 @@ printf '%s\n' "${VERSION}" > "${DIST_DIR}/latest.txt"
   cd "${DIST_DIR}"
   write_checksums \
     "install.sh" \
+    "install.ps1" \
     "latest.txt" \
     "${APP_NAME}"-darwin-*.tar.gz \
     "${APP_NAME}"-linux-*.tar.gz \

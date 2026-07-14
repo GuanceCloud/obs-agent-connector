@@ -39,5 +39,6 @@ jobs:
             dist/*.tar.gz
             dist/*.zip
             dist/*.sh
+            dist/*.ps1
             dist/*.txt
             dist/SHA256SUMS
