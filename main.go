@@ -276,7 +276,7 @@ func doctor(args []string) error {
 	fs.SetOutput(os.Stderr)
 	verbose := fs.Bool("verbose", false, "Show all checks")
 	online := fs.Bool("online", false, "Check whether remote installer scripts are reachable")
-	staticBaseFlag := fs.String("static-base", "", "Installer script and OSS package base URL. Default: https://static.guance.com")
+	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
 
 	target := ""
 	flagArgs := args
@@ -339,7 +339,7 @@ func install(args []string) error {
 	xToken := fs.String("x-token", "", "GTrace X-Token")
 	agentID := fs.String("agent-id", "", "GTrace agent_id tag")
 	agentName := fs.String("agent-name", "", "GTrace agent_name tag")
-	staticBaseFlag := fs.String("static-base", "", "Installer script and OSS package base URL. Default: https://static.guance.com")
+	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without installing")
 
@@ -438,7 +438,7 @@ func update(args []string) error {
 func updatePlugins(args []string) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	staticBaseFlag := fs.String("static-base", "", "Installer script and OSS package base URL. Default: https://static.guance.com")
+	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without updating")
 
@@ -1220,12 +1220,29 @@ func staticBaseURL(value string, endpoint string) string {
 		value = strings.TrimSpace(os.Getenv("GTRACE_AGENT_STATIC_BASE"))
 	}
 	if value == "" {
+		value = staticBaseFromDownloadBase(os.Getenv("DOWNLOAD_BASE_URL"))
+	}
+	if value == "" {
+		value = staticBaseFromDownloadBase(os.Getenv("OBS_AGENT_CONNECTOR_OSS_ENDPOINT"))
+	}
+	if value == "" {
+		value = connectorPluginStaticBase()
+	}
+	if value == "" {
 		value = derivedStaticBaseFromEndpoint(endpoint)
 	}
 	if value == "" {
 		value = defaultStaticBase
 	}
 	return strings.TrimRight(value, "/")
+}
+
+func connectorPluginStaticBase() string {
+	cfg, _, err := loadConnectorConfig()
+	if err != nil {
+		return ""
+	}
+	return staticBaseFromDownloadBase(cfg.DownloadBaseURL)
 }
 
 func defaultConnectorConfig() connectorConfig {
@@ -1277,6 +1294,36 @@ func latestMetadataURL(cfg connectorConfig) string {
 		return ""
 	}
 	return strings.TrimRight(cfg.DownloadBaseURL, "/") + "/latest.txt"
+}
+
+func staticBaseFromDownloadBase(downloadBase string) string {
+	downloadBase = strings.TrimSpace(downloadBase)
+	if downloadBase == "" {
+		return ""
+	}
+
+	parsed, err := url.Parse(downloadBase)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		return ""
+	}
+
+	parsed.RawQuery = ""
+	parsed.Fragment = ""
+
+	cleanedPath := strings.TrimRight(parsed.Path, "/")
+	if cleanedPath == "" {
+		parsed.Path = ""
+		return strings.TrimRight(parsed.String(), "/")
+	}
+
+	lastSlash := strings.LastIndex(cleanedPath, "/")
+	if lastSlash <= 0 {
+		parsed.Path = ""
+		return strings.TrimRight(parsed.String(), "/")
+	}
+
+	parsed.Path = cleanedPath[:lastSlash]
+	return strings.TrimRight(parsed.String(), "/")
 }
 
 func derivedStaticBaseFromEndpoint(endpoint string) string {

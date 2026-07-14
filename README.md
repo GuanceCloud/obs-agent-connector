@@ -46,8 +46,8 @@ For Qoder installs, `obs-agent-connector` detects the local layout and uses:
 - `--variant cn` with `~/.qoder-cn` when the CN layout is detected
 - `--variant global` with `~/.qoder` when the global layout is detected
 
-For plugin installation, `obs-agent-connector` also derives the default installer base from `--endpoint`.
-The CLI extracts the root domain from `--endpoint` and maps it to `https://static.<root-domain>`.
+For plugin installation, `obs-agent-connector` first reuses the CLI download source recorded in `~/.obs-agent-connector/config.json`.
+If that source is unavailable, the CLI derives the installer base from `--endpoint` by mapping the root domain to `https://static.<root-domain>`.
 Use `--static-base` to override this behavior.
 
 Compatibility note:

@@ -36,9 +36,10 @@ obs-agent-connector install codex \
   --yes
 ```
 
-By default, `install` derives the installer base from `--endpoint`.
+By default, `install` reuses the CLI download source recorded in `~/.obs-agent-connector/config.json`.
+If that source is unavailable, `install` derives the installer base from `--endpoint`.
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
-Use `--static-base` when you need to override the derived installer base.
+Use `--static-base` when you need to override the installer base.
 
 Preview only:
 

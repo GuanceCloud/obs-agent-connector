@@ -7,6 +7,8 @@ INSTALL_DIR="${INSTALL_DIR:-}"
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.obs-agent-connector}"
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL:-${OBS_AGENT_CONNECTOR_OSS_ENDPOINT:-}}"
 SCRIPT_PATH=""
+PATH_RC_FILE=""
+PATH_EXPORT_LINE=""
 
 case "${0:-}" in
   ""|"-"|sh|*/sh) ;;
@@ -29,6 +31,15 @@ usage() {
 Usage:
   install.sh [--version <tag|latest>] [--install-dir <path>] [--config-dir <path>] [--download-base-url <url>]
 EOF
+}
+
+shell_rc_file() {
+  shell_name="$(basename "${SHELL:-}")"
+  case "$shell_name" in
+    zsh) printf '%s\n' "$HOME/.zshrc" ;;
+    bash) printf '%s\n' "$HOME/.bashrc" ;;
+    *) printf '%s\n' "$HOME/.profile" ;;
+  esac
 }
 
 while [ "$#" -gt 0 ]; do
@@ -111,7 +122,21 @@ printf 'Wrote config to %s\n' "$config_path"
 
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
-  *) printf 'Add %s to PATH if needed.\n' "$INSTALL_DIR" ;;
+  *)
+    PATH_RC_FILE="$(shell_rc_file)"
+    PATH_EXPORT_LINE="export PATH=\"$INSTALL_DIR:\$PATH\""
+    if [ -n "$PATH_RC_FILE" ]; then
+      if [ ! -f "$PATH_RC_FILE" ] || ! grep -Fqs "$PATH_EXPORT_LINE" "$PATH_RC_FILE"; then
+        printf '\n%s\n' "$PATH_EXPORT_LINE" >> "$PATH_RC_FILE"
+        printf 'Added %s to PATH in %s\n' "$INSTALL_DIR" "$PATH_RC_FILE"
+      else
+        printf 'PATH already configured in %s\n' "$PATH_RC_FILE"
+      fi
+      printf 'Open a new shell or run: export PATH="%s:$PATH"\n' "$INSTALL_DIR"
+    else
+      printf 'Add %s to PATH if needed.\n' "$INSTALL_DIR"
+    fi
+    ;;
 esac
 
 if [ -n "$SCRIPT_PATH" ] && [ -f "$SCRIPT_PATH" ]; then
