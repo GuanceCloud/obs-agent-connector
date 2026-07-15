@@ -12,20 +12,66 @@ obs-agent-connector <command> [arguments]
 | --- | --- |
 | `list` | List installed Agent plugins detected on the local machine. |
 | `doctor [agent]` | Diagnose missing commands, missing plugin files, missing config files, and optional remote installer reachability. If no agent is provided, all supported agents are checked. |
+| `discover` | Detect supported local Agents and install any missing plugins by using connector defaults from `config.json`. |
 | `install <agent>` | Install one Agent plugin using the remote plugin installer. |
 | `update <agent>` | Update one installed Agent plugin without modifying its current configuration. |
 | `remove <agent>` | Remove one installed Agent plugin. Configuration files are kept unless `--purge-config` is used. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print a matching self-update command when a newer release is available. |
 
+## Bootstrap
+
+Initialize the CLI and save shared OBS defaults:
+
+```bash
+curl -fsSL -O https://static.guance.com/obs-agent-connector/install.sh
+sh install.sh --endpoint=https://llm-openway.guance.com --x-token=agent_xxx
+```
+
+The installer writes:
+
+- `download_base_url`
+- `endpoint`
+- `x_token`
+
+into `~/.obs-agent-connector/config.json`.
+When no download source is supplied, the installer derives it from the endpoint root domain and verifies the selected package against `SHA256SUMS`.
+
+## Discover
+
+Auto-install missing plugins for detected local Agents:
+
+```bash
+obs-agent-connector discover
+```
+
+Preview only:
+
+```bash
+obs-agent-connector discover --dry-run
+```
+
+Override stored defaults for a single run:
+
+```bash
+obs-agent-connector discover \
+  --endpoint https://llm-openway.guance.com \
+  --x-token agent_xxx \
+  --yes
+```
+
+`discover` detects supported Agent commands in `PATH`, skips Agents whose plugins are already installed, generates one `agent_id` per new plugin, and uses `<hostname>_<year>` as the default `agent_name`.
+Qoder is skipped until either `~/.qoder` or `~/.qoder-cn` has been created by the Agent.
+Missing or invalid connector defaults are reported as `discover failed` errors.
+
 ## Install
 
-Interactive install:
+Install one plugin with stored connector defaults:
 
 ```bash
 obs-agent-connector install codex
 ```
 
-Non-interactive install:
+Override stored defaults or identity values:
 
 ```bash
 obs-agent-connector install codex \
@@ -40,6 +86,8 @@ By default, `install` reuses the CLI download source recorded in `~/.obs-agent-c
 If that source is unavailable, `install` derives the installer base from `--endpoint`.
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
 Use `--static-base` when you need to override the installer base.
+
+When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically.
 
 Preview only:
 
@@ -114,7 +162,7 @@ Show the current version and check for a newer release:
 obs-agent-connector version
 ```
 
-`version` reads CLI download metadata from `~/.obs-agent-connector/config.json`. The standard installer writes `download_base_url` there, and later self-update commands use the same address.
+`version` reads CLI metadata from `~/.obs-agent-connector/config.json`. The standard installer writes `download_base_url`, `endpoint`, and `x_token`, and later self-update commands use the same download source.
 
 Skip the remote release check:
 

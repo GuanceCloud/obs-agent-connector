@@ -2,9 +2,7 @@
 set -eu
 
 ROOT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
-TEMPLATE_FILE="${ROOT_DIR}/docs/release-template.md"
 OUTPUT_FILE="${1:-${ROOT_DIR}/dist/RELEASE_NOTES.md}"
-APP_NAME="${APP_NAME:-obs-agent-connector}"
 VERSION="${VERSION:-dev}"
 
 mkdir -p "$(dirname "${OUTPUT_FILE}")"
@@ -32,16 +30,4 @@ if [ -z "${CHANGES}" ]; then
   CHANGES="- Packaging update"
 fi
 
-escaped_changes="$(printf '%s\n' "${CHANGES}" | sed 's/[&/\]/\\&/g')"
-
-sed \
-  -e "s/{{APP_NAME}}/${APP_NAME}/g" \
-  -e "s/{{VERSION}}/${VERSION}/g" \
-  -e "/{{CHANGES}}/{
-r /dev/stdin
-d
-}" \
-  "${TEMPLATE_FILE}" \
-  > "${OUTPUT_FILE}" <<EOF
-${escaped_changes}
-EOF
+printf '%s\n' "${CHANGES}" > "${OUTPUT_FILE}"

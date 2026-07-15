@@ -21,17 +21,20 @@ Both `qoder` and `qoder-cn` use the same plugin installer:
 | `qoder` | Detects the local layout, sets `QODER_HOME`, and passes `--variant cn` or `--variant global` |
 | `qoder-cn` | Legacy compatibility target that forces the CN layout with `QODER_HOME=~/.qoder-cn` and `--variant cn` |
 
+Qoder discovery requires an existing `~/.qoder` or `~/.qoder-cn` directory. If neither directory exists, the Agent is treated as not installed and its plugin is not installed.
+
 This prevents the international and China editions from overwriting each other's plugin files and configuration.
 
 ## Install Parameters
 
-The CLI collects these values:
+Bootstrap stores shared defaults for `Endpoint` and `X-Token` in `~/.obs-agent-connector/config.json`.
+At plugin install time, the CLI uses:
 
-| Prompt | Plugin Argument |
+| Value | Source | Plugin Argument |
 | --- | --- |
-| `Endpoint` | `--endpoint` |
-| `X-Token` | `--x-token` |
-| `Agent ID` | `--tag agent_id=<value>` |
-| `Agent Name` | `--tag agent_name=<value>` |
+| `Endpoint` | `config.json` or `--endpoint` override | `--endpoint` |
+| `X-Token` | `config.json` or `--x-token` override | `--x-token` |
+| `Agent ID` | auto-generated or `--agent-id` override | `--tag agent_id=<value>` |
+| `Agent Name` | auto-generated or `--agent-name` override | `--tag agent_name=<value>` |
 
 The CLI always uses `--type gtrace`.

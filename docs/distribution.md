@@ -55,7 +55,7 @@ The `Release` workflow:
 
 1. Calls the reusable `Package` workflow with the tag name as `version`
 2. Downloads the packaged artifacts
-3. Renders release notes from `docs/release-template.md`
+3. Renders release notes directly from commit subjects between the previous tag and the current tag
 4. Publishes the artifacts and generated notes to GitHub Releases
 
 ## Preferred Install Method
@@ -64,31 +64,42 @@ Use the installer script instead of opening the binary directly.
 The installer:
 
 - downloads the correct package for the current platform
+- derives the download source from the endpoint when no source is supplied
+- verifies the package against `SHA256SUMS` before extraction
 - installs `obs-agent-connector` into a bin directory
 - writes `~/.obs-agent-connector/config.json`
-- records the CLI download source for later `version` and self-update operations
+- records the CLI download source plus shared `endpoint` and `x_token` defaults for later `discover`, `install`, `version`, and self-update operations
 
 Example:
 
 ```bash
-export OBS_AGENT_CONNECTOR_OSS_ENDPOINT=<download-base-url>
-curl -fsSL -O $OBS_AGENT_CONNECTOR_OSS_ENDPOINT/install.sh
-sh install.sh
+curl -fsSL -O https://static.guance.com/obs-agent-connector/install.sh
+sh install.sh --endpoint=https://llm-openway.guance.com --x-token=agent_xxx
+```
+
+If the installer adds `~/.local/bin` to your shell profile, reload the profile before using the command in the current shell:
+
+```bash
+source ~/.zshrc
 ```
 
 If you want to install a specific version:
 
 ```bash
-export OBS_AGENT_CONNECTOR_OSS_ENDPOINT=<download-base-url>
-curl -fsSL -O $OBS_AGENT_CONNECTOR_OSS_ENDPOINT/install.sh
+curl -fsSL -O https://static.guance.com/obs-agent-connector/install.sh
 sh install.sh \
-  --version v0.1.2
+  --version v0.1.4 \
+  --endpoint=https://llm-openway.guance.com \
+  --x-token=agent_xxx
 ```
 
 You can still pass the source explicitly:
 
 ```bash
-sh install.sh --download-base-url <download-base-url>
+sh install.sh \
+  --download-base-url <download-base-url> \
+  --endpoint <endpoint> \
+  --x-token <token>
 ```
 
 ## Windows Preferred Install Method
@@ -104,26 +115,26 @@ The installer:
 Example:
 
 ```powershell
-$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT = "<download-base-url>"
+$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT = "https://static.guance.com/obs-agent-connector"
 Invoke-WebRequest -Uri "$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT/install.ps1" -OutFile "install.ps1"
-powershell -ExecutionPolicy Bypass -File .\install.ps1
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Endpoint "https://llm-openway.guance.com" -XToken "agent_xxx"
 ```
 
 If you want to install a specific version:
 
 ```powershell
-$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT = "<download-base-url>"
+$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT = "https://static.guance.com/obs-agent-connector"
 Invoke-WebRequest -Uri "$env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT/install.ps1" -OutFile "install.ps1"
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version v0.1.2
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Version v0.1.4 -Endpoint "https://llm-openway.guance.com" -XToken "agent_xxx"
 ```
 
 You can still pass the source explicitly:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -DownloadBaseUrl <download-base-url>
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -DownloadBaseUrl <download-base-url> -Endpoint <endpoint> -XToken <token>
 ```
 
-The generated config file contains the CLI download base URL used later by `version` and self-update commands.
+The generated config file contains the CLI download base URL plus shared `endpoint` and `x_token` values used later by `discover`, `install`, `version`, and self-update commands.
 That download base should also expose `latest.txt`.
 
 ## macOS Manual Install Example

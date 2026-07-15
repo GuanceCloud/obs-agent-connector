@@ -6,8 +6,10 @@ The tool provides a single entry point for plugin installation, update, removal,
 
 ## Features
 
+- Bootstrap the CLI and OBS defaults with one installer command.
 - Install Agent plugins through the official remote installer scripts.
-- Collect required OBS/GTrace parameters interactively.
+- Auto-discover local Agents and install missing plugins.
+- Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
 - Update one installed Agent plugin without modifying existing configuration.
 - Remove installed plugins while keeping configuration by default.
 - Detect installed plugins and their configuration paths.
@@ -34,6 +36,7 @@ The tool provides a single entry point for plugin installation, update, removal,
 ```bash
 obs-agent-connector list
 obs-agent-connector doctor
+obs-agent-connector discover
 obs-agent-connector install codex
 obs-agent-connector install qoder
 obs-agent-connector update codex
@@ -54,14 +57,20 @@ Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
 
-During installation, the CLI prompts for:
+Bootstrap the CLI with shared defaults:
 
-```text
-Endpoint
-X-Token
-Agent ID
-Agent Name
+```bash
+curl -fsSL -O https://static.guance.com/obs-agent-connector/install.sh && \
+sh install.sh --endpoint=https://llm-openway.guance.com --x-token=agent_xxx
 ```
+
+On first install, the script derives `download_base_url` from the endpoint root domain.
+For example, `https://llm-openway.guance.com` maps to `https://static.guance.com/obs-agent-connector`.
+The downloaded package is verified against `SHA256SUMS` before installation.
+
+After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
+`install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
+Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 
 ## Build
 
@@ -84,14 +93,15 @@ On macOS, do not double-click the extracted binary in Finder.
 Finder launches command-line executables through Terminal and appends `; exit;` automatically. Run the binary from Terminal instead.
 
 Preferred CLI installation uses the release installer script.
-The installer writes `~/.obs-agent-connector/config.json`, and `version` / self-update use that file to resolve the CLI download source.
+The installer writes `~/.obs-agent-connector/config.json`, including `download_base_url`, `endpoint`, and `x_token`.
+`install`, `discover`, `version`, and self-update reuse that file.
 Use `install.sh` on macOS/Linux and `install.ps1` on Windows.
 
 GitHub Actions:
 
 - `CI` runs on pushes and pull requests.
 - `Package` runs manually and uploads packaged artifacts as a workflow artifact.
-- `Release` runs on tags matching `v*`, reuses the `Package` workflow, renders release notes from the repository template, and publishes the same artifacts to GitHub Releases.
+- `Release` runs on tags matching `v*`, reuses the `Package` workflow, renders release notes from commit subjects, and publishes the same artifacts to GitHub Releases.
 
 ## Project Layout
 

@@ -2,6 +2,8 @@ package main
 
 import (
 	"bufio"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -17,6 +19,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
@@ -64,6 +67,20 @@ type githubRelease struct {
 
 type connectorConfig struct {
 	DownloadBaseURL string `json:"download_base_url"`
+	Endpoint        string `json:"endpoint"`
+	XToken          string `json:"x_token"`
+}
+
+type discoverCandidate struct {
+	Plugin        plugin
+	DetectedCmd   string
+	InstalledPath string
+}
+
+type discoverResult struct {
+	Agent  string
+	Result string
+	Detail string
 }
 
 var plugins = map[string]plugin{
@@ -198,6 +215,8 @@ func run(args []string) error {
 		return listPlugins()
 	case "doctor":
 		return doctor(args[1:])
+	case "discover":
+		return discover(args[1:])
 	case "install":
 		return install(args[1:])
 	case "update":
@@ -223,25 +242,19 @@ Usage:
 Commands:
   list                  List installed Agent plugins
   doctor [agent]        Diagnose environment and plugin issues
+  discover              Detect local Agents and install missing plugins
   install <agent>       Install an Agent plugin
   update <agent>        Update one installed Agent plugin
   remove <agent>        Remove an Agent plugin
   version               Show version and check for updates
-  version               Show current version and check for updates
 
 Examples:
+  obs-agent-connector discover
   obs-agent-connector install codex
   obs-agent-connector install qoder
   obs-agent-connector update codex
   obs-agent-connector remove codex
   obs-agent-connector version
-  obs-agent-connector version
-
-install prompts for:
-  Endpoint
-  X-Token
-  Agent ID
-  Agent Name
 
 `, appName)
 }
@@ -304,7 +317,7 @@ func doctor(args []string) error {
 	explicitTarget := strings.TrimSpace(strings.ToLower(target)) != ""
 	for _, p := range selected {
 		p = resolvedPlugin(p)
-		results = append(results, checkCommand(p.Name, p.AgentCommand, "Agent command was not found", "Install "+p.AgentCommand+" or check PATH"))
+		results = append(results, checkAgentCommand(p))
 		results = append(results, checkPluginInstalled(p, explicitTarget))
 		results = append(results, checkConfig(p))
 		for _, dependency := range p.Dependencies {
@@ -364,13 +377,22 @@ func install(args []string) error {
 	if err != nil {
 		return err
 	}
+	selected, err = resolvePluginsForInstall(selected)
+	if err != nil {
+		return err
+	}
 
-	input, err := promptInstallInput(installInput{
+	cfg, _, err := loadConnectorConfig()
+	if err != nil {
+		return err
+	}
+
+	input, err := resolveInstallInput(installInput{
 		Endpoint:  strings.TrimSpace(*endpoint),
 		XToken:    strings.TrimSpace(*xToken),
 		AgentID:   strings.TrimSpace(*agentID),
 		AgentName: strings.TrimSpace(*agentName),
-	})
+	}, cfg)
 	if err != nil {
 		return err
 	}
@@ -415,6 +437,140 @@ func install(args []string) error {
 		if err := installOne(staticBase, p, input); err != nil {
 			return err
 		}
+	}
+
+	return nil
+}
+
+func discover(args []string) error {
+	fs := flag.NewFlagSet("discover", flag.ContinueOnError)
+	fs.SetOutput(os.Stderr)
+	endpoint := fs.String("endpoint", "", "GTrace endpoint")
+	xToken := fs.String("x-token", "", "GTrace X-Token")
+	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
+	yes := fs.Bool("yes", false, "Skip confirmation")
+	dryRun := fs.Bool("dry-run", false, "Print planned actions without installing")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	if fs.NArg() > 0 {
+		return fmt.Errorf("unrecognized discover arguments: %s", strings.Join(fs.Args(), " "))
+	}
+
+	cfg, _, err := loadConnectorConfig()
+	if err != nil {
+		return fmt.Errorf("discover failed to load connector config: %w", err)
+	}
+
+	input, err := resolveCommonInstallInput(installInput{
+		Endpoint: strings.TrimSpace(*endpoint),
+		XToken:   strings.TrimSpace(*xToken),
+	}, cfg)
+	if err != nil {
+		return fmt.Errorf("discover failed: %w", err)
+	}
+
+	candidates := discoverCandidates()
+	if len(candidates) == 0 {
+		fmt.Println("No supported Agents detected.")
+		return nil
+	}
+
+	rows := make([][]string, 0, len(candidates))
+	pending := make([]discoverCandidate, 0, len(candidates))
+	for _, candidate := range candidates {
+		pluginState := "missing"
+		action := "install"
+		if candidate.InstalledPath != "" {
+			pluginState = "installed"
+			action = "skip"
+		} else {
+			pending = append(pending, candidate)
+		}
+		rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, pluginState, action})
+	}
+
+	fmt.Println("Discover plan:")
+	printTable([]string{"AGENT", "COMMAND", "PLUGIN", "ACTION"}, rows)
+
+	if len(pending) == 0 {
+		fmt.Println("All detected Agents already have plugins installed.")
+		return nil
+	}
+
+	staticBase := staticBaseURL(*staticBaseFlag, input.Endpoint)
+	fmt.Printf("OSS_ENDPOINT: %s\n", staticBase)
+	fmt.Printf("Endpoint: %s\n", input.Endpoint)
+	fmt.Printf("X-Token: %s\n", input.XToken)
+
+	if *dryRun {
+		return nil
+	}
+
+	if !*yes {
+		ok, err := confirm("Continue discovery install?", true)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			fmt.Println("Canceled.")
+			return nil
+		}
+	}
+
+	results := make([]discoverResult, 0, len(candidates))
+	hadFailure := false
+	for _, candidate := range candidates {
+		if candidate.InstalledPath != "" {
+			results = append(results, discoverResult{
+				Agent:  candidate.Plugin.Name,
+				Result: "skipped",
+				Detail: "plugin already installed",
+			})
+			continue
+		}
+
+		perAgent, err := resolveInstallInput(installInput{
+			Endpoint: input.Endpoint,
+			XToken:   input.XToken,
+		}, cfg)
+		if err != nil {
+			hadFailure = true
+			results = append(results, discoverResult{
+				Agent:  candidate.Plugin.Name,
+				Result: "failed",
+				Detail: err.Error(),
+			})
+			continue
+		}
+
+		if err := installOne(staticBase, candidate.Plugin, perAgent); err != nil {
+			hadFailure = true
+			results = append(results, discoverResult{
+				Agent:  candidate.Plugin.Name,
+				Result: "failed",
+				Detail: err.Error(),
+			})
+			continue
+		}
+
+		results = append(results, discoverResult{
+			Agent:  candidate.Plugin.Name,
+			Result: "installed",
+			Detail: fmt.Sprintf("agent_id=%s agent_name=%s", perAgent.AgentID, perAgent.AgentName),
+		})
+	}
+
+	fmt.Println()
+	fmt.Println("Discover summary:")
+	summaryRows := make([][]string, 0, len(results))
+	for _, result := range results {
+		summaryRows = append(summaryRows, []string{result.Agent, result.Result, result.Detail})
+	}
+	printTable([]string{"AGENT", "RESULT", "DETAIL"}, summaryRows)
+
+	if hadFailure {
+		return fmt.Errorf("one or more plugin installs failed")
 	}
 
 	return nil
@@ -680,6 +836,54 @@ func selectInstalledPlugins(target string) ([]plugin, error) {
 	return out, nil
 }
 
+func resolvePluginsForInstall(selected []plugin) ([]plugin, error) {
+	resolved := make([]plugin, 0, len(selected))
+	for _, p := range selected {
+		switch p.Name {
+		case "qoder", "qoder-cn":
+			variant, ok := detectExistingQoderVariant()
+			if !ok {
+				return nil, fmt.Errorf("qoder Agent data directory was not found; start Qoder before installing its plugin")
+			}
+			if p.Name == "qoder-cn" && variant != "cn" {
+				return nil, fmt.Errorf("qoder-cn Agent data directory was not found: ~/.qoder-cn")
+			}
+			resolved = append(resolved, withQoderVariant(p, variant))
+		default:
+			resolved = append(resolved, p)
+		}
+	}
+	return resolved, nil
+}
+
+func discoverCandidates() []discoverCandidate {
+	names := pluginNames()
+	out := make([]discoverCandidate, 0, len(names))
+	for _, name := range names {
+		p := plugins[name]
+		if p.Name == "qoder" {
+			variant, ok := detectExistingQoderVariant()
+			if !ok {
+				continue
+			}
+			p = withQoderVariant(p, variant)
+		} else {
+			p = resolvedPlugin(p)
+		}
+		command, ok := detectAgentCommand(p)
+		if !ok {
+			continue
+		}
+		installedPath, _ := installedMarker(p)
+		out = append(out, discoverCandidate{
+			Plugin:        p,
+			DetectedCmd:   command,
+			InstalledPath: installedPath,
+		})
+	}
+	return out
+}
+
 func checkCommand(target string, command string, missingMessage string, fix string) checkResult {
 	if _, err := exec.LookPath(command); err == nil {
 		return checkResult{
@@ -696,6 +900,28 @@ func checkCommand(target string, command string, missingMessage string, fix stri
 		Check:   command,
 		Message: missingMessage,
 		Fix:     fix,
+	}
+}
+
+func checkAgentCommand(p plugin) checkResult {
+	command, ok := detectAgentCommand(p)
+	if ok {
+		return checkResult{
+			Level:   "OK",
+			Target:  p.Name,
+			Check:   command,
+			Message: "found",
+			Fix:     "-",
+		}
+	}
+
+	candidates := agentCommands(p)
+	return checkResult{
+		Level:   "FAIL",
+		Target:  p.Name,
+		Check:   strings.Join(candidates, "|"),
+		Message: "Agent command was not found",
+		Fix:     "Install " + strings.Join(candidates, " or ") + " or check PATH",
 	}
 }
 
@@ -888,38 +1114,31 @@ func buildSelfUpdateCommand(tag string, cfg connectorConfig) (string, string, er
 		return "", "", err
 	}
 
-	packageName, binaryName, _, err := releaseAssetNames()
-	if err != nil {
-		return "", "", err
-	}
-
-	downloadURL := strings.TrimRight(cfg.DownloadBaseURL, "/") + "/" + packageName
+	installDir := filepath.Dir(executablePath)
+	downloadBase := strings.TrimRight(cfg.DownloadBaseURL, "/")
 
 	if runtime.GOOS == "windows" {
 		command := fmt.Sprintf(
-			"powershell -Command \"Invoke-WebRequest -Uri %s -OutFile $env:TEMP\\%s; Expand-Archive -Path $env:TEMP\\%s -DestinationPath $env:TEMP\\obs-agent-connector-update -Force; Copy-Item $env:TEMP\\obs-agent-connector-update\\%s %s -Force\"",
-			windowsDoubleQuote(downloadURL),
-			windowsDoubleQuote(packageName),
-			windowsDoubleQuote(packageName),
-			windowsDoubleQuote(binaryName),
-			windowsDoubleQuote(executablePath),
+			"powershell -ExecutionPolicy Bypass -Command \"$installer = Join-Path $env:TEMP 'obs-agent-connector-install.ps1'; Invoke-WebRequest -Uri %s -OutFile $installer; & $installer -BinaryOnly -Version %s -InstallDir %s -DownloadBaseUrl %s\"",
+			powershellSingleQuote(downloadBase+"/install.ps1"),
+			powershellSingleQuote(tag),
+			powershellSingleQuote(installDir),
+			powershellSingleQuote(downloadBase),
 		)
 		return command, "", nil
 	}
 
-	archivePath := "/tmp/" + packageName
-	extractedPath := "/tmp/" + binaryName
+	installerPath := "/tmp/obs-agent-connector-install.sh"
 	command := fmt.Sprintf(
-		"curl -fsSL -o %s %s && tar -xzf %s -C /tmp && install -m 0755 %s %s",
-		shellQuote(archivePath),
-		shellQuote(downloadURL),
-		shellQuote(archivePath),
-		shellQuote(extractedPath),
-		shellQuote(executablePath),
+		"curl -fsSL -o %s %s && sh %s --binary-only --version %s --install-dir %s --download-base-url %s",
+		shellQuote(installerPath),
+		shellQuote(downloadBase+"/install.sh"),
+		shellQuote(installerPath),
+		shellQuote(tag),
+		shellQuote(installDir),
+		shellQuote(downloadBase),
 	)
-
-	note := "If the current executable path requires elevated permissions, prefix the final install step with sudo."
-	return command, note, nil
+	return command, "If the current install directory requires elevated permissions, run the command with suitable privileges.", nil
 }
 
 func releaseAssetNames() (packageName string, binaryName string, extension string, err error) {
@@ -937,52 +1156,39 @@ func releaseAssetNames() (packageName string, binaryName string, extension strin
 	}
 }
 
-func promptInstallInput(defaults installInput) (installInput, error) {
-	reader := bufio.NewReader(os.Stdin)
-	var err error
-	input := defaults
-
-	if input.Endpoint == "" {
-		input.Endpoint, err = promptRequired(reader, "Endpoint")
+func resolveInstallInput(defaults installInput, cfg connectorConfig) (installInput, error) {
+	input, err := resolveCommonInstallInput(defaults, cfg)
+	if err != nil {
+		return input, err
+	}
+	if strings.TrimSpace(input.AgentID) == "" {
+		agentID, err := generateAgentID()
 		if err != nil {
 			return input, err
 		}
+		input.AgentID = agentID
 	}
-	if input.XToken == "" {
-		input.XToken, err = promptRequired(reader, "X-Token")
-		if err != nil {
-			return input, err
-		}
+	if strings.TrimSpace(input.AgentName) == "" {
+		input.AgentName = defaultAgentName(time.Now())
 	}
-	if input.AgentID == "" {
-		input.AgentID, err = promptRequired(reader, "Agent ID")
-		if err != nil {
-			return input, err
-		}
-	}
-	if input.AgentName == "" {
-		input.AgentName, err = promptRequired(reader, "Agent Name")
-		if err != nil {
-			return input, err
-		}
-	}
-
 	return input, nil
 }
 
-func promptRequired(reader *bufio.Reader, label string) (string, error) {
-	for {
-		fmt.Printf("%s: ", label)
-		value, err := reader.ReadString('\n')
-		if err != nil {
-			return "", err
-		}
-		value = strings.TrimSpace(value)
-		if value != "" {
-			return value, nil
-		}
-		fmt.Printf("%s cannot be empty.\n", label)
+func resolveCommonInstallInput(defaults installInput, cfg connectorConfig) (installInput, error) {
+	input := defaults
+	if strings.TrimSpace(input.Endpoint) == "" {
+		input.Endpoint = strings.TrimSpace(cfg.Endpoint)
 	}
+	if strings.TrimSpace(input.XToken) == "" {
+		input.XToken = strings.TrimSpace(cfg.XToken)
+	}
+	if strings.TrimSpace(input.Endpoint) == "" {
+		return input, fmt.Errorf("endpoint is required; pass --endpoint or configure it in %s", configFileName)
+	}
+	if strings.TrimSpace(input.XToken) == "" {
+		return input, fmt.Errorf("x-token is required; pass --x-token or configure it in %s", configFileName)
+	}
+	return input, nil
 }
 
 func confirm(label string, defaultYes bool) (bool, error) {
@@ -1285,6 +1491,12 @@ func loadConnectorConfig() (connectorConfig, string, error) {
 	if strings.TrimSpace(disk.DownloadBaseURL) != "" {
 		cfg.DownloadBaseURL = strings.TrimRight(strings.TrimSpace(disk.DownloadBaseURL), "/")
 	}
+	if strings.TrimSpace(disk.Endpoint) != "" {
+		cfg.Endpoint = strings.TrimSpace(disk.Endpoint)
+	}
+	if strings.TrimSpace(disk.XToken) != "" {
+		cfg.XToken = strings.TrimSpace(disk.XToken)
+	}
 
 	return cfg, path, nil
 }
@@ -1378,10 +1590,78 @@ func registeredDomain(host string) string {
 func pluginNames() []string {
 	names := make([]string, 0, len(plugins))
 	for name := range plugins {
+		if name == "qoder-cn" {
+			continue
+		}
 		names = append(names, name)
 	}
 	sort.Strings(names)
 	return names
+}
+
+func agentCommands(p plugin) []string {
+	return []string{p.AgentCommand}
+}
+
+func detectAgentCommand(p plugin) (string, bool) {
+	for _, command := range agentCommands(p) {
+		if _, err := exec.LookPath(command); err == nil {
+			return command, true
+		}
+	}
+	return "", false
+}
+
+func generateAgentID() (string, error) {
+	buf := make([]byte, 16)
+	if _, err := rand.Read(buf); err != nil {
+		return "", fmt.Errorf("generate agent_id: %w", err)
+	}
+	return "agent_" + hex.EncodeToString(buf), nil
+}
+
+func defaultAgentName(now time.Time) string {
+	host, err := os.Hostname()
+	if err != nil {
+		host = ""
+	}
+	host = normalizeAgentNameHost(host)
+	year := strconv.Itoa(now.Year())
+	if host == "" {
+		return "agent_" + year
+	}
+	return host + "_" + year
+}
+
+func normalizeAgentNameHost(value string) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if value == "" {
+		return ""
+	}
+
+	var builder strings.Builder
+	lastUnderscore := false
+	for _, r := range value {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' || r == '_' {
+			builder.WriteRune(r)
+			lastUnderscore = false
+			continue
+		}
+		if unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' || r == ' ' {
+			if !lastUnderscore {
+				builder.WriteByte('_')
+				lastUnderscore = true
+			}
+			continue
+		}
+		if !lastUnderscore {
+			builder.WriteByte('_')
+			lastUnderscore = true
+		}
+	}
+
+	normalized := strings.Trim(builder.String(), "_")
+	return normalized
 }
 
 func resolvedPlugin(p plugin) plugin {
@@ -1400,6 +1680,9 @@ func withQoderVariant(p plugin, variant string) plugin {
 	home := "~/.qoder"
 	if variant == "cn" {
 		home = "~/.qoder-cn"
+		resolved.AgentCommand = "qoder-cn"
+	} else {
+		resolved.AgentCommand = "qoder"
 	}
 	resolved.Env = []string{"QODER_HOME=" + home}
 	resolved.InstallArgs = []string{"--variant", variant}
@@ -1416,14 +1699,25 @@ func withQoderVariant(p plugin, variant string) plugin {
 }
 
 func detectQoderVariant(fallback string) string {
+	if variant, ok := detectExistingQoderVariant(); ok {
+		return variant
+	}
+
+	if strings.EqualFold(fallback, "global") {
+		return "global"
+	}
+	return "cn"
+}
+
+func detectExistingQoderVariant() (string, bool) {
 	qoderHome := strings.TrimSpace(os.Getenv("QODER_HOME"))
-	if qoderHome != "" {
+	if qoderHome != "" && pathExists(expandHome(qoderHome)) {
 		base := strings.ToLower(filepath.Base(qoderHome))
 		switch base {
 		case ".qoder-cn", "qoder-cn":
-			return "cn"
+			return "cn", true
 		case ".qoder", "qoder":
-			return "global"
+			return "global", true
 		}
 	}
 
@@ -1433,16 +1727,12 @@ func detectQoderVariant(fallback string) string {
 		hasCN := pathExists(filepath.Join(home, ".qoder-cn"))
 		switch {
 		case hasGlobal && !hasCN:
-			return "global"
+			return "global", true
 		case hasCN:
-			return "cn"
+			return "cn", true
 		}
 	}
-
-	if strings.EqualFold(fallback, "global") {
-		return "global"
-	}
-	return "cn"
+	return "", false
 }
 
 func installedMarker(p plugin) (string, bool) {
@@ -1545,4 +1835,8 @@ func shellQuote(value string) string {
 
 func windowsDoubleQuote(value string) string {
 	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
+}
+
+func powershellSingleQuote(value string) string {
+	return "'" + strings.ReplaceAll(value, "'", "''") + "'"
 }
