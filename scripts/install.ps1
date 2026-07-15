@@ -84,8 +84,21 @@ if (-not $InstallDir) {
 }
 
 function Get-LatestVersion {
-  $latestUrl = "$DownloadBaseUrl/latest.txt"
+  $latestUrl = "$DownloadBaseUrl/latest.txt?v=$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())"
   return (Invoke-RestMethod -Uri $latestUrl).ToString().Trim()
+}
+
+function Add-CacheKey {
+  param(
+    [string]$Url,
+    [string]$Key
+  )
+
+  $Uri = [System.Uri]$Url
+  if (($Uri.Scheme -ne "http") -and ($Uri.Scheme -ne "https")) {
+    return $Url
+  }
+  return "$Url?v=$([System.Uri]::EscapeDataString($Key))"
 }
 
 if ($Version -eq "latest") {
@@ -109,7 +122,8 @@ switch ($processorArchitecture.ToUpperInvariant()) {
 $AssetBaseName = "$AppName-windows-$GoArch"
 $AssetName = "$AssetBaseName.zip"
 $BinaryName = "$AssetBaseName.exe"
-$DownloadUrl = "$DownloadBaseUrl/$AssetName"
+$DownloadUrl = Add-CacheKey -Url "$DownloadBaseUrl/$AssetName" -Key $Version
+$ChecksumsUrl = Add-CacheKey -Url "$DownloadBaseUrl/SHA256SUMS" -Key $Version
 $TempDir = Join-Path ([System.IO.Path]::GetTempPath()) ([System.Guid]::NewGuid().ToString("N"))
 
 try {
@@ -120,7 +134,7 @@ try {
   $ZipPath = Join-Path $TempDir $AssetName
   $ChecksumsPath = Join-Path $TempDir "SHA256SUMS"
   Invoke-WebRequest -Uri $DownloadUrl -OutFile $ZipPath
-  Invoke-WebRequest -Uri "$DownloadBaseUrl/SHA256SUMS" -OutFile $ChecksumsPath
+  Invoke-WebRequest -Uri $ChecksumsUrl -OutFile $ChecksumsPath
 
   $ExpectedHash = $null
   foreach ($Line in Get-Content -LiteralPath $ChecksumsPath) {

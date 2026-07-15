@@ -58,6 +58,8 @@ The `Release` workflow:
 3. Renders release notes directly from commit subjects between the previous tag and the current tag
 4. Publishes the artifacts and generated notes to GitHub Releases
 
+When mirroring a release to a CDN-backed static download directory, upload the complete artifact set before updating `latest.txt` and `SHA256SUMS`. Purge or use a short cache policy for the stable `install.sh`, `install.ps1`, and `latest.txt` URLs. Package downloads include the resolved version as a cache key to avoid stale unversioned artifacts.
+
 ## Preferred Install Method
 
 Use the installer script instead of opening the binary directly.

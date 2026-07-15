@@ -1120,7 +1120,7 @@ func buildSelfUpdateCommand(tag string, cfg connectorConfig) (string, string, er
 	if runtime.GOOS == "windows" {
 		command := fmt.Sprintf(
 			"powershell -ExecutionPolicy Bypass -Command \"$installer = Join-Path $env:TEMP 'obs-agent-connector-install.ps1'; Invoke-WebRequest -Uri %s -OutFile $installer; & $installer -BinaryOnly -Version %s -InstallDir %s -DownloadBaseUrl %s\"",
-			powershellSingleQuote(downloadBase+"/install.ps1"),
+			powershellSingleQuote(downloadBase+"/install.ps1?v="+url.QueryEscape(tag)),
 			powershellSingleQuote(tag),
 			powershellSingleQuote(installDir),
 			powershellSingleQuote(downloadBase),
@@ -1132,7 +1132,7 @@ func buildSelfUpdateCommand(tag string, cfg connectorConfig) (string, string, er
 	command := fmt.Sprintf(
 		"curl -fsSL -o %s %s && sh %s --binary-only --version %s --install-dir %s --download-base-url %s",
 		shellQuote(installerPath),
-		shellQuote(downloadBase+"/install.sh"),
+		shellQuote(downloadBase+"/install.sh?v="+url.QueryEscape(tag)),
 		shellQuote(installerPath),
 		shellQuote(tag),
 		shellQuote(installDir),

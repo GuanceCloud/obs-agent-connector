@@ -73,4 +73,7 @@ func TestBuildSelfUpdateCommandUsesInstallerVerificationPath(t *testing.T) {
 	if !strings.Contains(command, installer) {
 		t.Fatalf("expected installer %q in command %q", installer, command)
 	}
+	if !strings.Contains(command, "?v=v9.9.9") {
+		t.Fatalf("expected version cache key in command %q", command)
+	}
 }

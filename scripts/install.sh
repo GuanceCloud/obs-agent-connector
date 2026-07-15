@@ -96,6 +96,15 @@ calculate_sha256() {
   return 1
 }
 
+cache_busted_url() {
+  cache_url="$1"
+  cache_key="$2"
+  case "$cache_url" in
+    http://*|https://*) printf '%s?v=%s\n' "$cache_url" "$cache_key" ;;
+    *) printf '%s\n' "$cache_url" ;;
+  esac
+}
+
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --version) shift; VERSION="$1" ;;
@@ -164,7 +173,8 @@ fi
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL%/}"
 
 latest_version() {
-  curl -fsSL "${DOWNLOAD_BASE_URL}/latest.txt" | tr -d '\r' | head -n 1
+  latest_cache_key="$(date +%s)"
+  curl -fsSL "$(cache_busted_url "${DOWNLOAD_BASE_URL}/latest.txt" "$latest_cache_key")" | tr -d '\r' | head -n 1
 }
 
 current_version="$VERSION"
@@ -193,7 +203,8 @@ esac
 
 asset_name="${APP_NAME}-${goos}-${goarch}.tar.gz"
 binary_name="${APP_NAME}-${goos}-${goarch}"
-download_url="${DOWNLOAD_BASE_URL}/${asset_name}"
+download_url="$(cache_busted_url "${DOWNLOAD_BASE_URL}/${asset_name}" "$current_version")"
+checksums_url="$(cache_busted_url "${DOWNLOAD_BASE_URL}/SHA256SUMS" "$current_version")"
 
 tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT INT TERM
@@ -201,7 +212,7 @@ trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
 
 curl -fsSL -o "$tmp_dir/$asset_name" "$download_url"
-curl -fsSL -o "$tmp_dir/SHA256SUMS" "${DOWNLOAD_BASE_URL}/SHA256SUMS"
+curl -fsSL -o "$tmp_dir/SHA256SUMS" "$checksums_url"
 
 expected_checksum="$(awk -v name="$asset_name" '{ file=$2; sub(/^\*/, "", file); if (file == name) { print tolower($1); exit } }' "$tmp_dir/SHA256SUMS")"
 if [ -z "$expected_checksum" ]; then
