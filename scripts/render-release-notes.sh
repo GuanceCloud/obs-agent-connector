@@ -7,6 +7,23 @@ VERSION="${VERSION:-dev}"
 
 mkdir -p "$(dirname "${OUTPUT_FILE}")"
 
+append_line() {
+  line="$1"
+  if [ -z "${NOTES:-}" ]; then
+    NOTES="$line"
+    return
+  fi
+  case "
+${NOTES}
+" in
+    *"
+${line}
+"*) ;;
+    *) NOTES="${NOTES}
+${line}" ;;
+  esac
+}
+
 previous_tag() {
   git -C "${ROOT_DIR}" tag --sort=version:refname \
     | grep -Fxv "${VERSION}" \
@@ -14,15 +31,38 @@ previous_tag() {
 }
 
 render_changes() {
-  local previous
   previous="$(previous_tag || true)"
+  NOTES=""
 
   if [ -n "${previous}" ]; then
-    git -C "${ROOT_DIR}" log --format='- %s' "${previous}..${VERSION}"
+    changed_files="$(git -C "${ROOT_DIR}" diff --name-only "${previous}..${VERSION}")"
+
+    if printf '%s\n' "${changed_files}" | grep -Eq '^(cmd/|internal/app/|internal/agent/|main\.go|main_test\.go)'; then
+      append_line "- Reorganized the CLI into cmd/ and internal/ packages, with separate app and Agent modules."
+    fi
+
+    if printf '%s\n' "${changed_files}" | grep -Eq '^(internal/app/command_discover\.go|internal/app/command_install\.go|internal/app/command_update\.go|internal/app/installer\.go|internal/agent/(definition|registry|codex|openclaw|qoder)\.go)'; then
+      append_line "- Improved installation and update flows, including Windows-specific plugin installer routing for supported Agents."
+    fi
+
+    if printf '%s\n' "${changed_files}" | grep -Eq '^(internal/app/command_toggle\.go|internal/app/version\.go|internal/app/version_test\.go)'; then
+      append_line "- Added runtime plugin enable/disable commands and direct self-update support with version -u."
+    fi
+
+    if printf '%s\n' "${changed_files}" | grep -Eq '^(README\.md|docs/|AGENTS\.md|\.github/workflows/|scripts/build-release\.sh)'; then
+      append_line "- Updated documentation, CI, and release packaging to match the new command set and project layout."
+    fi
+
+    if [ -n "${NOTES}" ]; then
+      printf '%s\n' "${NOTES}"
+      return
+    fi
+
+    git -C "${ROOT_DIR}" log --format='- %s' "${previous}..${VERSION}" | head -n 5
     return
   fi
 
-  git -C "${ROOT_DIR}" log --format='- %s' "${VERSION}" -n 20
+  git -C "${ROOT_DIR}" log --format='- %s' "${VERSION}" -n 5
 }
 
 CHANGES="$(render_changes)"
