@@ -78,6 +78,33 @@ func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	}
 }
 
+func TestDownloadSourceURLUsesOSSArchiveForCodexOnUnix(t *testing.T) {
+	url, err := downloadSourceURL("https://static.example.com", agentDefinitionForTest("codex"), "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "https://static.example.com/codex-otel-plugin/codex-otel-plugin.tar.gz"
+	if url != expected {
+		t.Fatalf("expected %q, got %q", expected, url)
+	}
+}
+
+func TestRenderPluginUpdateCommandUsesOSSArchiveForQoder(t *testing.T) {
+	previous := currentGOOS
+	currentGOOS = "linux"
+	t.Cleanup(func() {
+		currentGOOS = previous
+	})
+
+	command := renderPluginUpdateCommand("https://static.example.com", agentDefinitionForTest("qoder"))
+	if !strings.Contains(command, "https://static.example.com/qoder-otel-plugin/qoder-otel-plugin.tar.gz") {
+		t.Fatalf("expected qoder OSS archive in command %q", command)
+	}
+	if strings.Contains(command, "github.com") {
+		t.Fatalf("expected qoder update command to avoid GitHub in %q", command)
+	}
+}
+
 func agentDefinitionForTest(name string) agent.Definition {
 	definition := agent.Get(name)
 	if definition.Name == "" {

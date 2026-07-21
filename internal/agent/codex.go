@@ -6,6 +6,8 @@ func codexPlugin() Definition {
 		PluginName:       "codex-otel-plugin",
 		AgentCommand:     "codex",
 		WindowsInstaller: "https://github.com/GuanceCloud/codex-otel-plugin/releases/latest/download/install-release.ps1",
+		PackageScript:    "scripts/install.sh",
+		PackageArgs:      []string{"--refresh"},
 		Markers: []string{
 			"~/.codex/plugin-sources/codex-otel-plugin/plugins/tracing",
 			"~/.codex/plugins/cache/codex-otel-plugin",

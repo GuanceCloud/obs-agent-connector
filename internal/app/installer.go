@@ -82,6 +82,12 @@ func confirm(label string, defaultYes bool) (bool, error) {
 func installOne(staticBase string, p agent.Definition, input installInput) error {
 	fmt.Printf("\n==> Installing %s\n", p.Name)
 
+	if usesPackageArchive(currentGOOS, p) {
+		return runPackageInstaller(staticBase, p, "installation", func(extractDir string) []string {
+			return buildPackageInstallArgs(extractDir, p, input)
+		})
+	}
+
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	url, err := installerURLForOS(staticBase, p, currentGOOS)
 	if err != nil {
@@ -119,6 +125,12 @@ func installOne(staticBase string, p agent.Definition, input installInput) error
 
 func updatePluginOne(staticBase string, p agent.Definition) error {
 	fmt.Printf("\n==> Updating %s\n", p.Name)
+
+	if usesPackageArchive(currentGOOS, p) {
+		return runPackageInstaller(staticBase, p, "update", func(extractDir string) []string {
+			return buildPackageUpdateArgs(extractDir, p)
+		})
+	}
 
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	url, err := installerURLForOS(staticBase, p, currentGOOS)
@@ -229,6 +241,9 @@ func buildPluginUpdateArgs(scriptPath string, p agent.Definition) []string {
 }
 
 func renderInstallCommand(staticBase string, p agent.Definition, input installInput) string {
+	if usesPackageArchive(currentGOOS, p) {
+		return renderPackageCommand(staticBase, p, buildPackageInstallArgs(packageExtractPath(p), p, input))
+	}
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	if currentGOOS == "windows" {
 		return renderPowerShellInstallCommand(scriptPath, p, input)
@@ -243,6 +258,9 @@ func renderInstallCommand(staticBase string, p agent.Definition, input installIn
 }
 
 func renderPluginUpdateCommand(staticBase string, p agent.Definition) string {
+	if usesPackageArchive(currentGOOS, p) {
+		return renderPackageCommand(staticBase, p, buildPackageUpdateArgs(packageExtractPath(p), p))
+	}
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	if currentGOOS == "windows" {
 		return renderPowerShellUpdateCommand(scriptPath, p)
@@ -304,6 +322,117 @@ func installerURLForOS(staticBase string, p agent.Definition, goos string) (stri
 		return p.WindowsInstaller, nil
 	}
 	return strings.TrimRight(staticBase, "/") + "/" + p.PluginName + "/install.sh", nil
+}
+
+func downloadSourceURL(staticBase string, p agent.Definition, goos string) (string, error) {
+	if usesPackageArchive(goos, p) {
+		return packageArchiveURL(staticBase, p), nil
+	}
+	return installerURLForOS(staticBase, p, goos)
+}
+
+func packageArchiveURL(staticBase string, p agent.Definition) string {
+	return strings.TrimRight(staticBase, "/") + "/" + p.PluginName + "/" + p.PluginName + ".tar.gz"
+}
+
+func usesPackageArchive(goos string, p agent.Definition) bool {
+	return !strings.EqualFold(strings.TrimSpace(goos), "windows") && strings.TrimSpace(p.PackageScript) != ""
+}
+
+func packageExtractPath(p agent.Definition) string {
+	return filepath.Join(os.TempDir(), p.PluginName+"-package")
+}
+
+func buildPackageInstallArgs(extractDir string, p agent.Definition, input installInput) []string {
+	args := make([]string, 0, len(p.PackageArgs)+8)
+	if p.PackageRootArg {
+		args = append(args, extractDir)
+	}
+	args = append(args, p.PackageArgs...)
+	args = append(args,
+		"--type", fixedType,
+		"--endpoint", input.Endpoint,
+		"--x-token", input.XToken,
+		"--tag", "agent_id="+input.AgentID,
+		"--tag", "agent_name="+input.AgentName,
+	)
+	args = append(args, p.InstallArgs...)
+	return args
+}
+
+func buildPackageUpdateArgs(extractDir string, p agent.Definition) []string {
+	args := make([]string, 0, len(p.PackageArgs)+2)
+	if p.PackageRootArg {
+		args = append(args, extractDir)
+	}
+	args = append(args, p.PackageArgs...)
+	args = append(args, "--no-config")
+	args = append(args, p.InstallArgs...)
+	return args
+}
+
+func renderPackageCommand(staticBase string, p agent.Definition, args []string) string {
+	archivePath := tempPackageArchivePath(p)
+	extractDir := packageExtractPath(p)
+	scriptPath := filepath.Join(extractDir, filepath.FromSlash(p.PackageScript))
+	return fmt.Sprintf(
+		"curl -fsSL -o %s %s && \\\nmkdir -p %s && tar -xzf %s --strip-components=1 -C %s && \\\n%s \\\n%s",
+		shellQuote(archivePath),
+		shellQuote(packageArchiveURL(staticBase, p)),
+		shellQuote(extractDir),
+		shellQuote(archivePath),
+		shellQuote(extractDir),
+		renderEnvAssignments(staticBase, p),
+		renderBashCommand(append([]string{scriptPath}, args...)),
+	)
+}
+
+func tempPackageArchivePath(p agent.Definition) string {
+	return filepath.Join(os.TempDir(), p.PluginName+".tar.gz")
+}
+
+func runPackageInstaller(staticBase string, p agent.Definition, action string, argsFn func(string) []string) error {
+	extractDir, err := os.MkdirTemp("", p.PluginName+"-package-*")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(extractDir)
+	archivePath := filepath.Join(extractDir, p.PluginName+".tar.gz")
+
+	archiveURL := packageArchiveURL(staticBase, p)
+	fmt.Printf("Downloading package: %s\n", archiveURL)
+	if err := downloadFile(archiveURL, archivePath); err != nil {
+		return fmt.Errorf("failed to download %s package: %w", p.Name, err)
+	}
+
+	if err := extractTarGzStripOne(archivePath, extractDir); err != nil {
+		return fmt.Errorf("failed to extract %s package: %w", p.Name, err)
+	}
+
+	scriptPath := filepath.Join(extractDir, filepath.FromSlash(p.PackageScript))
+	if !agent.PathExists(scriptPath) {
+		return fmt.Errorf("package installer was not found: %s", scriptPath)
+	}
+
+	args := argsFn(extractDir)
+	fmt.Printf("Running: %s\n", renderBashCommand(append([]string{scriptPath}, args...)))
+
+	cmd := exec.Command("bash", append([]string{scriptPath}, args...)...)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	cmd.Stdin = os.Stdin
+	cmd.Env = append(os.Environ(), pluginEnv(staticBase, p)...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("%s %s failed: %w", p.Name, action, err)
+	}
+	return nil
+}
+
+func extractTarGzStripOne(archivePath string, extractDir string) error {
+	cmd := exec.Command("tar", "-xzf", archivePath, "--strip-components=1", "-C", extractDir)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
 
 func tempScriptPathForOS(goos string, p agent.Definition) string {

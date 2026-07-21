@@ -68,7 +68,7 @@ func install(args []string) error {
 	fmt.Println("Install plan:")
 	for _, p := range selected {
 		p = agent.Resolve(p)
-		url, err := installerURLForOS(staticBase, p, currentGOOS)
+		url, err := downloadSourceURL(staticBase, p, currentGOOS)
 		if err != nil {
 			return err
 		}

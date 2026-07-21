@@ -5,6 +5,9 @@ type Definition struct {
 	PluginName       string
 	AgentCommand     string
 	WindowsInstaller string
+	PackageScript    string
+	PackageArgs      []string
+	PackageRootArg   bool
 	Env              []string
 	InstallArgs      []string
 	WindowsArgs      []string
