@@ -20,12 +20,14 @@ All user-facing CLI text and all project documentation must be written in Englis
 Before finishing documentation or CLI text changes, check for non-English Chinese text:
 
 ```bash
-rg -n "[\p{Han}]" README.md docs scripts main.go AGENTS.md .gitignore go.mod
+rg -n "[\p{Han}]" README.md docs scripts cmd internal AGENTS.md .gitignore go.mod
 ```
 
 ## Development
 
-Prefer small, focused changes. Keep plugin-specific installation logic in the plugin registry data and shared execution helpers in `main.go`.
+Prefer small, focused changes. Keep each Agent definition and its variant-specific behavior in the matching file under `internal/agent`. Keep command handlers and shared application workflows under `internal/app`. The executable entry point belongs in `cmd/obs-agent-connector`.
+
+Do not add Agent-specific branches to `internal/agent/registry.go`. Use the resolver hooks on `agent.Definition` when an Agent needs custom installation or discovery behavior.
 
 Do not generate Agent runtime configuration directly in this CLI. Runtime configuration files such as `gtrace.json`, `config.yaml`, or `openclaw.json` are owned by each Agent plugin installer.
 
@@ -34,10 +36,10 @@ Do not generate Agent runtime configuration directly in this CLI. Runtime config
 Run these checks before handing off changes:
 
 ```bash
-gofmt -w main.go
+gofmt -w $(find cmd internal -type f -name '*.go')
 go test ./...
 go vet ./...
-go build -o obs-agent-connector .
+go build -o obs-agent-connector ./cmd/obs-agent-connector
 ```
 
 For release packaging:
@@ -54,19 +56,18 @@ Keep the public command model simple:
 
 ```bash
 obs-agent-connector list
-obs-agent-connector doctor [agent|all]
-obs-agent-connector install [agent|all]
+obs-agent-connector discover
+obs-agent-connector install <agent>
 obs-agent-connector update <agent>
-obs-agent-connector remove [agent|all]
+obs-agent-connector remove <agent>
+obs-agent-connector version
 ```
 
 Rules:
 
-- `install` may support `all`.
-- `remove` may support `all`.
 - `update` must require one explicit Agent name and must not support `all`.
 - `update cli` is intentionally unsupported. Future CLI version management should be implemented under a separate `version` command.
-- `install` collects `Endpoint`, `X-Token`, `Agent ID`, and `Agent Name`.
+- `install` resolves `Endpoint` and `X-Token` from flags or connector config, and generates `Agent ID` and `Agent Name` unless explicitly provided.
 - `install` always passes `--type gtrace` to plugin installers.
 - `update` must preserve existing configuration by passing `--no-config`.
 - `remove` must keep configuration files by default; only delete config files when `--purge-config` is provided.

@@ -191,10 +191,10 @@ If you do not want to use the installer, unzip the package:
 Expand-Archive .\obs-agent-connector-windows-amd64.zip -DestinationPath .
 ```
 
-Run:
+Verify the binary:
 
 ```powershell
-.\obs-agent-connector-windows-amd64.exe doctor
+.\obs-agent-connector-windows-amd64.exe version --offline
 ```
 
 You can optionally rename the executable to `obs-agent-connector.exe`, place it in a stable directory, and add that directory to `PATH`.

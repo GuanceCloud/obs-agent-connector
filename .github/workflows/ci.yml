@@ -20,7 +20,7 @@ jobs:
 
       - name: Verify formatting
         run: |
-          gofmt -w main.go
+          gofmt -w $(find cmd internal -type f -name '*.go')
           git diff --exit-code
 
       - name: Run tests
@@ -30,7 +30,7 @@ jobs:
         run: go vet ./...
 
       - name: Build local binary
-        run: go build -o obs-agent-connector .
+        run: go build -o obs-agent-connector ./cmd/obs-agent-connector
 
   package-smoke:
     runs-on: ubuntu-latest

@@ -2,7 +2,7 @@
 
 `obs-agent-connector` is a command-line tool for installing and managing OBS/GTrace Agent plugins across multiple AI coding agents.
 
-The tool provides a single entry point for plugin installation, update, removal, local status inspection, and environment diagnostics. It delegates the final runtime configuration generation to each Agent plugin installer.
+The tool provides a single entry point for plugin installation, update, removal, automatic discovery, and local status inspection. It delegates the final runtime configuration generation to each Agent plugin installer.
 
 ## Features
 
@@ -11,10 +11,11 @@ The tool provides a single entry point for plugin installation, update, removal,
 - Auto-discover local Agents and install missing plugins.
 - Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
 - Update one installed Agent plugin without modifying existing configuration.
+- Enable or disable an installed plugin by updating its runtime config.
 - Remove installed plugins while keeping configuration by default.
 - Detect installed plugins and their configuration paths.
-- Diagnose local environment issues with `doctor`.
 - Show the current CLI version and check whether a newer GitHub release is available.
+- Run CLI self-update directly from the `version -u` command.
 - Support separate Qoder international and China editions.
 - Install the CLI through a dedicated installer script.
 - Use native installers for Unix shell and Windows PowerShell.
@@ -26,22 +27,24 @@ The tool provides a single entry point for plugin installation, update, removal,
 | Agent | Notes |
 | --- | --- |
 | `claude` | Claude plugin |
-| `codex` | Codex plugin |
+| `codex` | Codex plugin. Supported on Windows. |
 | `hermes` | Hermes plugin |
-| `openclaw` | OpenClaw plugin |
-| `qoder` | Qoder plugin. The CLI auto-detects CN vs global layout and passes the matching `--variant` value. |
+| `openclaw` | OpenClaw plugin. Supported on Windows. |
+| `qoder` | Qoder plugin. The CLI auto-detects CN vs global layout and passes the matching `--variant` value. Supported on Windows. |
 
 ## Common Commands
 
 ```bash
 obs-agent-connector list
-obs-agent-connector doctor
 obs-agent-connector discover
 obs-agent-connector install codex
 obs-agent-connector install qoder
+obs-agent-connector enable codex
+obs-agent-connector disable codex
 obs-agent-connector update codex
 obs-agent-connector remove codex
 obs-agent-connector version
+obs-agent-connector version -u
 ```
 
 For Qoder installs, `obs-agent-connector` detects the local layout and uses:
@@ -56,6 +59,8 @@ Use `--static-base` to override this behavior.
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
+- On Windows, only `codex`, `openclaw`, and `qoder` are currently supported for plugin installation and update.
+- Windows plugin installation uses each plugin's GitHub release PowerShell installer instead of the OSS shell installer.
 
 Bootstrap the CLI with shared defaults:
 
@@ -70,14 +75,16 @@ The downloaded package is verified against `SHA256SUMS` before installation.
 
 After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
 `install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
+The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
 Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
+`enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
 
 ## Build
 
 Build a local binary:
 
 ```bash
-go build -o obs-agent-connector .
+go build -o obs-agent-connector ./cmd/obs-agent-connector
 ```
 
 Build release packages:
@@ -111,7 +118,11 @@ GitHub Actions:
 ├── .github/workflows/    CI and release workflows
 ├── scripts/              Build and release scripts
 ├── dist/                 Generated release artifacts
-├── main.go               CLI implementation
+├── cmd/
+│   └── obs-agent-connector/  Executable entry point
+├── internal/
+│   ├── agent/            Agent definitions, discovery, and registry
+│   └── app/              Commands, installation, config, and version flows
 ├── go.mod
 └── README.md
 ```

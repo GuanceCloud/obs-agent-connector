@@ -1,9 +1,8 @@
-package main
+package agent
 
 import (
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 )
@@ -12,7 +11,7 @@ func TestResolvePluginsForInstallRequiresQoderDataDirectory(t *testing.T) {
 	t.Setenv("HOME", t.TempDir())
 	t.Setenv("QODER_HOME", "")
 
-	_, err := resolvePluginsForInstall([]plugin{plugins["qoder"]})
+	_, err := ResolveForInstall([]Definition{definitions["qoder"]})
 	if err == nil || !strings.Contains(err.Error(), "data directory was not found") {
 		t.Fatalf("expected missing Qoder directory error, got %v", err)
 	}
@@ -38,7 +37,7 @@ func TestResolvePluginsForInstallDetectsQoderVariant(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			resolved, err := resolvePluginsForInstall([]plugin{plugins["qoder"]})
+			resolved, err := ResolveForInstall([]Definition{definitions["qoder"]})
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -52,28 +51,5 @@ func TestResolvePluginsForInstallDetectsQoderVariant(t *testing.T) {
 				t.Fatalf("expected variant %q, got %#v", test.variant, got)
 			}
 		})
-	}
-}
-
-func TestBuildSelfUpdateCommandUsesInstallerVerificationPath(t *testing.T) {
-	command, _, err := buildSelfUpdateCommand("v9.9.9", connectorConfig{
-		DownloadBaseURL: "https://static.example.com/obs-agent-connector",
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !strings.Contains(command, "BinaryOnly") && !strings.Contains(command, "binary-only") {
-		t.Fatalf("expected binary-only installer command, got %q", command)
-	}
-	installer := "/install.sh"
-	if runtime.GOOS == "windows" {
-		installer = "/install.ps1"
-	}
-	if !strings.Contains(command, installer) {
-		t.Fatalf("expected installer %q in command %q", installer, command)
-	}
-	if !strings.Contains(command, "?v=v9.9.9") {
-		t.Fatalf("expected version cache key in command %q", command)
 	}
 }
