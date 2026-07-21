@@ -1,25 +1,26 @@
 package agent
 
 type Definition struct {
-	Name             string
-	PluginName       string
-	AgentCommand     string
-	WindowsInstaller string
-	PackageScript    string
-	PackageArgs      []string
-	PackageRootArg   bool
-	Env              []string
-	InstallArgs      []string
-	WindowsArgs      []string
-	Markers          []string
-	ConfigFiles      []string
-	EnabledJSONPath  []string
-	RemoveCmds       [][]string
-	RemovePaths      []string
-	Hidden           bool
-	Resolve          func(Definition) Definition
-	ResolveInstall   func(Definition) (Definition, error)
-	ResolveDiscovery func(Definition) (Definition, bool)
+	Name                     string
+	PluginName               string
+	AgentCommand             string
+	WindowsInstaller         string
+	PackageScript            string
+	PackageArgs              []string
+	PackageRootArg           bool
+	DiscoveryCommandOptional bool
+	Env                      []string
+	InstallArgs              []string
+	WindowsArgs              []string
+	Markers                  []string
+	ConfigFiles              []string
+	EnabledJSONPath          []string
+	RemoveCmds               [][]string
+	RemovePaths              []string
+	Hidden                   bool
+	Resolve                  func(Definition) Definition
+	ResolveInstall           func(Definition) (Definition, error)
+	ResolveDiscovery         func(Definition) (Definition, bool)
 }
 
 type Candidate struct {

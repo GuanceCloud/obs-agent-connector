@@ -1,6 +1,8 @@
 package agent
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -51,6 +53,33 @@ func TestWindowsSupportFlags(t *testing.T) {
 			t.Fatalf("expected %s windows support %t, got %t", name, expected, got)
 		}
 	}
+}
+
+func TestDiscoverCandidatesIncludesQoderWithoutCommandWhenDataDirExists(t *testing.T) {
+	home := t.TempDir()
+	previousHome := os.Getenv("HOME")
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", previousHome)
+	})
+
+	if err := os.MkdirAll(filepath.Join(home, ".qoder"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	candidates := DiscoverCandidatesForOS("linux")
+	for _, candidate := range candidates {
+		if candidate.Plugin.Name != "qoder" {
+			continue
+		}
+		if candidate.DetectedCmd != "data-dir" {
+			t.Fatalf("expected qoder detect source data-dir, got %q", candidate.DetectedCmd)
+		}
+		return
+	}
+	t.Fatal("expected qoder to be discoverable from data dir")
 }
 
 func assertNoMigrationArtifact(t *testing.T, definition Definition) {

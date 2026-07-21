@@ -92,7 +92,10 @@ func DiscoverCandidatesForOS(goos string) []Candidate {
 		}
 		command, ok := detectAgentCommand(p)
 		if !ok {
-			continue
+			if !p.DiscoveryCommandOptional {
+				continue
+			}
+			command = "data-dir"
 		}
 		installedPath, _ := InstalledMarker(p)
 		out = append(out, Candidate{

@@ -9,11 +9,12 @@ import (
 
 func qoderPlugin() Definition {
 	return Definition{
-		Name:             "qoder",
-		PluginName:       "qoder-otel-plugin",
-		AgentCommand:     "qoder",
-		WindowsInstaller: "https://github.com/GuanceCloud/qoder-otel-plugin/releases/latest/download/install-release.ps1",
-		PackageScript:    "scripts/install-local.sh",
+		Name:                     "qoder",
+		PluginName:               "qoder-otel-plugin",
+		AgentCommand:             "qoder",
+		WindowsInstaller:         "https://github.com/GuanceCloud/qoder-otel-plugin/releases/latest/download/install-release.ps1",
+		PackageScript:            "scripts/install-local.sh",
+		DiscoveryCommandOptional: true,
 		Markers: []string{
 			"~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-probe",
 			"~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin",
@@ -32,11 +33,12 @@ func qoderPlugin() Definition {
 
 func qoderCNPlugin() Definition {
 	return Definition{
-		Name:             "qoder-cn",
-		PluginName:       "qoder-otel-plugin",
-		AgentCommand:     "qoder-cn",
-		WindowsInstaller: "https://github.com/GuanceCloud/qoder-otel-plugin/releases/latest/download/install-release.ps1",
-		PackageScript:    "scripts/install-local.sh",
+		Name:                     "qoder-cn",
+		PluginName:               "qoder-otel-plugin",
+		AgentCommand:             "qoder-cn",
+		WindowsInstaller:         "https://github.com/GuanceCloud/qoder-otel-plugin/releases/latest/download/install-release.ps1",
+		PackageScript:            "scripts/install-local.sh",
+		DiscoveryCommandOptional: true,
 		Markers: []string{
 			"~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-probe",
 			"~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin",
