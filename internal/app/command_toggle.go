@@ -84,6 +84,10 @@ func setJSONBoolPath(path string, jsonPath []string, value bool) error {
 	if err != nil {
 		return err
 	}
+	data, err = normalizeJSONBytes(data)
+	if err != nil {
+		return fmt.Errorf("decode JSON %s: %w", filepath.Base(path), err)
+	}
 
 	var root map[string]any
 	if len(strings.TrimSpace(string(data))) == 0 {

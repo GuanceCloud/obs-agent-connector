@@ -2,12 +2,15 @@ package app
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf16"
 )
 
 func staticBaseURL(value string, endpoint string) string {
@@ -74,7 +77,10 @@ func loadConnectorConfig() (connectorConfig, string, error) {
 	}
 
 	var disk connectorConfig
-	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
+	data, err = normalizeJSONBytes(data)
+	if err != nil {
+		return cfg, path, err
+	}
 	if err := json.Unmarshal(data, &disk); err != nil {
 		return cfg, path, err
 	}
@@ -176,4 +182,32 @@ func registeredDomain(host string) string {
 	}
 
 	return parts[len(parts)-2] + "." + parts[len(parts)-1]
+}
+
+func normalizeJSONBytes(data []byte) ([]byte, error) {
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
+	if len(data) < 2 {
+		return data, nil
+	}
+
+	switch {
+	case bytes.HasPrefix(data, []byte{0xFF, 0xFE}):
+		return decodeUTF16JSON(data[2:], binary.LittleEndian)
+	case bytes.HasPrefix(data, []byte{0xFE, 0xFF}):
+		return decodeUTF16JSON(data[2:], binary.BigEndian)
+	default:
+		return data, nil
+	}
+}
+
+func decodeUTF16JSON(data []byte, order binary.ByteOrder) ([]byte, error) {
+	if len(data)%2 != 0 {
+		return nil, fmt.Errorf("invalid UTF-16 JSON payload length %d", len(data))
+	}
+	words := make([]uint16, 0, len(data)/2)
+	for i := 0; i < len(data); i += 2 {
+		words = append(words, order.Uint16(data[i:i+2]))
+	}
+	text := string(utf16.Decode(words))
+	return []byte(text), nil
 }
