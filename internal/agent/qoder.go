@@ -12,7 +12,7 @@ func qoderPlugin() Definition {
 		Name:                     "qoder",
 		PluginName:               "qoder-otel-plugin",
 		AgentCommand:             "qoder",
-		WindowsInstaller:         "https://github.com/GuanceCloud/qoder-otel-plugin/releases/latest/download/install-release.ps1",
+		WindowsInstaller:         "install-release.ps1",
 		PackageScript:            "scripts/install-local.sh",
 		DiscoveryCommandOptional: true,
 		Markers: []string{
@@ -36,7 +36,7 @@ func qoderCNPlugin() Definition {
 		Name:                     "qoder-cn",
 		PluginName:               "qoder-otel-plugin",
 		AgentCommand:             "qoder-cn",
-		WindowsInstaller:         "https://github.com/GuanceCloud/qoder-otel-plugin/releases/latest/download/install-release.ps1",
+		WindowsInstaller:         "install-release.ps1",
 		PackageScript:            "scripts/install-local.sh",
 		DiscoveryCommandOptional: true,
 		Markers: []string{

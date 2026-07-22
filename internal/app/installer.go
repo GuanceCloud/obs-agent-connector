@@ -316,10 +316,14 @@ func splitEnvAssignment(value string) (string, string, bool) {
 
 func installerURLForOS(staticBase string, p agent.Definition, goos string) (string, error) {
 	if strings.EqualFold(strings.TrimSpace(goos), "windows") {
-		if strings.TrimSpace(p.WindowsInstaller) == "" {
+		installer := strings.TrimSpace(p.WindowsInstaller)
+		if installer == "" {
 			return "", unsupportedPlatformError(p, goos)
 		}
-		return p.WindowsInstaller, nil
+		if strings.Contains(installer, "://") {
+			return installer, nil
+		}
+		return strings.TrimRight(staticBase, "/") + "/" + p.PluginName + "/" + strings.TrimLeft(installer, "/"), nil
 	}
 	return strings.TrimRight(staticBase, "/") + "/" + p.PluginName + "/install.sh", nil
 }

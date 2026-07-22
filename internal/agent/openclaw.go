@@ -5,7 +5,7 @@ func openClawPlugin() Definition {
 		Name:             "openclaw",
 		PluginName:       "openclaw-otel-plugin",
 		AgentCommand:     "openclaw",
-		WindowsInstaller: "https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.ps1",
+		WindowsInstaller: "install-release.ps1",
 		WindowsArgs:      []string{"-Type", "gtrace"},
 		Markers: []string{
 			"~/.openclaw/extensions/openclaw-otel-plugin",

@@ -27,13 +27,13 @@ func TestResolveInstallInputKeepsExplicitAgentName(t *testing.T) {
 	}
 }
 
-func TestInstallerURLForWindowsUsesGitHubReleaseScript(t *testing.T) {
+func TestInstallerURLForWindowsUsesOSSReleaseScript(t *testing.T) {
 	definition := agentDefinitionForTest("codex")
 	url, err := installerURLForOS("https://static.example.com", definition, "windows")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://github.com/GuanceCloud/codex-otel-plugin/releases/latest/download/install-release.ps1"
+	expected := "https://static.example.com/codex-otel-plugin/install-release.ps1"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
