@@ -21,31 +21,12 @@ if (-not $ConfigDir) {
   $ConfigDir = Join-Path $HOME ".obs-agent-connector"
 }
 $ConfigPath = Join-Path $ConfigDir "config.json"
-$ExistingConfig = $null
-if (Test-Path -LiteralPath $ConfigPath) {
-  $ExistingContent = Get-Content -LiteralPath $ConfigPath -Raw
-  if ($ExistingContent) {
-    $ExistingConfig = $ExistingContent | ConvertFrom-Json
-  }
-}
 
 if (-not $DownloadBaseUrl) {
   $DownloadBaseUrl = $env:DOWNLOAD_BASE_URL
 }
 if (-not $DownloadBaseUrl) {
   $DownloadBaseUrl = $env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT
-}
-if ((-not $Endpoint) -and $ExistingConfig -and $ExistingConfig.endpoint) {
-  $Endpoint = [string]$ExistingConfig.endpoint
-}
-if ((-not $XToken) -and $ExistingConfig -and $ExistingConfig.x_token) {
-  $XToken = [string]$ExistingConfig.x_token
-}
-if ((-not $PluginSource) -and $ExistingConfig -and $ExistingConfig.plugin_source) {
-  $PluginSource = [string]$ExistingConfig.plugin_source
-}
-if ((-not $PluginBaseUrl) -and $ExistingConfig -and $ExistingConfig.plugin_base_url) {
-  $PluginBaseUrl = [string]$ExistingConfig.plugin_base_url
 }
 
 function Get-DownloadBaseFromEndpoint {
@@ -83,9 +64,6 @@ if (-not $DownloadBaseUrl) {
   if ($EndpointWasProvided) {
     $DownloadBaseUrl = Get-DownloadBaseFromEndpoint -Value $Endpoint
   }
-  elseif ($ExistingConfig -and $ExistingConfig.download_base_url) {
-    $DownloadBaseUrl = [string]$ExistingConfig.download_base_url
-  }
   else {
     $DownloadBaseUrl = Get-DownloadBaseFromEndpoint -Value $Endpoint
   }
@@ -100,13 +78,13 @@ if (-not $DownloadBaseUrl) {
   throw "download_base_url is required; pass -DownloadBaseUrl <url> or set DOWNLOAD_BASE_URL / OBS_AGENT_CONNECTOR_OSS_ENDPOINT"
 }
 if (($PluginSource -eq "github") -and (-not $PluginBaseUrl)) {
-  throw "plugin_base_url is required when plugin_source=github; pass -PluginBaseUrl <url> or update config.json"
+  throw "plugin_base_url is required when plugin_source=github; pass -PluginBaseUrl <url>"
 }
 if ((-not $BinaryOnly) -and (-not $Endpoint)) {
-  throw "endpoint is required; pass -Endpoint <url> on first install or keep it in config.json"
+  throw "endpoint is required; pass -Endpoint <url>"
 }
 if ((-not $BinaryOnly) -and (-not $XToken)) {
-  throw "x-token is required; pass -XToken <token> on first install or keep it in config.json"
+  throw "x-token is required; pass -XToken <token>"
 }
 $DownloadBaseUrl = $DownloadBaseUrl.TrimEnd("/")
 $PluginBaseUrl = $PluginBaseUrl.TrimEnd("/")
@@ -162,6 +140,9 @@ try {
   New-Item -ItemType Directory -Path $TempDir | Out-Null
   New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
   New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
+  if ((-not $BinaryOnly) -and (Test-Path -LiteralPath $ConfigPath)) {
+    Remove-Item -LiteralPath $ConfigPath -Force
+  }
 
   $ZipPath = Join-Path $TempDir $AssetName
   $ChecksumsPath = Join-Path $TempDir "SHA256SUMS"

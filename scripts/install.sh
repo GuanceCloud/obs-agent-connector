@@ -156,37 +156,18 @@ if [ -z "${INSTALL_DIR}" ]; then
 fi
 
 config_path="${CONFIG_DIR}/config.json"
-existing_download_base_url="$(json_get download_base_url "$config_path")"
-existing_plugin_source="$(json_get plugin_source "$config_path")"
-existing_plugin_base_url="$(json_get plugin_base_url "$config_path")"
-existing_endpoint="$(json_get endpoint "$config_path")"
-existing_x_token="$(json_get x_token "$config_path")"
-
-if [ -z "${ENDPOINT}" ] && [ -n "${existing_endpoint}" ]; then
-  ENDPOINT="${existing_endpoint}"
-fi
-if [ -z "${X_TOKEN}" ] && [ -n "${existing_x_token}" ]; then
-  X_TOKEN="${existing_x_token}"
-fi
 if [ -z "${DOWNLOAD_BASE_URL}" ]; then
   if [ -n "${endpoint_was_provided}" ]; then
     DOWNLOAD_BASE_URL="$(download_base_from_endpoint "${ENDPOINT}")"
-  elif [ -n "${existing_download_base_url}" ]; then
-    DOWNLOAD_BASE_URL="${existing_download_base_url}"
   else
     DOWNLOAD_BASE_URL="$(download_base_from_endpoint "${ENDPOINT}")"
   fi
-fi
-if [ -z "${PLUGIN_SOURCE}" ] && [ -n "${existing_plugin_source}" ]; then
-  PLUGIN_SOURCE="${existing_plugin_source}"
 fi
 if [ -z "${PLUGIN_SOURCE}" ]; then
   PLUGIN_SOURCE="oss"
 fi
 if [ -z "${PLUGIN_BASE_URL}" ]; then
-  if [ -n "${existing_plugin_base_url}" ]; then
-    PLUGIN_BASE_URL="${existing_plugin_base_url}"
-  elif [ "${PLUGIN_SOURCE}" = "oss" ]; then
+  if [ "${PLUGIN_SOURCE}" = "oss" ]; then
     PLUGIN_BASE_URL="$(plugin_base_from_download_base "${DOWNLOAD_BASE_URL}")"
   fi
 fi
@@ -196,15 +177,15 @@ if [ -z "${DOWNLOAD_BASE_URL}" ]; then
   exit 2
 fi
 if [ "${BINARY_ONLY}" -eq 0 ] && [ -z "${ENDPOINT}" ]; then
-  echo "endpoint is required; pass --endpoint <url> on first install or keep it in config.json" >&2
+  echo "endpoint is required; pass --endpoint <url>" >&2
   exit 2
 fi
 if [ "${BINARY_ONLY}" -eq 0 ] && [ -z "${X_TOKEN}" ]; then
-  echo "x-token is required; pass --x-token <token> on first install or keep it in config.json" >&2
+  echo "x-token is required; pass --x-token <token>" >&2
   exit 2
 fi
 if [ "${PLUGIN_SOURCE}" = "github" ] && [ -z "${PLUGIN_BASE_URL}" ]; then
-  echo "plugin_base_url is required when plugin_source=github; pass --plugin-base-url <url> or update config.json" >&2
+  echo "plugin_base_url is required when plugin_source=github; pass --plugin-base-url <url>" >&2
   exit 2
 fi
 
@@ -249,6 +230,9 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
+if [ "${BINARY_ONLY}" -eq 0 ] && [ -f "$config_path" ]; then
+  rm -f "$config_path"
+fi
 
 curl -fsSL -o "$tmp_dir/$asset_name" "$download_url"
 curl -fsSL -o "$tmp_dir/SHA256SUMS" "$checksums_url"
