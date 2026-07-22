@@ -61,11 +61,18 @@ func updatePlugins(args []string) error {
 		return nil
 	}
 
-	staticBase := staticBaseURL(*staticBaseFlag, "")
+	cfg, _, err := loadConnectorConfig()
+	if err != nil {
+		return err
+	}
+	pluginDownload, err := pluginDownloadSettings(*staticBaseFlag, cfg, "")
+	if err != nil {
+		return err
+	}
 	fmt.Println("Update plan. Configuration files will not be modified:")
 	for _, p := range selected {
 		p = agent.Resolve(p)
-		url, err := downloadSourceURL(staticBase, p, currentGOOS)
+		url, err := downloadSourceURL(pluginDownload, p, currentGOOS)
 		if err != nil {
 			return err
 		}
@@ -77,7 +84,7 @@ func updatePlugins(args []string) error {
 		fmt.Println("Command preview:")
 		for _, p := range selected {
 			p = agent.Resolve(p)
-			fmt.Println(renderPluginUpdateCommand(staticBase, p))
+			fmt.Println(renderPluginUpdateCommand(pluginDownload, p))
 		}
 		return nil
 	}
@@ -95,7 +102,7 @@ func updatePlugins(args []string) error {
 
 	for _, p := range selected {
 		p = agent.Resolve(p)
-		if err := updatePluginOne(staticBase, p); err != nil {
+		if err := updatePluginOne(pluginDownload, p); err != nil {
 			return err
 		}
 	}

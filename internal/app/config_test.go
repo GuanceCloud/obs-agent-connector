@@ -64,6 +64,30 @@ func TestLoadConnectorConfigAcceptsUTF16LEBOM(t *testing.T) {
 	}
 }
 
+func TestPluginDownloadSettingsUsesConfigForGitHub(t *testing.T) {
+	cfg := connectorConfig{
+		PluginSource:  "github",
+		PluginBaseURL: "https://github.com/GuanceCloud/",
+	}
+	download, err := pluginDownloadSettings("", cfg, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if download.Source != pluginSourceGitHub {
+		t.Fatalf("expected source %q, got %q", pluginSourceGitHub, download.Source)
+	}
+	if download.BaseURL != "https://github.com/GuanceCloud" {
+		t.Fatalf("unexpected plugin base URL %q", download.BaseURL)
+	}
+}
+
+func TestPluginDownloadSettingsRejectsGitHubWithoutBaseURL(t *testing.T) {
+	_, err := pluginDownloadSettings("", connectorConfig{PluginSource: "github"}, "")
+	if err == nil {
+		t.Fatal("expected plugin_base_url validation error")
+	}
+}
+
 func encodeUTF16WithBOM(value string, order binary.ByteOrder, bom []byte) []byte {
 	words := utf16.Encode([]rune(value))
 	data := make([]byte, len(bom)+len(words)*2)

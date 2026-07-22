@@ -29,11 +29,23 @@ func TestResolveInstallInputKeepsExplicitAgentName(t *testing.T) {
 
 func TestInstallerURLForWindowsUsesOSSReleaseScript(t *testing.T) {
 	definition := agentDefinitionForTest("codex")
-	url, err := installerURLForOS("https://static.example.com", definition, "windows")
+	url, err := installerURLForOS(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, definition, "windows")
 	if err != nil {
 		t.Fatal(err)
 	}
 	expected := "https://static.example.com/codex-otel-plugin/install-release.ps1"
+	if url != expected {
+		t.Fatalf("expected %q, got %q", expected, url)
+	}
+}
+
+func TestInstallerURLForWindowsUsesGitHubReleaseScript(t *testing.T) {
+	definition := agentDefinitionForTest("codex")
+	url, err := installerURLForOS(pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: "https://github.com/GuanceCloud"}, definition, "windows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "https://github.com/GuanceCloud/codex-otel-plugin/releases/latest/download/install-release.ps1"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
@@ -46,7 +58,7 @@ func TestRenderInstallCommandForWindowsUsesPowerShell(t *testing.T) {
 		currentGOOS = previous
 	})
 
-	command := renderInstallCommand("https://static.example.com", agentDefinitionForTest("openclaw"), installInput{
+	command := renderInstallCommand(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("openclaw"), installInput{
 		Endpoint:  "https://llm-openway.guance.com",
 		XToken:    "agent_test",
 		AgentID:   "agent_123",
@@ -79,7 +91,7 @@ func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 }
 
 func TestDownloadSourceURLUsesOSSArchiveForCodexOnUnix(t *testing.T) {
-	url, err := downloadSourceURL("https://static.example.com", agentDefinitionForTest("codex"), "linux")
+	url, err := downloadSourceURL(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("codex"), "linux")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -96,12 +108,23 @@ func TestRenderPluginUpdateCommandUsesOSSArchiveForQoder(t *testing.T) {
 		currentGOOS = previous
 	})
 
-	command := renderPluginUpdateCommand("https://static.example.com", agentDefinitionForTest("qoder"))
+	command := renderPluginUpdateCommand(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("qoder"))
 	if !strings.Contains(command, "https://static.example.com/qoder-otel-plugin/qoder-otel-plugin.tar.gz") {
 		t.Fatalf("expected qoder OSS archive in command %q", command)
 	}
 	if strings.Contains(command, "github.com") {
 		t.Fatalf("expected qoder update command to avoid GitHub in %q", command)
+	}
+}
+
+func TestDownloadSourceURLUsesGitHubArchiveForCodexOnUnix(t *testing.T) {
+	url, err := downloadSourceURL(pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: "https://github.com/GuanceCloud"}, agentDefinitionForTest("codex"), "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "https://github.com/GuanceCloud/codex-otel-plugin/releases/latest/download/codex-otel-plugin.tar.gz"
+	if url != expected {
+		t.Fatalf("expected %q, got %q", expected, url)
 	}
 }
 

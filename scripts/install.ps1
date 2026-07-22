@@ -3,6 +3,8 @@ param(
   [string]$InstallDir = "",
   [string]$ConfigDir = "",
   [string]$DownloadBaseUrl = "",
+  [string]$PluginSource = "",
+  [string]$PluginBaseUrl = "",
   [string]$Endpoint = "",
   [string]$XToken = "",
   [switch]$BinaryOnly,
@@ -39,6 +41,12 @@ if ((-not $Endpoint) -and $ExistingConfig -and $ExistingConfig.endpoint) {
 if ((-not $XToken) -and $ExistingConfig -and $ExistingConfig.x_token) {
   $XToken = [string]$ExistingConfig.x_token
 }
+if ((-not $PluginSource) -and $ExistingConfig -and $ExistingConfig.plugin_source) {
+  $PluginSource = [string]$ExistingConfig.plugin_source
+}
+if ((-not $PluginBaseUrl) -and $ExistingConfig -and $ExistingConfig.plugin_base_url) {
+  $PluginBaseUrl = [string]$ExistingConfig.plugin_base_url
+}
 
 function Get-DownloadBaseFromEndpoint {
   param([string]$Value)
@@ -57,6 +65,20 @@ function Get-DownloadBaseFromEndpoint {
   return "https://static.$RootDomain/obs-agent-connector"
 }
 
+function Get-PluginBaseFromDownloadBase {
+  param([string]$Value)
+
+  if (-not $Value) {
+    return ""
+  }
+  $Trimmed = $Value.TrimEnd("/")
+  $SlashIndex = $Trimmed.LastIndexOf("/")
+  if ($SlashIndex -lt 0) {
+    return $Trimmed
+  }
+  return $Trimmed.Substring(0, $SlashIndex)
+}
+
 if (-not $DownloadBaseUrl) {
   if ($EndpointWasProvided) {
     $DownloadBaseUrl = Get-DownloadBaseFromEndpoint -Value $Endpoint
@@ -68,8 +90,17 @@ if (-not $DownloadBaseUrl) {
     $DownloadBaseUrl = Get-DownloadBaseFromEndpoint -Value $Endpoint
   }
 }
+if (-not $PluginSource) {
+  $PluginSource = "oss"
+}
+if ((-not $PluginBaseUrl) -and ($PluginSource -eq "oss")) {
+  $PluginBaseUrl = Get-PluginBaseFromDownloadBase -Value $DownloadBaseUrl
+}
 if (-not $DownloadBaseUrl) {
   throw "download_base_url is required; pass -DownloadBaseUrl <url> or set DOWNLOAD_BASE_URL / OBS_AGENT_CONNECTOR_OSS_ENDPOINT"
+}
+if (($PluginSource -eq "github") -and (-not $PluginBaseUrl)) {
+  throw "plugin_base_url is required when plugin_source=github; pass -PluginBaseUrl <url> or update config.json"
 }
 if ((-not $BinaryOnly) -and (-not $Endpoint)) {
   throw "endpoint is required; pass -Endpoint <url> on first install or keep it in config.json"
@@ -78,6 +109,7 @@ if ((-not $BinaryOnly) -and (-not $XToken)) {
   throw "x-token is required; pass -XToken <token> on first install or keep it in config.json"
 }
 $DownloadBaseUrl = $DownloadBaseUrl.TrimEnd("/")
+$PluginBaseUrl = $PluginBaseUrl.TrimEnd("/")
 
 if (-not $InstallDir) {
   $InstallDir = Join-Path ([Environment]::GetFolderPath("LocalApplicationData")) "Programs\obs-agent-connector\bin"
@@ -159,6 +191,8 @@ try {
   if (-not $BinaryOnly) {
     $ConfigJson = [ordered]@{
       download_base_url = $DownloadBaseUrl
+      plugin_source = $PluginSource
+      plugin_base_url = $PluginBaseUrl
       endpoint = $Endpoint
       x_token = $XToken
     } | ConvertTo-Json

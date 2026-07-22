@@ -63,20 +63,22 @@ func install(args []string) error {
 		return err
 	}
 
-	staticBase := staticBaseURL(*staticBaseFlag, input.Endpoint)
+	pluginDownload, err := pluginDownloadSettings(*staticBaseFlag, cfg, input.Endpoint)
+	if err != nil {
+		return err
+	}
 	fmt.Println()
 	fmt.Println("Install plan:")
 	for _, p := range selected {
 		p = agent.Resolve(p)
-		url, err := downloadSourceURL(staticBase, p, currentGOOS)
+		url, err := downloadSourceURL(pluginDownload, p, currentGOOS)
 		if err != nil {
 			return err
 		}
 		fmt.Printf("  - %s (%s)\n", p.Name, url)
 	}
-	if currentGOOS != "windows" {
-		fmt.Printf("OSS_ENDPOINT: %s\n", staticBase)
-	}
+	fmt.Printf("Plugin Source: %s\n", pluginDownload.Source)
+	fmt.Printf("Plugin Base URL: %s\n", pluginDownload.BaseURL)
 	fmt.Printf("Type: %s\n", fixedType)
 	fmt.Printf("Endpoint: %s\n", input.Endpoint)
 	fmt.Printf("X-Token: %s\n", input.XToken)
@@ -88,7 +90,7 @@ func install(args []string) error {
 		fmt.Println("Command preview:")
 		for _, p := range selected {
 			p = agent.Resolve(p)
-			fmt.Println(renderInstallCommand(staticBase, p, input))
+			fmt.Println(renderInstallCommand(pluginDownload, p, input))
 		}
 		return nil
 	}
@@ -106,7 +108,7 @@ func install(args []string) error {
 
 	for _, p := range selected {
 		p = agent.Resolve(p)
-		if err := installOne(staticBase, p, input); err != nil {
+		if err := installOne(pluginDownload, p, input); err != nil {
 			return err
 		}
 	}

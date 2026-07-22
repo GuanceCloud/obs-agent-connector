@@ -36,6 +36,54 @@ func staticBaseURL(value string, endpoint string) string {
 	return strings.TrimRight(value, "/")
 }
 
+func pluginDownloadSettings(overrideBase string, cfg connectorConfig, endpoint string) (pluginDownloadConfig, error) {
+	source := normalizePluginSource(cfg.PluginSource)
+
+	if envSource := normalizePluginSource(os.Getenv("OBS_AGENT_CONNECTOR_PLUGIN_SOURCE")); envSource != "" {
+		source = envSource
+	}
+
+	baseURL := strings.TrimSpace(overrideBase)
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(os.Getenv("OBS_AGENT_CONNECTOR_PLUGIN_BASE_URL"))
+	}
+	if baseURL == "" {
+		baseURL = strings.TrimSpace(cfg.PluginBaseURL)
+	}
+
+	switch source {
+	case "", pluginSourceOSS:
+		source = pluginSourceOSS
+		if baseURL == "" {
+			baseURL = staticBaseURL("", endpoint)
+		}
+	case pluginSourceGitHub:
+		if baseURL == "" {
+			return pluginDownloadConfig{}, fmt.Errorf("plugin_base_url is required when plugin_source=github")
+		}
+	default:
+		return pluginDownloadConfig{}, fmt.Errorf("unsupported plugin_source %q", source)
+	}
+
+	return pluginDownloadConfig{
+		Source:  source,
+		BaseURL: strings.TrimRight(baseURL, "/"),
+	}, nil
+}
+
+func normalizePluginSource(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "":
+		return ""
+	case pluginSourceOSS:
+		return pluginSourceOSS
+	case pluginSourceGitHub:
+		return pluginSourceGitHub
+	default:
+		return strings.ToLower(strings.TrimSpace(value))
+	}
+}
+
 func connectorPluginStaticBase() string {
 	cfg, _, err := loadConnectorConfig()
 	if err != nil {
@@ -87,6 +135,12 @@ func loadConnectorConfig() (connectorConfig, string, error) {
 
 	if strings.TrimSpace(disk.DownloadBaseURL) != "" {
 		cfg.DownloadBaseURL = strings.TrimRight(strings.TrimSpace(disk.DownloadBaseURL), "/")
+	}
+	if source := normalizePluginSource(disk.PluginSource); source != "" {
+		cfg.PluginSource = source
+	}
+	if strings.TrimSpace(disk.PluginBaseURL) != "" {
+		cfg.PluginBaseURL = strings.TrimRight(strings.TrimSpace(disk.PluginBaseURL), "/")
 	}
 	if strings.TrimSpace(disk.Endpoint) != "" {
 		cfg.Endpoint = strings.TrimSpace(disk.Endpoint)

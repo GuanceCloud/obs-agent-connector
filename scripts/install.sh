@@ -6,6 +6,8 @@ VERSION="${VERSION:-latest}"
 INSTALL_DIR="${INSTALL_DIR:-}"
 CONFIG_DIR="${CONFIG_DIR:-$HOME/.obs-agent-connector}"
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL:-${OBS_AGENT_CONNECTOR_OSS_ENDPOINT:-}}"
+PLUGIN_SOURCE="${PLUGIN_SOURCE:-}"
+PLUGIN_BASE_URL="${PLUGIN_BASE_URL:-}"
 ENDPOINT="${ENDPOINT:-}"
 X_TOKEN="${X_TOKEN:-}"
 BINARY_ONLY=0
@@ -33,7 +35,7 @@ esac
 usage() {
   cat <<EOF
 Usage:
-  install.sh [--version <tag|latest>] [--install-dir <path>] [--config-dir <path>] [--download-base-url <url>] [--endpoint <url>] [--x-token <token>] [--binary-only]
+  install.sh [--version <tag|latest>] [--install-dir <path>] [--config-dir <path>] [--download-base-url <url>] [--endpoint <url>] [--x-token <token>] [--plugin-source <oss|github>] [--plugin-base-url <url>] [--binary-only]
 EOF
 }
 
@@ -78,6 +80,19 @@ download_base_from_endpoint() {
   fi
 }
 
+plugin_base_from_download_base() {
+  value="$1"
+  value="${value%/}"
+  case "$value" in
+    */*)
+      printf '%s\n' "${value%/*}"
+      ;;
+    *)
+      printf '%s\n' "$value"
+      ;;
+  esac
+}
+
 calculate_sha256() {
   checksum_target="$1"
   if command -v sha256sum >/dev/null 2>&1; then
@@ -115,6 +130,10 @@ while [ "$#" -gt 0 ]; do
     --config-dir=*) CONFIG_DIR="${1#*=}" ;;
     --download-base-url) shift; DOWNLOAD_BASE_URL="$1" ;;
     --download-base-url=*) DOWNLOAD_BASE_URL="${1#*=}" ;;
+    --plugin-source) shift; PLUGIN_SOURCE="$1" ;;
+    --plugin-source=*) PLUGIN_SOURCE="${1#*=}" ;;
+    --plugin-base-url) shift; PLUGIN_BASE_URL="$1" ;;
+    --plugin-base-url=*) PLUGIN_BASE_URL="${1#*=}" ;;
     --endpoint) shift; ENDPOINT="$1" ;;
     --endpoint=*) ENDPOINT="${1#*=}" ;;
     --x-token) shift; X_TOKEN="$1" ;;
@@ -138,6 +157,8 @@ fi
 
 config_path="${CONFIG_DIR}/config.json"
 existing_download_base_url="$(json_get download_base_url "$config_path")"
+existing_plugin_source="$(json_get plugin_source "$config_path")"
+existing_plugin_base_url="$(json_get plugin_base_url "$config_path")"
 existing_endpoint="$(json_get endpoint "$config_path")"
 existing_x_token="$(json_get x_token "$config_path")"
 
@@ -156,6 +177,19 @@ if [ -z "${DOWNLOAD_BASE_URL}" ]; then
     DOWNLOAD_BASE_URL="$(download_base_from_endpoint "${ENDPOINT}")"
   fi
 fi
+if [ -z "${PLUGIN_SOURCE}" ] && [ -n "${existing_plugin_source}" ]; then
+  PLUGIN_SOURCE="${existing_plugin_source}"
+fi
+if [ -z "${PLUGIN_SOURCE}" ]; then
+  PLUGIN_SOURCE="oss"
+fi
+if [ -z "${PLUGIN_BASE_URL}" ]; then
+  if [ -n "${existing_plugin_base_url}" ]; then
+    PLUGIN_BASE_URL="${existing_plugin_base_url}"
+  elif [ "${PLUGIN_SOURCE}" = "oss" ]; then
+    PLUGIN_BASE_URL="$(plugin_base_from_download_base "${DOWNLOAD_BASE_URL}")"
+  fi
+fi
 
 if [ -z "${DOWNLOAD_BASE_URL}" ]; then
   echo "download_base_url is required; pass --download-base-url <url> or set DOWNLOAD_BASE_URL / OBS_AGENT_CONNECTOR_OSS_ENDPOINT" >&2
@@ -169,8 +203,13 @@ if [ "${BINARY_ONLY}" -eq 0 ] && [ -z "${X_TOKEN}" ]; then
   echo "x-token is required; pass --x-token <token> on first install or keep it in config.json" >&2
   exit 2
 fi
+if [ "${PLUGIN_SOURCE}" = "github" ] && [ -z "${PLUGIN_BASE_URL}" ]; then
+  echo "plugin_base_url is required when plugin_source=github; pass --plugin-base-url <url> or update config.json" >&2
+  exit 2
+fi
 
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL%/}"
+PLUGIN_BASE_URL="${PLUGIN_BASE_URL%/}"
 
 latest_version() {
   latest_cache_key="$(date +%s)"
@@ -233,6 +272,8 @@ if [ "${BINARY_ONLY}" -eq 0 ]; then
   cat > "$config_path" <<EOF
 {
   "download_base_url": "$(json_escape "${DOWNLOAD_BASE_URL}")",
+  "plugin_source": "$(json_escape "${PLUGIN_SOURCE}")",
+  "plugin_base_url": "$(json_escape "${PLUGIN_BASE_URL}")",
   "endpoint": "$(json_escape "${ENDPOINT}")",
   "x_token": "$(json_escape "${X_TOKEN}")"
 }

@@ -74,10 +74,12 @@ func discover(args []string) error {
 		return nil
 	}
 
-	staticBase := staticBaseURL(*staticBaseFlag, input.Endpoint)
-	if currentGOOS != "windows" {
-		fmt.Printf("OSS_ENDPOINT: %s\n", staticBase)
+	pluginDownload, err := pluginDownloadSettings(*staticBaseFlag, cfg, input.Endpoint)
+	if err != nil {
+		return fmt.Errorf("discover failed: %w", err)
 	}
+	fmt.Printf("Plugin Source: %s\n", pluginDownload.Source)
+	fmt.Printf("Plugin Base URL: %s\n", pluginDownload.BaseURL)
 	fmt.Printf("Endpoint: %s\n", input.Endpoint)
 	fmt.Printf("X-Token: %s\n", input.XToken)
 
@@ -130,7 +132,7 @@ func discover(args []string) error {
 			continue
 		}
 
-		if err := installOne(staticBase, candidate.Plugin, perAgent); err != nil {
+		if err := installOne(pluginDownload, candidate.Plugin, perAgent); err != nil {
 			hadFailure = true
 			results = append(results, discoverResult{
 				Agent:  candidate.Plugin.Name,

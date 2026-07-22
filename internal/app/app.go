@@ -3,11 +3,13 @@ package app
 import "fmt"
 
 const (
-	appName           = "obs-agent-connector"
-	fixedType         = "gtrace"
-	defaultStaticBase = "https://static.guance.com"
-	configDirName     = ".obs-agent-connector"
-	configFileName    = "config.json"
+	appName            = "obs-agent-connector"
+	fixedType          = "gtrace"
+	defaultStaticBase  = "https://static.guance.com"
+	pluginSourceOSS    = "oss"
+	pluginSourceGitHub = "github"
+	configDirName      = ".obs-agent-connector"
+	configFileName     = "config.json"
 )
 
 var version = "dev"

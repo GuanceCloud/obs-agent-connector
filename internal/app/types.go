@@ -14,8 +14,15 @@ type githubRelease struct {
 
 type connectorConfig struct {
 	DownloadBaseURL string `json:"download_base_url"`
+	PluginSource    string `json:"plugin_source"`
+	PluginBaseURL   string `json:"plugin_base_url"`
 	Endpoint        string `json:"endpoint"`
 	XToken          string `json:"x_token"`
+}
+
+type pluginDownloadConfig struct {
+	Source  string
+	BaseURL string
 }
 
 type discoverResult struct {

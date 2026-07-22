@@ -79,17 +79,17 @@ func confirm(label string, defaultYes bool) (bool, error) {
 	}
 }
 
-func installOne(staticBase string, p agent.Definition, input installInput) error {
+func installOne(download pluginDownloadConfig, p agent.Definition, input installInput) error {
 	fmt.Printf("\n==> Installing %s\n", p.Name)
 
 	if usesPackageArchive(currentGOOS, p) {
-		return runPackageInstaller(staticBase, p, "installation", func(extractDir string) []string {
+		return runPackageInstaller(download, p, "installation", func(extractDir string) []string {
 			return buildPackageInstallArgs(extractDir, p, input)
 		})
 	}
 
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
-	url, err := installerURLForOS(staticBase, p, currentGOOS)
+	url, err := installerURLForOS(download, p, currentGOOS)
 	if err != nil {
 		return err
 	}
@@ -113,7 +113,7 @@ func installOne(staticBase string, p agent.Definition, input installInput) error
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
-		cmd.Env = append(os.Environ(), pluginEnv(staticBase, p)...)
+		cmd.Env = append(os.Environ(), pluginEnv(download, p)...)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("%s installation failed: %w", p.Name, err)
 		}
@@ -123,17 +123,17 @@ func installOne(staticBase string, p agent.Definition, input installInput) error
 	return nil
 }
 
-func updatePluginOne(staticBase string, p agent.Definition) error {
+func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 	fmt.Printf("\n==> Updating %s\n", p.Name)
 
 	if usesPackageArchive(currentGOOS, p) {
-		return runPackageInstaller(staticBase, p, "update", func(extractDir string) []string {
+		return runPackageInstaller(download, p, "update", func(extractDir string) []string {
 			return buildPackageUpdateArgs(extractDir, p)
 		})
 	}
 
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
-	url, err := installerURLForOS(staticBase, p, currentGOOS)
+	url, err := installerURLForOS(download, p, currentGOOS)
 	if err != nil {
 		return err
 	}
@@ -157,7 +157,7 @@ func updatePluginOne(staticBase string, p agent.Definition) error {
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
-		cmd.Env = append(os.Environ(), pluginEnv(staticBase, p)...)
+		cmd.Env = append(os.Environ(), pluginEnv(download, p)...)
 		if err := cmd.Run(); err != nil {
 			return fmt.Errorf("%s update failed: %w", p.Name, err)
 		}
@@ -240,36 +240,46 @@ func buildPluginUpdateArgs(scriptPath string, p agent.Definition) []string {
 	return args
 }
 
-func renderInstallCommand(staticBase string, p agent.Definition, input installInput) string {
+func renderInstallCommand(download pluginDownloadConfig, p agent.Definition, input installInput) string {
 	if usesPackageArchive(currentGOOS, p) {
-		return renderPackageCommand(staticBase, p, buildPackageInstallArgs(packageExtractPath(p), p, input))
+		return renderPackageCommand(download, p, buildPackageInstallArgs(packageExtractPath(p), p, input))
 	}
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	if currentGOOS == "windows" {
 		return renderPowerShellInstallCommand(scriptPath, p, input)
 	}
+	envAssignments := renderEnvAssignments(download, p)
+	envLine := ""
+	if envAssignments != "" {
+		envLine = envAssignments + " \\\n"
+	}
 	return fmt.Sprintf(
-		"curl -fsSL -o %s %s && \\\n%s \\\n%s",
+		"curl -fsSL -o %s %s && \\\n%s%s",
 		shellQuote(scriptPath),
-		shellQuote(strings.TrimRight(staticBase, "/")+"/"+p.PluginName+"/install.sh"),
-		renderEnvAssignments(staticBase, p),
+		shellQuote(mustInstallerURL(download, p, currentGOOS)),
+		envLine,
 		renderBashCommand(buildInstallArgs(scriptPath, p, input)),
 	)
 }
 
-func renderPluginUpdateCommand(staticBase string, p agent.Definition) string {
+func renderPluginUpdateCommand(download pluginDownloadConfig, p agent.Definition) string {
 	if usesPackageArchive(currentGOOS, p) {
-		return renderPackageCommand(staticBase, p, buildPackageUpdateArgs(packageExtractPath(p), p))
+		return renderPackageCommand(download, p, buildPackageUpdateArgs(packageExtractPath(p), p))
 	}
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	if currentGOOS == "windows" {
 		return renderPowerShellUpdateCommand(scriptPath, p)
 	}
+	envAssignments := renderEnvAssignments(download, p)
+	envLine := ""
+	if envAssignments != "" {
+		envLine = envAssignments + " \\\n"
+	}
 	return fmt.Sprintf(
-		"curl -fsSL -o %s %s && \\\n%s \\\n%s",
+		"curl -fsSL -o %s %s && \\\n%s%s",
 		shellQuote(scriptPath),
-		shellQuote(strings.TrimRight(staticBase, "/")+"/"+p.PluginName+"/install.sh"),
-		renderEnvAssignments(staticBase, p),
+		shellQuote(mustInstallerURL(download, p, currentGOOS)),
+		envLine,
 		renderBashCommand(buildPluginUpdateArgs(scriptPath, p)),
 	)
 }
@@ -282,8 +292,11 @@ func renderBashCommand(args []string) string {
 	return "bash " + strings.Join(out, " ")
 }
 
-func pluginEnv(staticBase string, p agent.Definition) []string {
-	env := []string{"OSS_ENDPOINT=" + staticBase}
+func pluginEnv(download pluginDownloadConfig, p agent.Definition) []string {
+	env := []string{}
+	if download.Source == pluginSourceOSS {
+		env = append(env, "OSS_ENDPOINT="+download.BaseURL)
+	}
 	for _, item := range p.Env {
 		key, value, ok := splitEnvAssignment(item)
 		if !ok {
@@ -294,8 +307,11 @@ func pluginEnv(staticBase string, p agent.Definition) []string {
 	return env
 }
 
-func renderEnvAssignments(staticBase string, p agent.Definition) string {
-	assignments := []string{"OSS_ENDPOINT=" + shellQuote(staticBase)}
+func renderEnvAssignments(download pluginDownloadConfig, p agent.Definition) string {
+	assignments := []string{}
+	if download.Source == pluginSourceOSS {
+		assignments = append(assignments, "OSS_ENDPOINT="+shellQuote(download.BaseURL))
+	}
 	for _, item := range p.Env {
 		key, value, ok := splitEnvAssignment(item)
 		if !ok {
@@ -314,29 +330,44 @@ func splitEnvAssignment(value string) (string, string, bool) {
 	return key, val, true
 }
 
-func installerURLForOS(staticBase string, p agent.Definition, goos string) (string, error) {
+func installerURLForOS(download pluginDownloadConfig, p agent.Definition, goos string) (string, error) {
 	if strings.EqualFold(strings.TrimSpace(goos), "windows") {
-		installer := strings.TrimSpace(p.WindowsInstaller)
-		if installer == "" {
+		if strings.TrimSpace(p.WindowsInstaller) == "" {
 			return "", unsupportedPlatformError(p, goos)
 		}
-		if strings.Contains(installer, "://") {
-			return installer, nil
+		switch download.Source {
+		case pluginSourceGitHub:
+			return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/releases/latest/download/install-release.ps1", nil
+		case pluginSourceOSS:
+			return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/" + strings.TrimLeft(strings.TrimSpace(p.WindowsInstaller), "/"), nil
+		default:
+			return "", fmt.Errorf("unsupported plugin source %q", download.Source)
 		}
-		return strings.TrimRight(staticBase, "/") + "/" + p.PluginName + "/" + strings.TrimLeft(installer, "/"), nil
 	}
-	return strings.TrimRight(staticBase, "/") + "/" + p.PluginName + "/install.sh", nil
+	switch download.Source {
+	case pluginSourceGitHub:
+		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/releases/latest/download/install-release.sh", nil
+	case pluginSourceOSS:
+		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/install.sh", nil
+	default:
+		return "", fmt.Errorf("unsupported plugin source %q", download.Source)
+	}
 }
 
-func downloadSourceURL(staticBase string, p agent.Definition, goos string) (string, error) {
+func downloadSourceURL(download pluginDownloadConfig, p agent.Definition, goos string) (string, error) {
 	if usesPackageArchive(goos, p) {
-		return packageArchiveURL(staticBase, p), nil
+		return packageArchiveURL(download, p), nil
 	}
-	return installerURLForOS(staticBase, p, goos)
+	return installerURLForOS(download, p, goos)
 }
 
-func packageArchiveURL(staticBase string, p agent.Definition) string {
-	return strings.TrimRight(staticBase, "/") + "/" + p.PluginName + "/" + p.PluginName + ".tar.gz"
+func packageArchiveURL(download pluginDownloadConfig, p agent.Definition) string {
+	switch download.Source {
+	case pluginSourceGitHub:
+		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/releases/latest/download/" + p.PluginName + ".tar.gz"
+	default:
+		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/" + p.PluginName + ".tar.gz"
+	}
 }
 
 func usesPackageArchive(goos string, p agent.Definition) bool {
@@ -375,18 +406,23 @@ func buildPackageUpdateArgs(extractDir string, p agent.Definition) []string {
 	return args
 }
 
-func renderPackageCommand(staticBase string, p agent.Definition, args []string) string {
+func renderPackageCommand(download pluginDownloadConfig, p agent.Definition, args []string) string {
 	archivePath := tempPackageArchivePath(p)
 	extractDir := packageExtractPath(p)
 	scriptPath := filepath.Join(extractDir, filepath.FromSlash(p.PackageScript))
+	envAssignments := renderEnvAssignments(download, p)
+	envLine := ""
+	if envAssignments != "" {
+		envLine = envAssignments + " \\\n"
+	}
 	return fmt.Sprintf(
-		"curl -fsSL -o %s %s && \\\nmkdir -p %s && tar -xzf %s --strip-components=1 -C %s && \\\n%s \\\n%s",
+		"curl -fsSL -o %s %s && \\\nmkdir -p %s && tar -xzf %s --strip-components=1 -C %s && \\\n%s%s",
 		shellQuote(archivePath),
-		shellQuote(packageArchiveURL(staticBase, p)),
+		shellQuote(packageArchiveURL(download, p)),
 		shellQuote(extractDir),
 		shellQuote(archivePath),
 		shellQuote(extractDir),
-		renderEnvAssignments(staticBase, p),
+		envLine,
 		renderBashCommand(append([]string{scriptPath}, args...)),
 	)
 }
@@ -395,7 +431,7 @@ func tempPackageArchivePath(p agent.Definition) string {
 	return filepath.Join(os.TempDir(), p.PluginName+".tar.gz")
 }
 
-func runPackageInstaller(staticBase string, p agent.Definition, action string, argsFn func(string) []string) error {
+func runPackageInstaller(download pluginDownloadConfig, p agent.Definition, action string, argsFn func(string) []string) error {
 	extractDir, err := os.MkdirTemp("", p.PluginName+"-package-*")
 	if err != nil {
 		return err
@@ -403,7 +439,7 @@ func runPackageInstaller(staticBase string, p agent.Definition, action string, a
 	defer os.RemoveAll(extractDir)
 	archivePath := filepath.Join(extractDir, p.PluginName+".tar.gz")
 
-	archiveURL := packageArchiveURL(staticBase, p)
+	archiveURL := packageArchiveURL(download, p)
 	fmt.Printf("Downloading package: %s\n", archiveURL)
 	if err := downloadFile(archiveURL, archivePath); err != nil {
 		return fmt.Errorf("failed to download %s package: %w", p.Name, err)
@@ -425,11 +461,19 @@ func runPackageInstaller(staticBase string, p agent.Definition, action string, a
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.Stdin = os.Stdin
-	cmd.Env = append(os.Environ(), pluginEnv(staticBase, p)...)
+	cmd.Env = append(os.Environ(), pluginEnv(download, p)...)
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("%s %s failed: %w", p.Name, action, err)
 	}
 	return nil
+}
+
+func mustInstallerURL(download pluginDownloadConfig, p agent.Definition, goos string) string {
+	url, err := installerURLForOS(download, p, goos)
+	if err != nil {
+		return "<invalid-installer-url>"
+	}
+	return url
 }
 
 func extractTarGzStripOne(archivePath string, extractDir string) error {
