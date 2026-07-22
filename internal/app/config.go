@@ -1,6 +1,7 @@
 package app
 
 import (
+	"bytes"
 	"encoding/json"
 	"net"
 	"net/url"
@@ -73,6 +74,7 @@ func loadConnectorConfig() (connectorConfig, string, error) {
 	}
 
 	var disk connectorConfig
+	data = bytes.TrimPrefix(data, []byte{0xEF, 0xBB, 0xBF})
 	if err := json.Unmarshal(data, &disk); err != nil {
 		return cfg, path, err
 	}

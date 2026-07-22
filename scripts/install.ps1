@@ -98,7 +98,7 @@ function Add-CacheKey {
   if (($Uri.Scheme -ne "http") -and ($Uri.Scheme -ne "https")) {
     return $Url
   }
-  return "$Url?v=$([System.Uri]::EscapeDataString($Key))"
+  return "${Url}?v=$([System.Uri]::EscapeDataString($Key))"
 }
 
 if ($Version -eq "latest") {
@@ -157,11 +157,12 @@ try {
   Copy-Item -LiteralPath (Join-Path $TempDir $BinaryName) -Destination (Join-Path $InstallDir "$AppName.exe") -Force
 
   if (-not $BinaryOnly) {
-    [ordered]@{
+    $ConfigJson = [ordered]@{
       download_base_url = $DownloadBaseUrl
       endpoint = $Endpoint
       x_token = $XToken
-    } | ConvertTo-Json | Set-Content -LiteralPath $ConfigPath -Encoding UTF8
+    } | ConvertTo-Json
+    [System.IO.File]::WriteAllText($ConfigPath, $ConfigJson, (New-Object System.Text.UTF8Encoding($false)))
   }
 
   if (-not $NoPathUpdate) {
