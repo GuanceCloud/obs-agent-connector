@@ -8,7 +8,7 @@ The tool provides a single entry point for plugin installation, update, removal,
 
 - Bootstrap the CLI and OBS defaults with one installer command.
 - Install Agent plugins through the official remote installer scripts.
-- Auto-discover local Agents and install missing plugins.
+- Auto-discover local Agents, install missing plugins, and sync all plugins with `discover -u`.
 - Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
 - Update one installed Agent plugin without modifying existing configuration.
 - Enable or disable an installed plugin by updating its runtime config.
@@ -37,6 +37,7 @@ The tool provides a single entry point for plugin installation, update, removal,
 ```bash
 obs-agent-connector list
 obs-agent-connector discover
+obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install qoder
 obs-agent-connector enable codex
@@ -75,7 +76,9 @@ The downloaded package is verified against `SHA256SUMS` before installation.
 
 After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
 `install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
+The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
+`list` and `discover` also show the detected plugin version when it can be resolved from the local install layout.
 Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
 

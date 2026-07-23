@@ -8,6 +8,11 @@ import (
 	"strings"
 )
 
+type discoverStep struct {
+	Candidate agent.Candidate
+	Action    string
+}
+
 func discover(args []string) error {
 	fs := flag.NewFlagSet("discover", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -16,6 +21,8 @@ func discover(args []string) error {
 	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print planned actions without installing")
+	updateMode := fs.Bool("u", false, "Update installed plugins and install missing ones")
+	fs.BoolVar(updateMode, "update", false, "Update installed plugins and install missing ones")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -43,33 +50,46 @@ func discover(args []string) error {
 	}
 
 	rows := make([][]string, 0, len(candidates))
-	pending := make([]agent.Candidate, 0, len(candidates))
+	steps := make([]discoverStep, 0, len(candidates))
 	hasUnsupported := false
 	for _, candidate := range candidates {
+		version := displayVersion(candidate.InstalledVersion)
 		if !candidate.Supported {
 			hasUnsupported = true
-			rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, "n/a", "unsupported on windows"})
+			rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, "n/a", version, "unsupported"})
 			continue
 		}
 		pluginState := "missing"
 		action := "install"
-		if candidate.InstalledPath != "" {
+		if candidate.InstalledPath != "" && *updateMode {
+			pluginState = "installed"
+			action = "update"
+			steps = append(steps, discoverStep{Candidate: candidate, Action: action})
+		} else if candidate.InstalledPath != "" {
 			pluginState = "installed"
 			action = "skip"
 		} else {
-			pending = append(pending, candidate)
+			steps = append(steps, discoverStep{Candidate: candidate, Action: action})
 		}
-		rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, pluginState, action})
+		rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, pluginState, version, action})
 	}
 
 	fmt.Println("Discover plan:")
-	printTable([]string{"AGENT", "COMMAND", "PLUGIN", "ACTION"}, rows)
+	printTable([]string{"AGENT", "COMMAND", "PLUGIN", "VERSION", "ACTION"}, rows)
 
-	if len(pending) == 0 {
-		if hasUnsupported {
-			fmt.Println("No supported missing plugins found.")
+	if len(steps) == 0 {
+		if *updateMode {
+			if hasUnsupported {
+				fmt.Println("No supported plugins found to update.")
+			} else {
+				fmt.Println("All detected Agents already have plugins installed.")
+			}
 		} else {
-			fmt.Println("All detected Agents already have plugins installed.")
+			if hasUnsupported {
+				fmt.Println("No supported missing plugins found.")
+			} else {
+				fmt.Println("All detected Agents already have plugins installed.")
+			}
 		}
 		return nil
 	}
@@ -88,7 +108,11 @@ func discover(args []string) error {
 	}
 
 	if !*yes {
-		ok, err := confirm("Continue discovery install?", true)
+		label := "Continue discovery install?"
+		if *updateMode {
+			label = "Continue discovery sync?"
+		}
+		ok, err := confirm(label, true)
 		if err != nil {
 			return err
 		}
@@ -109,11 +133,35 @@ func discover(args []string) error {
 			})
 			continue
 		}
-		if candidate.InstalledPath != "" {
+		if candidate.InstalledPath != "" && !*updateMode {
 			results = append(results, discoverResult{
 				Agent:  candidate.Plugin.Name,
 				Result: "skipped",
-				Detail: "plugin already installed",
+				Detail: "plugin already installed version=" + displayVersion(candidate.InstalledVersion),
+			})
+			continue
+		}
+
+		if candidate.InstalledPath != "" {
+			beforeVersion := candidate.InstalledVersion
+			if err := updatePluginOne(pluginDownload, candidate.Plugin); err != nil {
+				hadFailure = true
+				results = append(results, discoverResult{
+					Agent:  candidate.Plugin.Name,
+					Result: "failed",
+					Detail: err.Error(),
+				})
+				continue
+			}
+			afterVersion := agent.InstalledVersion(candidate.Plugin)
+			detail := fmt.Sprintf("version=%s", displayVersion(afterVersion))
+			if beforeVersion != "" && afterVersion != "" && beforeVersion != afterVersion {
+				detail = fmt.Sprintf("version %s -> %s", beforeVersion, afterVersion)
+			}
+			results = append(results, discoverResult{
+				Agent:  candidate.Plugin.Name,
+				Result: "updated",
+				Detail: detail,
 			})
 			continue
 		}
@@ -142,10 +190,11 @@ func discover(args []string) error {
 			continue
 		}
 
+		installedVersion := agent.InstalledVersion(candidate.Plugin)
 		results = append(results, discoverResult{
 			Agent:  candidate.Plugin.Name,
 			Result: "installed",
-			Detail: fmt.Sprintf("agent_id=%s agent_name=%s", perAgent.AgentID, perAgent.AgentName),
+			Detail: fmt.Sprintf("version=%s agent_id=%s agent_name=%s", displayVersion(installedVersion), perAgent.AgentID, perAgent.AgentName),
 		})
 	}
 
@@ -162,4 +211,12 @@ func discover(args []string) error {
 	}
 
 	return nil
+}
+
+func displayVersion(version string) string {
+	version = strings.TrimSpace(version)
+	if version == "" {
+		return "-"
+	}
+	return version
 }

@@ -99,10 +99,11 @@ func DiscoverCandidatesForOS(goos string) []Candidate {
 		}
 		installedPath, _ := InstalledMarker(p)
 		out = append(out, Candidate{
-			Plugin:        p,
-			DetectedCmd:   command,
-			InstalledPath: installedPath,
-			Supported:     SupportsPlatform(p, goos),
+			Plugin:           p,
+			DetectedCmd:      command,
+			InstalledPath:    installedPath,
+			InstalledVersion: InstalledVersion(p),
+			Supported:        SupportsPlatform(p, goos),
 		})
 	}
 	return out

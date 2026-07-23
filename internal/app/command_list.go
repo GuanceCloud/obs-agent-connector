@@ -19,13 +19,18 @@ func listPlugins() error {
 		if configPath == "" {
 			configPath = "-"
 		}
-		rows = append(rows, []string{p.Name, agent.DisplayPath(configPath), agent.DisplayPath(installedAt)})
+		rows = append(rows, []string{
+			p.Name,
+			displayVersion(agent.InstalledVersion(p)),
+			agent.DisplayPath(configPath),
+			agent.DisplayPath(installedAt),
+		})
 	}
 	if !found {
 		fmt.Println("No installed plugins found.")
 		return nil
 	}
 
-	printTable([]string{"AGENT", "CONFIG", "PATH"}, rows)
+	printTable([]string{"AGENT", "VERSION", "CONFIG", "PATH"}, rows)
 	return nil
 }

@@ -2,15 +2,28 @@ package app
 
 import (
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 )
 
+var uuidPattern = regexp.MustCompile(`^agid_[0-9a-f]{32}$`)
+
 func TestDefaultAgentNameIncludesAgentAndDate(t *testing.T) {
 	name := defaultAgentName("claude", time.Date(2026, time.July, 15, 10, 30, 0, 0, time.Local))
 	if !strings.HasSuffix(name, "_claude_20260715") {
 		t.Fatalf("expected agent and date suffix, got %q", name)
+	}
+}
+
+func TestGenerateAgentIDUsesUUIDv4HexWithoutDashes(t *testing.T) {
+	agentID, err := generateAgentID()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !uuidPattern.MatchString(agentID) {
+		t.Fatalf("expected agid_<uuidhex> agent_id, got %q", agentID)
 	}
 }
 

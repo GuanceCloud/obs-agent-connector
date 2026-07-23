@@ -45,7 +45,7 @@ At plugin install time, the CLI uses:
 | --- | --- |
 | `Endpoint` | `config.json` or `--endpoint` override | `--endpoint` |
 | `X-Token` | `config.json` or `--x-token` override | `--x-token` |
-| `Agent ID` | auto-generated or `--agent-id` override | `--tag agent_id=<value>` |
+| `Agent ID` | auto-generated `agid_<uuidv4-without-dashes>` or `--agent-id` override | `--tag agent_id=<value>` |
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
 The CLI always uses `--type gtrace`.

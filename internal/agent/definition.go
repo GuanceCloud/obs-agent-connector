@@ -24,8 +24,9 @@ type Definition struct {
 }
 
 type Candidate struct {
-	Plugin        Definition
-	DetectedCmd   string
-	InstalledPath string
-	Supported     bool
+	Plugin           Definition
+	DetectedCmd      string
+	InstalledPath    string
+	InstalledVersion string
+	Supported        bool
 }

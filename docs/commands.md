@@ -10,8 +10,8 @@ obs-agent-connector <command> [arguments]
 
 | Command | Purpose |
 | --- | --- |
-| `list` | List installed Agent plugins detected on the local machine. |
-| `discover` | Detect supported local Agents and install any missing plugins by using connector defaults from `config.json`. |
+| `list` | List installed Agent plugins detected on the local machine, including best-effort plugin version detection. |
+| `discover` | Detect supported local Agents and install any missing plugins by using connector defaults from `config.json`. Use `discover -u` to update installed plugins and install any missing plugins in one run. |
 | `install <agent>` | Install one Agent plugin using the remote plugin installer. |
 | `enable <agent>` | Enable one installed Agent plugin by setting its runtime JSON `enabled` switch to `true`. |
 | `disable <agent>` | Disable one installed Agent plugin by setting its runtime JSON `enabled` switch to `false`. |
@@ -45,6 +45,12 @@ Auto-install missing plugins for detected local Agents:
 obs-agent-connector discover
 ```
 
+Update installed plugins and install any missing plugins in one run:
+
+```bash
+obs-agent-connector discover -u
+```
+
 Preview only:
 
 ```bash
@@ -60,7 +66,9 @@ obs-agent-connector discover \
   --yes
 ```
 
-`discover` detects supported Agent commands in `PATH`, skips Agents whose plugins are already installed, generates one `agent_id` per new plugin, and uses `<hostname>_<agent>_<YYYYMMDD>` as the default `agent_name`.
+`discover` detects supported Agent commands in `PATH`, skips Agents whose plugins are already installed by default, and switches to update mode when `-u` is provided.
+For new plugin installs it generates one `agid_<uuidv4-without-dashes>` `agent_id` and uses `<hostname>_<agent>_<YYYYMMDD>` as the default `agent_name`.
+The output also shows the detected plugin version when it can be resolved from the local install layout.
 Qoder is skipped until either `~/.qoder` or `~/.qoder-cn` has been created by the Agent.
 Missing or invalid connector defaults are reported as `discover failed` errors.
 
@@ -90,7 +98,7 @@ Use `--static-base` when you need to override the installer base.
 On Windows, plugin installation does not use the OSS shell installer. The CLI downloads each supported plugin's GitHub release PowerShell installer instead.
 Only `codex`, `openclaw`, and `qoder` are currently supported on Windows. Unsupported Agents return a friendly error.
 
-When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically.
+When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 
 Preview only:
 

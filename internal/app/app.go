@@ -53,7 +53,7 @@ Usage:
 
 Commands:
   list                  List installed Agent plugins
-  discover              Detect local Agents and install missing plugins
+  discover              Detect local Agents; install missing plugins, or sync all with -u
   install <agent>       Install an Agent plugin
   enable <agent>        Enable one installed Agent plugin
   disable <agent>       Disable one installed Agent plugin
@@ -63,6 +63,7 @@ Commands:
 
 Examples:
   obs-agent-connector discover
+  obs-agent-connector discover -u
   obs-agent-connector install codex
   obs-agent-connector install qoder
   obs-agent-connector enable codex

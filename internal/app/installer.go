@@ -3,7 +3,6 @@ package app
 import (
 	"bufio"
 	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	"io"
@@ -606,7 +605,9 @@ func generateAgentID() (string, error) {
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("generate agent_id: %w", err)
 	}
-	return "agent_" + hex.EncodeToString(buf), nil
+	buf[6] = (buf[6] & 0x0f) | 0x40
+	buf[8] = (buf[8] & 0x3f) | 0x80
+	return fmt.Sprintf("agid_%x", buf), nil
 }
 
 func defaultAgentName(agent string, now time.Time) string {
