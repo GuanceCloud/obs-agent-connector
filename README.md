@@ -132,6 +132,7 @@ GitHub Actions:
 
 ## Documentation
 
+- [Usage guide](docs/usage.md)
 - [Command reference](docs/commands.md)
 - [Plugin matrix](docs/plugins.md)
 - [Distribution guide](docs/distribution.md)
