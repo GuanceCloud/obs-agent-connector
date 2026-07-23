@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
@@ -113,6 +114,10 @@ func runSelfUpdateCommand(command string) error {
 }
 
 func fetchLatestRelease(cfg connectorConfig) (githubRelease, error) {
+	if repo, ok := githubReleaseRepo(cfg.DownloadBaseURL); ok {
+		return fetchLatestGitHubRelease(repo)
+	}
+
 	metadataURL := latestMetadataURL(cfg)
 	if metadataURL == "" {
 		return githubRelease{}, fmt.Errorf("download_base_url is not configured")
@@ -148,6 +153,64 @@ func fetchLatestRelease(cfg connectorConfig) (githubRelease, error) {
 		release.HTMLURL = strings.TrimRight(cfg.DownloadBaseURL, "/") + "/"
 	}
 	return release, nil
+}
+
+func fetchLatestGitHubRelease(repo string) (githubRelease, error) {
+	apiURL := "https://api.github.com/repos/" + repo + "/releases/latest"
+	client := &http.Client{Timeout: 8 * time.Second}
+	req, err := http.NewRequest(http.MethodGet, apiURL, nil)
+	if err != nil {
+		return githubRelease{}, err
+	}
+	req.Header.Set("User-Agent", appName)
+	req.Header.Set("Accept", "application/vnd.github+json")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return githubRelease{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return githubRelease{}, fmt.Errorf("latest GitHub release is not reachable: %s", apiURL)
+	}
+
+	var payload struct {
+		TagName string `json:"tag_name"`
+		HTMLURL string `json:"html_url"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return githubRelease{}, err
+	}
+	if strings.TrimSpace(payload.TagName) == "" {
+		return githubRelease{}, fmt.Errorf("latest GitHub release is empty")
+	}
+	return githubRelease{
+		TagName: strings.TrimSpace(payload.TagName),
+		HTMLURL: strings.TrimSpace(payload.HTMLURL),
+	}, nil
+}
+
+func githubReleaseRepo(downloadBase string) (string, bool) {
+	downloadBase = strings.TrimSpace(downloadBase)
+	if downloadBase == "" {
+		return "", false
+	}
+	parsed, err := url.Parse(downloadBase)
+	if err != nil {
+		return "", false
+	}
+	if !strings.EqualFold(parsed.Host, "github.com") {
+		return "", false
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	if len(parts) < 5 {
+		return "", false
+	}
+	if parts[2] != "releases" || parts[3] != "download" {
+		return "", false
+	}
+	return parts[0] + "/" + parts[1], true
 }
 
 func compareReleaseVersions(current string, latest string) (int, bool) {
@@ -237,6 +300,9 @@ func buildSelfUpdateCommand(tag string, cfg connectorConfig) (string, string, er
 
 	installDir := filepath.Dir(executablePath)
 	downloadBase := strings.TrimRight(cfg.DownloadBaseURL, "/")
+	if repo, ok := githubReleaseRepo(cfg.DownloadBaseURL); ok {
+		downloadBase = "https://github.com/" + repo + "/releases/download/" + tag
+	}
 
 	if runtime.GOOS == "windows" {
 		command := fmt.Sprintf(

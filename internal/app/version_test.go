@@ -6,6 +6,16 @@ import (
 	"testing"
 )
 
+func TestGitHubReleaseRepoFromVersionPinnedDownloadBase(t *testing.T) {
+	repo, ok := githubReleaseRepo("https://github.com/GuanceCloud/obs-agent-connector/releases/download/v0.1.8")
+	if !ok {
+		t.Fatal("expected GitHub release repo to be detected")
+	}
+	if repo != "GuanceCloud/obs-agent-connector" {
+		t.Fatalf("expected repo path, got %q", repo)
+	}
+}
+
 func TestBuildSelfUpdateCommandUsesInstallerVerificationPath(t *testing.T) {
 	command, _, err := buildSelfUpdateCommand("v9.9.9", connectorConfig{
 		DownloadBaseURL: "https://static.example.com/obs-agent-connector",
@@ -26,6 +36,21 @@ func TestBuildSelfUpdateCommandUsesInstallerVerificationPath(t *testing.T) {
 	}
 	if !strings.Contains(command, "?v=v9.9.9") {
 		t.Fatalf("expected version cache key in command %q", command)
+	}
+}
+
+func TestBuildSelfUpdateCommandUsesTargetTagForGitHubDownloadBase(t *testing.T) {
+	command, _, err := buildSelfUpdateCommand("v9.9.9", connectorConfig{
+		DownloadBaseURL: "https://github.com/GuanceCloud/obs-agent-connector/releases/download/v0.1.8",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(command, "/releases/download/v9.9.9/") {
+		t.Fatalf("expected GitHub self-update command to use target tag, got %q", command)
+	}
+	if strings.Contains(command, "/releases/download/v0.1.8/") {
+		t.Fatalf("expected GitHub self-update command to avoid pinned old tag, got %q", command)
 	}
 }
 
