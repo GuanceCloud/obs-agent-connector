@@ -24,13 +24,13 @@ The tool provides a single entry point for plugin installation, update, removal,
 
 ## Supported Agents
 
-| Agent | Notes |
-| --- | --- |
-| `claude` | Claude plugin |
-| `codex` | Codex plugin. Supported on Windows. |
-| `hermes` | Hermes plugin |
-| `openclaw` | OpenClaw plugin. Supported on Windows. |
-| `qoder` | Qoder plugin. The CLI auto-detects CN vs global layout and passes the matching `--variant` value. Supported on Windows. |
+| Agent | Plugin | macOS | Linux | Windows | Notes |
+| --- | --- | --- | --- | --- | --- |
+| `claude` | `claude-otel-plugin` | Yes | Yes | No | Claude plugin |
+| `codex` | `codex-otel-plugin` | Yes | Yes | Yes | Codex plugin |
+| `hermes` | `hermes-otel-plugin` | Yes | Yes | No | Hermes plugin |
+| `openclaw` | `openclaw-otel-plugin` | Yes | Yes | Yes | OpenClaw plugin |
+| `qoder` | `qoder-otel-plugin` | Yes | Yes | Yes | Auto-detects CN vs global layout and passes the matching `--variant` value |
 
 ## Common Commands
 
