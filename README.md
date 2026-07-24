@@ -26,11 +26,11 @@ The tool provides a single entry point for plugin installation, update, removal,
 
 | Agent | Plugin | macOS | Linux | Windows | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `claude` | `claude-otel-plugin` | Yes | Yes | No | Claude plugin |
-| `codex` | `codex-otel-plugin` | Yes | Yes | Yes | Codex plugin |
-| `hermes` | `hermes-otel-plugin` | Yes | Yes | No | Hermes plugin |
-| `openclaw` | `openclaw-otel-plugin` | Yes | Yes | Yes | OpenClaw plugin |
-| `qoder` | `qoder-otel-plugin` | Yes | Yes | Yes | Auto-detects CN vs global layout and passes the matching `--variant` value |
+| `claude` | `claude-otel-plugin` | `✓` | `✓` | `✗` | Claude plugin |
+| `codex` | `codex-otel-plugin` | `✓` | `✓` | `✓` | Codex plugin |
+| `hermes` | `hermes-otel-plugin` | `✓` | `✓` | `✗` | Hermes plugin |
+| `openclaw` | `openclaw-otel-plugin` | `✓` | `✓` | `✓` | OpenClaw plugin |
+| `qoder` | `qoder-otel-plugin` | `✓` | `✓` | `✓` | Auto-detects CN vs global layout and passes the matching `--variant` value |
 
 ## Common Commands
 
