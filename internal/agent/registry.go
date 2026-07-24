@@ -8,12 +8,13 @@ import (
 )
 
 var definitions = map[string]Definition{
-	"claude":   claudePlugin(),
-	"codex":    codexPlugin(),
-	"hermes":   hermesPlugin(),
-	"openclaw": openClawPlugin(),
-	"qoder":    qoderPlugin(),
-	"qoder-cn": qoderCNPlugin(),
+	"claude":    claudePlugin(),
+	"codex":     codexPlugin(),
+	"hermes":    hermesPlugin(),
+	"openclaw":  openClawPlugin(),
+	"qoder":     qoderPlugin(),
+	"qoder-cn":  qoderCNPlugin(),
+	"workbuddy": workBuddyPlugin(),
 }
 
 func Get(name string) Definition {

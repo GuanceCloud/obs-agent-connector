@@ -98,7 +98,7 @@ func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	if !strings.Contains(message, "claude is not supported on Windows") {
 		t.Fatalf("unexpected error message %q", message)
 	}
-	if !strings.Contains(message, "codex, openclaw, qoder") {
+	if !strings.Contains(message, "codex, openclaw, qoder, workbuddy") {
 		t.Fatalf("expected supported Windows agent list in %q", message)
 	}
 }

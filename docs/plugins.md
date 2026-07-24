@@ -11,6 +11,7 @@
 | `hermes` | Hermes | `https://static.guance.com/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `openclaw` | OpenClaw | Unix: `https://static.guance.com/openclaw-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.ps1` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
 | `qoder` | Qoder with automatic CN/global detection | Unix: `https://static.guance.com/qoder-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/qoder-otel-plugin/releases/latest/download/install-release.ps1` | `~/.qoder/gtrace.json` or `~/.qoder-cn/gtrace.json` | `~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin` or `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
+| `workbuddy` | WorkBuddy with automatic profile-directory detection | Unix: `https://static.guance.com/workbuddy-otel-plugin/workbuddy-otel-plugin.tar.gz`  Windows: `https://github.com/GuanceCloud/workbuddy-otel-plugin/releases/latest/download/install-release.ps1` | `~/.workbuddy/gtrace.json` | `~/.workbuddy/plugins/marketplaces/guance/plugins/workbuddy-otel-plugin` |
 
 ## Qoder Variants
 
@@ -32,6 +33,7 @@ Windows plugin installation and update are currently supported only for:
 - `codex`
 - `openclaw`
 - `qoder`
+- `workbuddy`
 
 On Windows, `obs-agent-connector` downloads the plugin PowerShell installer from the plugin's GitHub release instead of using the OSS shell installer.
 If a user tries `install` or `update` with an unsupported Agent, the CLI returns a friendly error with the supported Windows Agent list.
@@ -60,5 +62,6 @@ The CLI always uses `--type gtrace`.
 | `codex` | `enabled` |
 | `openclaw` | `plugins.entries.openclaw-otel-plugin.enabled` |
 | `qoder` | `enabled` |
+| `workbuddy` | `enabled` |
 
 `hermes` is not included because its runtime config is `~/.hermes/config.yaml`.

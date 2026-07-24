@@ -31,6 +31,7 @@ The tool provides a single entry point for plugin installation, update, removal,
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
 | `qoder` | `qoder-otel-plugin` | `✅` | `✅` | `✅` | Auto-detects CN vs global layout and passes the matching `--variant` value |
+| `workbuddy` | `workbuddy-otel-plugin` | `✅` | `✅` | `✅` | Uses the detected WorkBuddy profile directory and writes `gtrace.json` there |
 
 ## Common Commands
 
@@ -40,6 +41,7 @@ obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install qoder
+obs-agent-connector install workbuddy
 obs-agent-connector enable codex
 obs-agent-connector disable codex
 obs-agent-connector update codex
@@ -60,7 +62,7 @@ Use `--static-base` to override this behavior.
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, only `codex`, `openclaw`, and `qoder` are currently supported for plugin installation and update.
+- On Windows, only `codex`, `openclaw`, `qoder`, and `workbuddy` are currently supported for plugin installation and update.
 - Windows plugin installation uses each plugin's GitHub release PowerShell installer instead of the OSS shell installer.
 
 Bootstrap the CLI with shared defaults:
@@ -80,6 +82,7 @@ The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
 `list` and `discover` also show the detected plugin version when it can be resolved from the local install layout.
 Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
+WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
 
 ## Build

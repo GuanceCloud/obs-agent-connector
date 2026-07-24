@@ -11,11 +11,12 @@ Supported Agents:
 - `hermes`
 - `openclaw`
 - `qoder`
+- `workbuddy`
 
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `codex`, `openclaw`, and `qoder` only
+- Windows currently supports `codex`, `openclaw`, `qoder`, and `workbuddy` only
 
 ## Install obs-agent-connector
 
@@ -151,6 +152,7 @@ obs-agent-connector update codex
 obs-agent-connector enable codex
 obs-agent-connector disable codex
 obs-agent-connector remove codex
+obs-agent-connector install workbuddy
 obs-agent-connector version
 obs-agent-connector version -u
 ```
@@ -218,6 +220,7 @@ obs-agent-connector discover --update
   - `agent_name` as `<hostname>_<agent>_<YYYYMMDD>`
 - shows detected plugin versions in the output
 - only includes `qoder` when `~/.qoder` or `~/.qoder-cn` already exists
+- only includes `workbuddy` when the WorkBuddy profile directory already exists, for example `~/.workbuddy`
 
 Example:
 
@@ -385,6 +388,7 @@ Supported Agents on Windows:
 - `codex`
 - `openclaw`
 - `qoder`
+- `workbuddy`
 
 Notes:
 
