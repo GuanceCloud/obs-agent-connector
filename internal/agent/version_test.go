@@ -49,6 +49,52 @@ func TestInstalledVersionFromPackageJSON(t *testing.T) {
 	}
 }
 
+func TestInstalledVersionFromVersionFile(t *testing.T) {
+	home := t.TempDir()
+	previousHome := os.Getenv("HOME")
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", previousHome)
+	})
+
+	pluginDir := filepath.Join(home, ".hermes", "plugins", "hermes-otel-plugin")
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginDir, "VERSION"), []byte("0.1.9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := InstalledVersion(hermesPlugin()); got != "0.1.9" {
+		t.Fatalf("expected hermes version 0.1.9, got %q", got)
+	}
+}
+
+func TestInstalledVersionFromReleaseJSON(t *testing.T) {
+	home := t.TempDir()
+	previousHome := os.Getenv("HOME")
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", previousHome)
+	})
+
+	pluginDir := filepath.Join(home, ".hermes", "plugins", "hermes-otel-plugin")
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginDir, "RELEASE.json"), []byte(`{"name":"hermes-otel-plugin","version":"0.1.9"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := InstalledVersion(hermesPlugin()); got != "0.1.9" {
+		t.Fatalf("expected hermes version 0.1.9, got %q", got)
+	}
+}
+
 func TestDiscoverCandidatesIncludesInstalledVersion(t *testing.T) {
 	home := t.TempDir()
 	previousHome := os.Getenv("HOME")

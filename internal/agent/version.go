@@ -36,6 +36,9 @@ func detectInstalledVersion(path string) string {
 	if !info.IsDir() {
 		return ""
 	}
+	if version := versionFromKnownTextFiles(path); version != "" {
+		return version
+	}
 	if version := versionFromKnownJSONFiles(path); version != "" {
 		return version
 	}
@@ -54,6 +57,9 @@ func detectInstalledVersion(path string) string {
 			continue
 		}
 		childPath := filepath.Join(path, entry.Name())
+		if version := versionFromKnownTextFiles(childPath); version != "" {
+			return version
+		}
 		if version := versionFromKnownJSONFiles(childPath); version != "" {
 			return version
 		}
@@ -79,9 +85,20 @@ func normalizeVersion(value string) string {
 }
 
 func versionFromKnownJSONFiles(dir string) string {
-	for _, name := range []string{"package.json", "plugin.json", "manifest.json", "marketplace.json"} {
+	for _, name := range []string{"package.json", "plugin.json", "manifest.json", "marketplace.json", "RELEASE.json"} {
 		path := filepath.Join(dir, name)
 		version, err := versionFromJSONFile(path)
+		if err == nil && version != "" {
+			return version
+		}
+	}
+	return ""
+}
+
+func versionFromKnownTextFiles(dir string) string {
+	for _, name := range []string{"VERSION"} {
+		path := filepath.Join(dir, name)
+		version, err := versionFromTextFile(path)
 		if err == nil && version != "" {
 			return version
 		}
@@ -101,4 +118,12 @@ func versionFromJSONFile(path string) (string, error) {
 		return "", err
 	}
 	return normalizeVersion(payload.Version), nil
+}
+
+func versionFromTextFile(path string) (string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	return normalizeVersion(string(data)), nil
 }
