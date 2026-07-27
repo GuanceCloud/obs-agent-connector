@@ -10,6 +10,7 @@ PLUGIN_SOURCE="${PLUGIN_SOURCE:-}"
 PLUGIN_BASE_URL="${PLUGIN_BASE_URL:-}"
 ENDPOINT="${ENDPOINT:-}"
 X_TOKEN="${X_TOKEN:-}"
+GLOBAL_TAGS_LINES=""
 BINARY_ONLY=0
 SCRIPT_PATH=""
 PATH_RC_FILE=""
@@ -35,7 +36,7 @@ esac
 usage() {
   cat <<EOF
 Usage:
-  install.sh [--version <tag|latest>] [--install-dir <path>] [--config-dir <path>] [--download-base-url <url>] [--endpoint <url>] [--x-token <token>] [--plugin-source <oss|github>] [--plugin-base-url <url>] [--binary-only]
+  install.sh [--version <tag|latest>] [--install-dir <path>] [--config-dir <path>] [--download-base-url <url>] [--endpoint <url>] [--x-token <token>] [--plugin-source <oss|github>] [--plugin-base-url <url>] [--tag <key=value>]... [--binary-only]
 EOF
 }
 
@@ -68,6 +69,37 @@ json_get() {
 
 json_escape() {
   printf '%s' "$1" | sed 's/\\/\\\\/g; s/"/\\"/g'
+}
+
+append_global_tag() {
+  value="$1"
+  if [ -n "${GLOBAL_TAGS_LINES}" ]; then
+    GLOBAL_TAGS_LINES="${GLOBAL_TAGS_LINES}
+${value}"
+  else
+    GLOBAL_TAGS_LINES="${value}"
+  fi
+}
+
+json_array_from_lines() {
+  lines="$1"
+  if [ -z "$lines" ]; then
+    printf '[]'
+    return
+  fi
+  first=1
+  printf '['
+  printf '%s\n' "$lines" | while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    escaped="$(json_escape "$line")"
+    if [ "$first" -eq 1 ]; then
+      first=0
+      printf '"%s"' "$escaped"
+    else
+      printf ',"%s"' "$escaped"
+    fi
+  done
+  printf ']'
 }
 
 download_base_from_endpoint() {
@@ -134,6 +166,8 @@ while [ "$#" -gt 0 ]; do
     --plugin-source=*) PLUGIN_SOURCE="${1#*=}" ;;
     --plugin-base-url) shift; PLUGIN_BASE_URL="$1" ;;
     --plugin-base-url=*) PLUGIN_BASE_URL="${1#*=}" ;;
+    --tag) shift; append_global_tag "$1" ;;
+    --tag=*) append_global_tag "${1#*=}" ;;
     --endpoint) shift; ENDPOINT="$1" ;;
     --endpoint=*) ENDPOINT="${1#*=}" ;;
     --x-token) shift; X_TOKEN="$1" ;;
@@ -187,6 +221,23 @@ fi
 if [ "${PLUGIN_SOURCE}" = "github" ] && [ -z "${PLUGIN_BASE_URL}" ]; then
   echo "plugin_base_url is required when plugin_source=github; pass --plugin-base-url <url>" >&2
   exit 2
+fi
+if [ -n "${GLOBAL_TAGS_LINES}" ]; then
+  old_ifs="${IFS}"
+  IFS='
+'
+  for assignment in ${GLOBAL_TAGS_LINES}; do
+    [ -n "$assignment" ] || continue
+    case "$assignment" in
+      *=*) ;;
+      *)
+        echo "tag must use KEY=VALUE format: $assignment" >&2
+        IFS="${old_ifs}"
+        exit 2
+        ;;
+    esac
+  done
+  IFS="${old_ifs}"
 fi
 
 DOWNLOAD_BASE_URL="${DOWNLOAD_BASE_URL%/}"
@@ -253,13 +304,15 @@ tar -xzf "$tmp_dir/$asset_name" -C "$tmp_dir"
 install -m 0755 "$tmp_dir/$binary_name" "$INSTALL_DIR/$APP_NAME"
 
 if [ "${BINARY_ONLY}" -eq 0 ]; then
+  global_tags_json="$(json_array_from_lines "${GLOBAL_TAGS_LINES}")"
   cat > "$config_path" <<EOF
 {
   "download_base_url": "$(json_escape "${DOWNLOAD_BASE_URL}")",
   "plugin_source": "$(json_escape "${PLUGIN_SOURCE}")",
   "plugin_base_url": "$(json_escape "${PLUGIN_BASE_URL}")",
   "endpoint": "$(json_escape "${ENDPOINT}")",
-  "x_token": "$(json_escape "${X_TOKEN}")"
+  "x_token": "$(json_escape "${X_TOKEN}")",
+  "global_tags": ${global_tags_json}
 }
 EOF
 fi

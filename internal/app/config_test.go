@@ -12,7 +12,7 @@ func TestLoadConnectorConfigAcceptsUTF8BOM(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "config.json")
 	data := append(
 		[]byte{0xEF, 0xBB, 0xBF},
-		[]byte(`{"download_base_url":"https://static.example.com/obs-agent-connector","endpoint":"https://example.com","x_token":"test-token"}`)...,
+		[]byte(`{"download_base_url":"https://static.example.com/obs-agent-connector","endpoint":"https://example.com","x_token":"test-token","global_tags":["team=platform","env=prod"]}`)...,
 	)
 	if err := os.WriteFile(path, data, 0o600); err != nil {
 		t.Fatal(err)
@@ -34,6 +34,9 @@ func TestLoadConnectorConfigAcceptsUTF8BOM(t *testing.T) {
 	}
 	if cfg.XToken != "test-token" {
 		t.Fatalf("unexpected x-token %q", cfg.XToken)
+	}
+	if len(cfg.GlobalTags) != 2 || cfg.GlobalTags[0] != "team=platform" || cfg.GlobalTags[1] != "env=prod" {
+		t.Fatalf("unexpected global tags %#v", cfg.GlobalTags)
 	}
 }
 

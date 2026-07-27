@@ -82,6 +82,9 @@ func install(args []string) error {
 	fmt.Printf("Type: %s\n", fixedType)
 	fmt.Printf("Endpoint: %s\n", input.Endpoint)
 	fmt.Printf("X-Token: %s\n", input.XToken)
+	if len(input.GlobalTags) > 0 {
+		fmt.Printf("Global Tags: %s\n", strings.Join(input.GlobalTags, ", "))
+	}
 	fmt.Printf("Agent ID: %s\n", input.AgentID)
 	fmt.Printf("Agent Name: %s\n", input.AgentName)
 

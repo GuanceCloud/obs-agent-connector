@@ -44,6 +44,9 @@ func resolveCommonInstallInput(defaults installInput, cfg connectorConfig) (inst
 	if strings.TrimSpace(input.XToken) == "" {
 		input.XToken = strings.TrimSpace(cfg.XToken)
 	}
+	if len(input.GlobalTags) == 0 && len(cfg.GlobalTags) > 0 {
+		input.GlobalTags = append([]string{}, cfg.GlobalTags...)
+	}
 	if strings.TrimSpace(input.Endpoint) == "" {
 		return input, fmt.Errorf("endpoint is required; pass --endpoint or configure it in %s", configFileName)
 	}
@@ -222,9 +225,8 @@ func buildInstallArgs(scriptPath string, p agent.Definition, input installInput)
 		"--type", fixedType,
 		"--endpoint", input.Endpoint,
 		"--x-token", input.XToken,
-		"--tag", "agent_id=" + input.AgentID,
-		"--tag", "agent_name=" + input.AgentName,
 	}
+	args = appendInstallTags(args, input)
 	args = append(args, p.InstallArgs...)
 	return args
 }
@@ -378,7 +380,7 @@ func packageExtractPath(p agent.Definition) string {
 }
 
 func buildPackageInstallArgs(extractDir string, p agent.Definition, input installInput) []string {
-	args := make([]string, 0, len(p.PackageArgs)+8)
+	args := make([]string, 0, len(p.PackageArgs)+8+(len(input.GlobalTags)*2))
 	if p.PackageRootArg {
 		args = append(args, extractDir)
 	}
@@ -387,9 +389,8 @@ func buildPackageInstallArgs(extractDir string, p agent.Definition, input instal
 		"--type", fixedType,
 		"--endpoint", input.Endpoint,
 		"--x-token", input.XToken,
-		"--tag", "agent_id="+input.AgentID,
-		"--tag", "agent_name="+input.AgentName,
 	)
+	args = appendInstallTags(args, input)
 	args = append(args, p.InstallArgs...)
 	return args
 }
@@ -516,15 +517,20 @@ func downloadFile(url string, target string) error {
 }
 
 func renderPowerShellInstallCommand(scriptPath string, p agent.Definition, input installInput) string {
+	tagValues := make([]string, 0, len(input.GlobalTags)+2)
+	for _, value := range input.GlobalTags {
+		tagValues = append(tagValues, powershellSingleQuote(value))
+	}
+	tagValues = append(tagValues,
+		powershellSingleQuote("agent_id="+input.AgentID),
+		powershellSingleQuote("agent_name="+input.AgentName),
+	)
 	args := []string{
 		"& " + powershellSingleQuote(scriptPath),
 		"-Version " + powershellSingleQuote("latest"),
 		"-Endpoint " + powershellSingleQuote(input.Endpoint),
 		"-XToken " + powershellSingleQuote(input.XToken),
-		"-Tag @(" + strings.Join([]string{
-			powershellSingleQuote("agent_id=" + input.AgentID),
-			powershellSingleQuote("agent_name=" + input.AgentName),
-		}, ", ") + ")",
+		"-Tag @(" + strings.Join(tagValues, ", ") + ")",
 	}
 	for _, arg := range renderPowerShellOptionArgs(p.WindowsArgs) {
 		args = append(args, arg)
@@ -608,6 +614,21 @@ func generateAgentID() (string, error) {
 	buf[6] = (buf[6] & 0x0f) | 0x40
 	buf[8] = (buf[8] & 0x3f) | 0x80
 	return fmt.Sprintf("agid_%x", buf), nil
+}
+
+func appendInstallTags(args []string, input installInput) []string {
+	for _, value := range input.GlobalTags {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		args = append(args, "--tag", value)
+	}
+	args = append(args,
+		"--tag", "agent_id="+input.AgentID,
+		"--tag", "agent_name="+input.AgentName,
+	)
+	return args
 }
 
 func defaultAgentName(agent string, now time.Time) string {

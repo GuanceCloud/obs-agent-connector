@@ -148,6 +148,16 @@ func loadConnectorConfig() (connectorConfig, string, error) {
 	if strings.TrimSpace(disk.XToken) != "" {
 		cfg.XToken = strings.TrimSpace(disk.XToken)
 	}
+	if len(disk.GlobalTags) > 0 {
+		cfg.GlobalTags = make([]string, 0, len(disk.GlobalTags))
+		for _, value := range disk.GlobalTags {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			cfg.GlobalTags = append(cfg.GlobalTags, value)
+		}
+	}
 
 	return cfg, path, nil
 }

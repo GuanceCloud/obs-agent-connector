@@ -40,6 +40,20 @@ func TestResolveInstallInputKeepsExplicitAgentName(t *testing.T) {
 	}
 }
 
+func TestResolveInstallInputLoadsGlobalTagsFromConfig(t *testing.T) {
+	input, err := resolveInstallInput(installInput{}, connectorConfig{
+		Endpoint:   "https://llm-openway.guance.com",
+		XToken:     "agent_test",
+		GlobalTags: []string{"team=platform", "env=prod"},
+	}, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(input.GlobalTags) != 2 || input.GlobalTags[0] != "team=platform" || input.GlobalTags[1] != "env=prod" {
+		t.Fatalf("expected global tags from config, got %#v", input.GlobalTags)
+	}
+}
+
 func TestInstallerURLForWindowsUsesOSSReleaseScript(t *testing.T) {
 	definition := agentDefinitionForTest("codex")
 	url, err := installerURLForOS(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, definition, "windows")
@@ -72,10 +86,11 @@ func TestRenderInstallCommandForWindowsUsesPowerShell(t *testing.T) {
 	})
 
 	command := renderInstallCommand(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("openclaw"), installInput{
-		Endpoint:  "https://llm-openway.guance.com",
-		XToken:    "agent_test",
-		AgentID:   "agent_123",
-		AgentName: "demo_openclaw_20260721",
+		Endpoint:   "https://llm-openway.guance.com",
+		XToken:     "agent_test",
+		AgentID:    "agent_123",
+		AgentName:  "demo_openclaw_20260721",
+		GlobalTags: []string{"team=platform"},
 	})
 
 	if !strings.Contains(command, "install-release.ps1") {
@@ -86,6 +101,31 @@ func TestRenderInstallCommandForWindowsUsesPowerShell(t *testing.T) {
 	}
 	if strings.Contains(command, "OSS_ENDPOINT=") {
 		t.Fatalf("expected Windows command to avoid OSS shell env, got %q", command)
+	}
+	if !strings.Contains(command, "team=platform") {
+		t.Fatalf("expected Windows command to include global tag, got %q", command)
+	}
+}
+
+func TestBuildInstallArgsIncludesGlobalTagsBeforeAgentIdentity(t *testing.T) {
+	args := buildInstallArgs("/tmp/install.sh", agentDefinitionForTest("codex"), installInput{
+		Endpoint:   "https://llm-openway.guance.com",
+		XToken:     "agent_test",
+		AgentID:    "agid_1234567890abcdef1234567890abcdef",
+		AgentName:  "demo_codex_20260727",
+		GlobalTags: []string{"team=platform", "env=prod"},
+	})
+	want := []string{
+		"--tag", "team=platform",
+		"--tag", "env=prod",
+		"--tag", "agent_id=agid_1234567890abcdef1234567890abcdef",
+		"--tag", "agent_name=demo_codex_20260727",
+	}
+	joined := strings.Join(args, " ")
+	for _, item := range want {
+		if !strings.Contains(joined, item) {
+			t.Fatalf("expected install args to contain %q, got %#v", item, args)
+		}
 	}
 }
 

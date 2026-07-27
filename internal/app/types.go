@@ -1,10 +1,11 @@
 package app
 
 type installInput struct {
-	Endpoint  string
-	XToken    string
-	AgentID   string
-	AgentName string
+	Endpoint   string
+	XToken     string
+	AgentID    string
+	AgentName  string
+	GlobalTags []string
 }
 
 type githubRelease struct {
@@ -13,11 +14,12 @@ type githubRelease struct {
 }
 
 type connectorConfig struct {
-	DownloadBaseURL string `json:"download_base_url"`
-	PluginSource    string `json:"plugin_source"`
-	PluginBaseURL   string `json:"plugin_base_url"`
-	Endpoint        string `json:"endpoint"`
-	XToken          string `json:"x_token"`
+	DownloadBaseURL string   `json:"download_base_url"`
+	PluginSource    string   `json:"plugin_source"`
+	PluginBaseURL   string   `json:"plugin_base_url"`
+	Endpoint        string   `json:"endpoint"`
+	XToken          string   `json:"x_token"`
+	GlobalTags      []string `json:"global_tags"`
 }
 
 type pluginDownloadConfig struct {

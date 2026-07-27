@@ -102,6 +102,9 @@ func discover(args []string) error {
 	fmt.Printf("Plugin Base URL: %s\n", pluginDownload.BaseURL)
 	fmt.Printf("Endpoint: %s\n", input.Endpoint)
 	fmt.Printf("X-Token: %s\n", input.XToken)
+	if len(input.GlobalTags) > 0 {
+		fmt.Printf("Global Tags: %s\n", strings.Join(input.GlobalTags, ", "))
+	}
 
 	if *dryRun {
 		return nil

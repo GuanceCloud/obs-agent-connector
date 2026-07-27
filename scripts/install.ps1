@@ -7,6 +7,7 @@ param(
   [string]$PluginBaseUrl = "",
   [string]$Endpoint = "",
   [string]$XToken = "",
+  [string[]]$Tag = @(),
   [switch]$BinaryOnly,
   [switch]$NoPathUpdate
 )
@@ -79,6 +80,11 @@ if (-not $DownloadBaseUrl) {
 }
 if (($PluginSource -eq "github") -and (-not $PluginBaseUrl)) {
   throw "plugin_base_url is required when plugin_source=github; pass -PluginBaseUrl <url>"
+}
+foreach ($Assignment in @($Tag)) {
+  if ((-not $Assignment) -or (-not $Assignment.Contains("=")) -or ($Assignment.IndexOf("=") -le 0)) {
+    throw "tag must use KEY=VALUE format: $Assignment"
+  }
 }
 if ((-not $BinaryOnly) -and (-not $Endpoint)) {
   throw "endpoint is required; pass -Endpoint <url>"
@@ -176,6 +182,7 @@ try {
       plugin_base_url = $PluginBaseUrl
       endpoint = $Endpoint
       x_token = $XToken
+      global_tags = @($Tag)
     } | ConvertTo-Json
     [System.IO.File]::WriteAllText($ConfigPath, $ConfigJson, (New-Object System.Text.UTF8Encoding($false)))
   }
