@@ -4,6 +4,7 @@ type Definition struct {
 	Name                     string
 	PluginName               string
 	AgentCommand             string
+	SupportedPlatforms       []string
 	WindowsInstaller         string
 	PackageScript            string
 	PackageArgs              []string

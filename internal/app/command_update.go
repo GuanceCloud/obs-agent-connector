@@ -69,15 +69,22 @@ func updatePlugins(args []string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Update plan. Configuration files will not be modified:")
+	fmt.Println("Update plan:")
+	targets := make([]string, 0, len(selected))
 	for _, p := range selected {
 		p = agent.Resolve(p)
 		url, err := downloadSourceURL(pluginDownload, p, currentGOOS)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("  - %s (%s)\n", p.Name, url)
+		targets = append(targets, fmt.Sprintf("%s (%s)", p.Name, url))
 	}
+	printDetails([][2]string{
+		{"Targets", strings.Join(targets, ", ")},
+		{"Plugin Source", pluginDownload.Source},
+		{"Plugin Base URL", pluginDownload.BaseURL},
+		{"Config", "will not be modified"},
+	})
 
 	if *dryRun {
 		fmt.Println()
@@ -95,7 +102,7 @@ func updatePlugins(args []string) error {
 			return err
 		}
 		if !ok {
-			fmt.Println("Canceled.")
+			printSingleDetail("Result", "canceled")
 			return nil
 		}
 	}

@@ -41,24 +41,28 @@ func remove(args []string) error {
 	}
 
 	fmt.Println("Remove plan:")
+	rows := make([][2]string, 0, len(selected)*3)
 	for _, p := range selected {
 		p = agent.Resolve(p)
-		fmt.Printf("  - %s\n", p.Name)
+		rows = append(rows, [2]string{"Agent", p.Name})
 		for _, cmd := range p.RemoveCmds {
-			fmt.Printf("    command: %s\n", strings.Join(cmd, " "))
+			rows = append(rows, [2]string{"Command", strings.Join(cmd, " ")})
 		}
 		for _, path := range p.RemovePaths {
-			fmt.Printf("    path: %s\n", path)
+			rows = append(rows, [2]string{"Path", path})
 		}
 		if *purgeConfig {
 			for _, path := range p.ConfigFiles {
-				fmt.Printf("    config: %s\n", path)
+				rows = append(rows, [2]string{"Config", path})
 			}
 		}
 	}
-	if !*purgeConfig {
-		fmt.Println("Configuration files will be kept. Use --purge-config to remove them.")
+	configMode := "kept"
+	if *purgeConfig {
+		configMode = "removed"
 	}
+	rows = append(rows, [2]string{"Config Mode", configMode})
+	printDetails(rows)
 
 	if *dryRun {
 		return nil
@@ -70,7 +74,7 @@ func remove(args []string) error {
 			return err
 		}
 		if !ok {
-			fmt.Println("Canceled.")
+			printSingleDetail("Result", "canceled")
 			return nil
 		}
 	}

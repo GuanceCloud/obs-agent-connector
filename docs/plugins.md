@@ -9,9 +9,10 @@
 | `claude` | Claude | `https://static.guance.com/claude-otel-plugin/install.sh` | `~/.claude/gtrace.json` | `~/.claude/marketplaces/claude-otel-plugin-release` |
 | `codex` | Codex | Unix: `https://static.guance.com/codex-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/codex-otel-plugin/releases/latest/download/install-release.ps1` | `~/.codex/gtrace.json` | `~/.codex/plugin-sources/codex-otel-plugin/plugins/tracing` |
 | `hermes` | Hermes | `https://static.guance.com/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
+| `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://github.com/GuanceCloud/opencode-otel-plugin/releases/latest/download/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
 | `openclaw` | OpenClaw | Unix: `https://static.guance.com/openclaw-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.ps1` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
 | `qoder` | Qoder with automatic CN/global detection | Unix: `https://static.guance.com/qoder-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/qoder-otel-plugin/releases/latest/download/install-release.ps1` | `~/.qoder/gtrace.json` or `~/.qoder-cn/gtrace.json` | `~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin` or `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
-| `workbuddy` | WorkBuddy with automatic profile-directory detection | Unix: `https://static.guance.com/workbuddy-otel-plugin/workbuddy-otel-plugin.tar.gz`  Windows: `https://github.com/GuanceCloud/workbuddy-otel-plugin/releases/latest/download/install-release.ps1` | `~/.workbuddy/gtrace.json` | `~/.workbuddy/plugins/marketplaces/guance/plugins/workbuddy-otel-plugin` |
+| `workbuddy` | WorkBuddy with automatic profile-directory detection | macOS: `https://static.guance.com/workbuddy-otel-plugin/workbuddy-otel-plugin.tar.gz`  Windows: `https://github.com/GuanceCloud/workbuddy-otel-plugin/releases/latest/download/install-release.ps1` | `~/.workbuddy/gtrace.json` | `~/.workbuddy/plugins/marketplaces/guance/plugins/workbuddy-otel-plugin` |
 
 ## Qoder Variants
 
@@ -31,6 +32,7 @@ This prevents the international and China editions from overwriting each other's
 Windows plugin installation and update are currently supported only for:
 
 - `codex`
+- `opencode`
 - `openclaw`
 - `qoder`
 - `workbuddy`
@@ -60,6 +62,7 @@ The CLI always uses `--type gtrace`.
 | --- | --- |
 | `claude` | `enabled` |
 | `codex` | `enabled` |
+| `opencode` | `enabled` |
 | `openclaw` | `plugins.entries.openclaw-otel-plugin.enabled` |
 | `qoder` | `enabled` |
 | `workbuddy` | `enabled` |

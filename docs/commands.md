@@ -11,12 +11,14 @@ obs-agent-connector <command> [arguments]
 | Command | Purpose |
 | --- | --- |
 | `list` | List installed Agent plugins detected on the local machine, including best-effort plugin version detection. |
+| `status <agent>` | Show one Agent plugin status, including install state, config path, plugin path, version, and runtime `enabled` state when supported. |
 | `discover` | Detect supported local Agents and install any missing plugins by using connector defaults from `config.json`. Use `discover -u` to update installed plugins and install any missing plugins in one run. |
-| `install <agent>` | Install one Agent plugin using the remote plugin installer. |
+| `install <agent>` | Install one Agent plugin using the remote plugin installer or release package. |
 | `enable <agent>` | Enable one installed Agent plugin by setting its runtime JSON `enabled` switch to `true`. |
 | `disable <agent>` | Disable one installed Agent plugin by setting its runtime JSON `enabled` switch to `false`. |
 | `update <agent>` | Update one installed Agent plugin without modifying its current configuration. |
 | `remove <agent>` | Remove one installed Agent plugin. Configuration files are kept unless `--purge-config` is used. |
+| `uninstall` | Uninstall `obs-agent-connector` itself. By default this removes the binary, connector config, and managed PATH entry when present. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print or run a matching self-update action when a newer release is available. |
 
 ## Bootstrap
@@ -70,7 +72,29 @@ obs-agent-connector discover \
 For new plugin installs it generates one `agid_<uuidv4-without-dashes>` `agent_id` and uses `<hostname>_<agent>_<YYYYMMDD>` as the default `agent_name`.
 The output also shows the detected plugin version when it can be resolved from the local install layout.
 Qoder is skipped until either `~/.qoder` or `~/.qoder-cn` has been created by the Agent.
+OpenCode is also detected when `~/.config/opencode` already exists, even if `opencode` is not currently in `PATH`.
 Missing or invalid connector defaults are reported as `discover failed` errors.
+
+## Status
+
+Show one Agent plugin status:
+
+```bash
+obs-agent-connector status codex
+```
+
+The output includes:
+
+- Agent name
+- resolved command name
+- whether the Agent is supported on the current platform
+- whether the plugin is installed
+- detected plugin version, when available
+- runtime config path
+- installed plugin path
+- runtime `enabled` state for Agents that use a supported JSON config
+
+For plugins such as `hermes`, whose runtime config is YAML, the `enabled` field is reported as `unsupported`.
 
 ## Install
 
@@ -96,7 +120,7 @@ If that source is unavailable, `install` derives the installer base from `--endp
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
 Use `--static-base` when you need to override the installer base.
 On Windows, plugin installation does not use the OSS shell installer. The CLI downloads each supported plugin's GitHub release PowerShell installer instead.
-Only `codex`, `openclaw`, and `qoder` are currently supported on Windows. Unsupported Agents return a friendly error.
+Only `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are currently supported on Windows. Unsupported Agents return a friendly error.
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 
@@ -148,7 +172,7 @@ obs-agent-connector disable codex --dry-run
 
 `enable` and `disable` update the Agent runtime JSON config in place:
 
-- `claude`, `codex`, and `qoder` set top-level `enabled`
+- `claude`, `codex`, `opencode`, and `qoder` set top-level `enabled`
 - `openclaw` sets `plugins.entries.openclaw-otel-plugin.enabled`
 
 `hermes` is not currently supported because its runtime config is YAML rather than a supported JSON `enabled` switch.
@@ -194,3 +218,31 @@ Skip the remote release check:
 ```bash
 obs-agent-connector version --offline
 ```
+
+## Uninstall
+
+Uninstall the connector itself:
+
+```bash
+obs-agent-connector uninstall
+```
+
+Preview only:
+
+```bash
+obs-agent-connector uninstall --dry-run
+```
+
+Keep connector config:
+
+```bash
+obs-agent-connector uninstall --keep-config
+```
+
+Behavior:
+
+- removes the current `obs-agent-connector` binary
+- removes `~/.obs-agent-connector/config.json` by default
+- keeps config when `--keep-config` is used
+- removes the installer-managed PATH export from `~/.zshrc`, `~/.bashrc`, or `~/.profile` when found
+- removes the connector install directory from the Windows user PATH when present

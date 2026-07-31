@@ -29,23 +29,27 @@ The tool provides a single entry point for plugin installation, update, removal,
 | `claude` | `claude-otel-plugin` | `✅` | `✅` | `❌` | Claude plugin |
 | `codex` | `codex-otel-plugin` | `✅` | `✅` | `✅` | Codex plugin |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
+| `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
 | `qoder` | `qoder-otel-plugin` | `✅` | `✅` | `✅` | Auto-detects CN vs global layout and passes the matching `--variant` value |
-| `workbuddy` | `workbuddy-otel-plugin` | `✅` | `✅` | `✅` | Uses the detected WorkBuddy profile directory and writes `gtrace.json` there |
+| `workbuddy` | `workbuddy-otel-plugin` | `✅` | `❌` | `✅` | Uses the detected WorkBuddy profile directory and writes `gtrace.json` there |
 
 ## Common Commands
 
 ```bash
 obs-agent-connector list
+obs-agent-connector status codex
 obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
+obs-agent-connector install opencode
 obs-agent-connector install qoder
 obs-agent-connector install workbuddy
 obs-agent-connector enable codex
 obs-agent-connector disable codex
 obs-agent-connector update codex
 obs-agent-connector remove codex
+obs-agent-connector uninstall
 obs-agent-connector version
 obs-agent-connector version -u
 ```
@@ -62,7 +66,7 @@ Use `--static-base` to override this behavior.
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, only `codex`, `openclaw`, `qoder`, and `workbuddy` are currently supported for plugin installation and update.
+- On Windows, only `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are currently supported for plugin installation and update.
 - Windows plugin installation uses each plugin's GitHub release PowerShell installer instead of the OSS shell installer.
 
 Bootstrap the CLI with shared defaults:
@@ -81,9 +85,12 @@ After bootstrap, use `discover` to auto-install missing plugins, or use `install
 The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
 `list` and `discover` also show the detected plugin version when it can be resolved from the local install layout.
+`status <agent>` prints a single-Agent view including install state, version, config path, plugin path, and runtime `enabled` status when the plugin uses a supported JSON config.
 Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
+OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
+`uninstall` removes the connector binary itself, removes the connector config by default, and cleans up the PATH entry previously added by the installer when it can be identified.
 
 ## Build
 

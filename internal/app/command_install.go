@@ -69,24 +69,31 @@ func install(args []string) error {
 	}
 	fmt.Println()
 	fmt.Println("Install plan:")
+	targets := make([]string, 0, len(selected))
 	for _, p := range selected {
 		p = agent.Resolve(p)
 		url, err := downloadSourceURL(pluginDownload, p, currentGOOS)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("  - %s (%s)\n", p.Name, url)
+		targets = append(targets, fmt.Sprintf("%s (%s)", p.Name, url))
 	}
-	fmt.Printf("Plugin Source: %s\n", pluginDownload.Source)
-	fmt.Printf("Plugin Base URL: %s\n", pluginDownload.BaseURL)
-	fmt.Printf("Type: %s\n", fixedType)
-	fmt.Printf("Endpoint: %s\n", input.Endpoint)
-	fmt.Printf("X-Token: %s\n", input.XToken)
+	rows := [][2]string{
+		{"Targets", strings.Join(targets, ", ")},
+		{"Plugin Source", pluginDownload.Source},
+		{"Plugin Base URL", pluginDownload.BaseURL},
+		{"Type", fixedType},
+		{"Endpoint", input.Endpoint},
+		{"X-Token", input.XToken},
+	}
 	if len(input.GlobalTags) > 0 {
-		fmt.Printf("Global Tags: %s\n", strings.Join(input.GlobalTags, ", "))
+		rows = append(rows, [2]string{"Global Tags", strings.Join(input.GlobalTags, ", ")})
 	}
-	fmt.Printf("Agent ID: %s\n", input.AgentID)
-	fmt.Printf("Agent Name: %s\n", input.AgentName)
+	rows = append(rows,
+		[2]string{"Agent ID", input.AgentID},
+		[2]string{"Agent Name", input.AgentName},
+	)
+	printDetails(rows)
 
 	if *dryRun {
 		fmt.Println()
@@ -104,7 +111,7 @@ func install(args []string) error {
 			return err
 		}
 		if !ok {
-			fmt.Println("Canceled.")
+			printSingleDetail("Result", "canceled")
 			return nil
 		}
 	}

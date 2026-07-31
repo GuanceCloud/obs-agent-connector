@@ -11,6 +11,7 @@ var definitions = map[string]Definition{
 	"claude":    claudePlugin(),
 	"codex":     codexPlugin(),
 	"hermes":    hermesPlugin(),
+	"opencode":  opencodePlugin(),
 	"openclaw":  openClawPlugin(),
 	"qoder":     qoderPlugin(),
 	"qoder-cn":  qoderCNPlugin(),
@@ -82,6 +83,9 @@ func DiscoverCandidatesForOS(goos string) []Candidate {
 	out := make([]Candidate, 0, len(names))
 	for _, name := range names {
 		p := definitions[name]
+		if !SupportsPlatform(p, goos) {
+			continue
+		}
 		if p.ResolveDiscovery != nil {
 			var ok bool
 			p, ok = p.ResolveDiscovery(p)
@@ -104,7 +108,7 @@ func DiscoverCandidatesForOS(goos string) []Candidate {
 			DetectedCmd:      command,
 			InstalledPath:    installedPath,
 			InstalledVersion: InstalledVersion(p),
-			Supported:        SupportsPlatform(p, goos),
+			Supported:        true,
 		})
 	}
 	return out
@@ -144,7 +148,22 @@ func Resolve(p Definition) Definition {
 }
 
 func SupportsPlatform(p Definition, goos string) bool {
-	if strings.EqualFold(strings.TrimSpace(goos), "windows") {
+	goos = strings.ToLower(strings.TrimSpace(goos))
+	if goos == "" {
+		return true
+	}
+	if len(p.SupportedPlatforms) > 0 {
+		for _, platform := range p.SupportedPlatforms {
+			if strings.EqualFold(strings.TrimSpace(platform), goos) {
+				if goos != "windows" {
+					return true
+				}
+				return strings.TrimSpace(p.WindowsInstaller) != ""
+			}
+		}
+		return false
+	}
+	if goos == "windows" {
 		return strings.TrimSpace(p.WindowsInstaller) != ""
 	}
 	return true

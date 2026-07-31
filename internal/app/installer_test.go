@@ -138,7 +138,7 @@ func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	if !strings.Contains(message, "claude is not supported on Windows") {
 		t.Fatalf("unexpected error message %q", message)
 	}
-	if !strings.Contains(message, "codex, openclaw, qoder, workbuddy") {
+	if !strings.Contains(message, "codex, openclaw, opencode, qoder, workbuddy") {
 		t.Fatalf("expected supported Windows agent list in %q", message)
 	}
 }
@@ -176,6 +176,17 @@ func TestDownloadSourceURLUsesGitHubArchiveForCodexOnUnix(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := "https://github.com/GuanceCloud/codex-otel-plugin/releases/latest/download/codex-otel-plugin.tar.gz"
+	if url != expected {
+		t.Fatalf("expected %q, got %q", expected, url)
+	}
+}
+
+func TestDownloadSourceURLUsesOSSArchiveForOpencodeOnUnix(t *testing.T) {
+	url, err := downloadSourceURL(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("opencode"), "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := "https://static.example.com/opencode-otel-plugin/opencode-otel-plugin.tar.gz"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}

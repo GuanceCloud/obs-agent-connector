@@ -9,6 +9,7 @@ Supported Agents:
 - `claude`
 - `codex`
 - `hermes`
+- `opencode`
 - `openclaw`
 - `qoder`
 - `workbuddy`
@@ -16,7 +17,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `codex`, `openclaw`, `qoder`, and `workbuddy` only
+- Windows currently supports `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` only
 
 ## Install obs-agent-connector
 
@@ -145,13 +146,16 @@ Additional parameter:
 
 ```bash
 obs-agent-connector list
+obs-agent-connector status codex
 obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
+obs-agent-connector install opencode
 obs-agent-connector update codex
 obs-agent-connector enable codex
 obs-agent-connector disable codex
 obs-agent-connector remove codex
+obs-agent-connector uninstall
 obs-agent-connector install workbuddy
 obs-agent-connector version
 obs-agent-connector version -u
@@ -173,6 +177,26 @@ The output includes:
 - installed plugin path
 
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
+
+## `status`
+
+Show one Agent plugin status:
+
+```bash
+obs-agent-connector status codex
+```
+
+The output includes:
+
+- resolved Agent command
+- platform support
+- install state
+- detected version
+- config path
+- plugin path
+- runtime `enabled` state when the Agent uses a supported JSON config
+
+For `hermes`, `enabled` is shown as `unsupported` because its runtime config is YAML.
 
 ## `discover`
 
@@ -220,6 +244,7 @@ obs-agent-connector discover --update
   - `agent_name` as `<hostname>_<agent>_<YYYYMMDD>`
 - shows detected plugin versions in the output
 - only includes `qoder` when `~/.qoder` or `~/.qoder-cn` already exists
+- also includes `opencode` when `~/.config/opencode` already exists, even if `opencode` is not in `PATH`
 - only includes `workbuddy` when the WorkBuddy profile directory already exists, for example `~/.workbuddy`
 
 Example:
@@ -230,6 +255,29 @@ obs-agent-connector discover \
   --x-token agent_xxx \
   --yes
 ```
+
+## `uninstall`
+
+Uninstall the connector itself:
+
+```bash
+obs-agent-connector uninstall
+```
+
+Parameters:
+
+| Parameter | Description |
+| --- | --- |
+| `--yes` | Skip confirmation |
+| `--dry-run` | Print the uninstall plan only |
+| `--keep-config` | Keep `~/.obs-agent-connector/config.json` |
+
+Behavior:
+
+- removes the current connector binary
+- removes the connector config by default
+- removes the PATH entry previously added by the installer when it can be identified
+- on Windows, schedules self-delete after the process exits
 
 ## `install`
 

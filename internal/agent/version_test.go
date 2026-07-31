@@ -49,6 +49,29 @@ func TestInstalledVersionFromPackageJSON(t *testing.T) {
 	}
 }
 
+func TestInstalledVersionFromOpencodePackageJSON(t *testing.T) {
+	home := t.TempDir()
+	previousHome := os.Getenv("HOME")
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", previousHome)
+	})
+
+	pluginDir := filepath.Join(home, ".config", "opencode", "plugins", "opencode-otel-plugin")
+	if err := os.MkdirAll(pluginDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(pluginDir, "package.json"), []byte(`{"version":"0.1.4"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if got := InstalledVersion(opencodePlugin()); got != "0.1.4" {
+		t.Fatalf("expected opencode version 0.1.4, got %q", got)
+	}
+}
+
 func TestInstalledVersionFromVersionFile(t *testing.T) {
 	home := t.TempDir()
 	previousHome := os.Getenv("HOME")

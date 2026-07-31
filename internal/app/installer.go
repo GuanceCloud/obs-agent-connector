@@ -82,7 +82,11 @@ func confirm(label string, defaultYes bool) (bool, error) {
 }
 
 func installOne(download pluginDownloadConfig, p agent.Definition, input installInput) error {
-	fmt.Printf("\n==> Installing %s\n", p.Name)
+	fmt.Println()
+	printDetails([][2]string{
+		{"Action", "install"},
+		{"Agent", p.Name},
+	})
 
 	if usesPackageArchive(currentGOOS, p) {
 		return runPackageInstaller(download, p, "installation", func(extractDir string) []string {
@@ -95,7 +99,7 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Downloading installer: %s\n", url)
+	printSingleDetail("Download", url)
 
 	if err := downloadFile(url, scriptPath); err != nil {
 		return fmt.Errorf("failed to download %s installer: %w", p.Name, err)
@@ -103,13 +107,13 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 
 	if currentGOOS == "windows" {
 		command := renderPowerShellInstallCommand(scriptPath, p, input)
-		fmt.Printf("Running: %s\n", command)
+		printSingleDetail("Command", command)
 		if err := runPowerShell(command); err != nil {
 			return fmt.Errorf("%s installation failed: %w", p.Name, err)
 		}
 	} else {
 		args := buildInstallArgs(scriptPath, p, input)
-		fmt.Printf("Running: %s\n", renderBashCommand(args))
+		printSingleDetail("Command", renderBashCommand(args))
 
 		cmd := exec.Command("bash", args...)
 		cmd.Stdout = os.Stdout
@@ -121,12 +125,16 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 		}
 	}
 
-	fmt.Printf("%s installed.\n", p.Name)
+	printSingleDetail("Result", "installed")
 	return nil
 }
 
 func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
-	fmt.Printf("\n==> Updating %s\n", p.Name)
+	fmt.Println()
+	printDetails([][2]string{
+		{"Action", "update"},
+		{"Agent", p.Name},
+	})
 
 	if usesPackageArchive(currentGOOS, p) {
 		return runPackageInstaller(download, p, "update", func(extractDir string) []string {
@@ -139,7 +147,7 @@ func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Downloading installer: %s\n", url)
+	printSingleDetail("Download", url)
 
 	if err := downloadFile(url, scriptPath); err != nil {
 		return fmt.Errorf("failed to download %s installer: %w", p.Name, err)
@@ -147,13 +155,13 @@ func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 
 	if currentGOOS == "windows" {
 		command := renderPowerShellUpdateCommand(scriptPath, p)
-		fmt.Printf("Running: %s\n", command)
+		printSingleDetail("Command", command)
 		if err := runPowerShell(command); err != nil {
 			return fmt.Errorf("%s update failed: %w", p.Name, err)
 		}
 	} else {
 		args := buildPluginUpdateArgs(scriptPath, p)
-		fmt.Printf("Running: %s\n", renderBashCommand(args))
+		printSingleDetail("Command", renderBashCommand(args))
 
 		cmd := exec.Command("bash", args...)
 		cmd.Stdout = os.Stdout
@@ -165,28 +173,32 @@ func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 		}
 	}
 
-	fmt.Printf("%s updated.\n", p.Name)
+	printSingleDetail("Result", "updated")
 	return nil
 }
 
 func removeOne(p agent.Definition, purgeConfig bool) error {
-	fmt.Printf("\n==> Removing %s\n", p.Name)
+	fmt.Println()
+	printDetails([][2]string{
+		{"Action", "remove"},
+		{"Agent", p.Name},
+	})
 
 	for _, command := range p.RemoveCmds {
 		if len(command) == 0 {
 			continue
 		}
 		if _, err := exec.LookPath(command[0]); err != nil {
-			fmt.Printf("Skipping command; %s was not found: %s\n", command[0], strings.Join(command, " "))
+			printSingleDetail("Skip", fmt.Sprintf("%s was not found: %s", command[0], strings.Join(command, " ")))
 			continue
 		}
-		fmt.Printf("Running: %s\n", strings.Join(command, " "))
+		printSingleDetail("Command", strings.Join(command, " "))
 		cmd := exec.Command(command[0], command[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
 		if err := cmd.Run(); err != nil {
-			fmt.Printf("Command failed; continuing local cleanup: %v\n", err)
+			printSingleDetail("Warning", fmt.Sprintf("command failed; continuing local cleanup: %v", err))
 		}
 	}
 
@@ -195,7 +207,7 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 		if !agent.PathExists(expanded) {
 			continue
 		}
-		fmt.Printf("Removing: %s\n", agent.DisplayPath(expanded))
+		printSingleDetail("Cleanup", agent.DisplayPath(expanded))
 		if err := os.RemoveAll(expanded); err != nil {
 			return err
 		}
@@ -207,14 +219,14 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 			if !agent.PathExists(expanded) {
 				continue
 			}
-			fmt.Printf("Removing config: %s\n", agent.DisplayPath(expanded))
+			printSingleDetail("Config", agent.DisplayPath(expanded))
 			if err := os.Remove(expanded); err != nil {
 				return err
 			}
 		}
 	}
 
-	fmt.Printf("%s removed.\n", p.Name)
+	printSingleDetail("Result", "removed")
 	return nil
 }
 
@@ -440,7 +452,7 @@ func runPackageInstaller(download pluginDownloadConfig, p agent.Definition, acti
 	archivePath := filepath.Join(extractDir, p.PluginName+".tar.gz")
 
 	archiveURL := packageArchiveURL(download, p)
-	fmt.Printf("Downloading package: %s\n", archiveURL)
+	printSingleDetail("Download", archiveURL)
 	if err := downloadFile(archiveURL, archivePath); err != nil {
 		return fmt.Errorf("failed to download %s package: %w", p.Name, err)
 	}
@@ -455,7 +467,7 @@ func runPackageInstaller(download pluginDownloadConfig, p agent.Definition, acti
 	}
 
 	args := argsFn(extractDir)
-	fmt.Printf("Running: %s\n", renderBashCommand(append([]string{scriptPath}, args...)))
+	printSingleDetail("Command", renderBashCommand(append([]string{scriptPath}, args...)))
 
 	cmd := exec.Command("bash", append([]string{scriptPath}, args...)...)
 	cmd.Stdout = os.Stdout

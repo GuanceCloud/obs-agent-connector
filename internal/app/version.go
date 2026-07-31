@@ -32,20 +32,23 @@ func showVersion(args []string) error {
 		return fmt.Errorf("version -u cannot be combined with --offline")
 	}
 
-	fmt.Printf("Version: %s\n", version)
-	fmt.Printf("Platform: %s/%s\n", runtime.GOOS, runtime.GOARCH)
+	rows := [][2]string{
+		{"Version", version},
+		{"Platform", runtime.GOOS + "/" + runtime.GOARCH},
+	}
 
 	cfg, cfgPath, cfgErr := loadConnectorConfig()
 	if cfgErr == nil && cfgPath != "" && strings.TrimSpace(cfg.DownloadBaseURL) != "" {
-		fmt.Printf("Download Base: %s\n", cfg.DownloadBaseURL)
+		rows = append(rows, [2]string{"Download Base", cfg.DownloadBaseURL})
 	}
 
 	if *offline {
 		if cfgErr != nil {
-			fmt.Printf("Config: unavailable (%v)\n", cfgErr)
+			rows = append(rows, [2]string{"Config", fmt.Sprintf("unavailable (%v)", cfgErr)})
 		} else if cfgPath != "" {
-			fmt.Printf("Config: %s\n", agent.DisplayPath(cfgPath))
+			rows = append(rows, [2]string{"Config", agent.DisplayPath(cfgPath)})
 		}
+		printDetails(rows)
 		return nil
 	}
 
@@ -54,48 +57,55 @@ func showVersion(args []string) error {
 		if *updateNow {
 			return fmt.Errorf("self-update failed to check latest release: %w", err)
 		}
-		fmt.Printf("Latest release: unavailable (%v)\n", err)
+		rows = append(rows, [2]string{"Latest Release", fmt.Sprintf("unavailable (%v)", err)})
+		printDetails(rows)
 		return nil
 	}
 
-	fmt.Printf("Latest release: %s\n", release.TagName)
-	fmt.Printf("Release page: %s\n", release.HTMLURL)
+	rows = append(rows,
+		[2]string{"Latest Release", release.TagName},
+		[2]string{"Release Page", release.HTMLURL},
+	)
 
 	if version == release.TagName {
-		fmt.Println("Status: up to date")
+		rows = append(rows, [2]string{"Status", "up to date"})
+		printDetails(rows)
 		return nil
 	}
 
 	comparison, ok := compareReleaseVersions(version, release.TagName)
 	if ok && comparison >= 0 {
-		fmt.Println("Status: up to date")
+		rows = append(rows, [2]string{"Status", "up to date"})
+		printDetails(rows)
 		return nil
 	}
 
-	fmt.Println("Status: update available")
+	rows = append(rows, [2]string{"Status", "update available"})
 	command, note, err := buildSelfUpdateCommand(release.TagName, cfg)
 	if err != nil {
 		if *updateNow {
 			return fmt.Errorf("self-update is unavailable: %w", err)
 		}
-		fmt.Printf("Update command: unavailable (%v)\n", err)
+		rows = append(rows, [2]string{"Update Command", fmt.Sprintf("unavailable (%v)", err)})
+		printDetails(rows)
 		return nil
 	}
 
 	if *updateNow {
-		fmt.Println("Running self-update...")
+		printDetails(rows)
+		printSingleDetail("Action", "self-update")
 		if err := runSelfUpdateCommand(command); err != nil {
 			return fmt.Errorf("self-update failed: %w", err)
 		}
-		fmt.Println("Self-update finished.")
+		printSingleDetail("Result", "completed")
 		return nil
 	}
 
-	fmt.Println("Update command:")
-	fmt.Println(command)
+	rows = append(rows, [2]string{"Update Command", command})
 	if note != "" {
-		fmt.Printf("Note: %s\n", note)
+		rows = append(rows, [2]string{"Note", note})
 	}
+	printDetails(rows)
 
 	return nil
 }

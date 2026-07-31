@@ -98,6 +98,32 @@ func TestDisableHermesReturnsUnsupportedError(t *testing.T) {
 	}
 }
 
+func TestDisableOpencodeSetsEnabledFalse(t *testing.T) {
+	home := t.TempDir()
+	setTestHome(t, home)
+
+	markerPath := filepath.Join(home, ".config", "opencode", "plugins", "opencode-otel-plugin")
+	configPath := filepath.Join(home, ".config", "opencode", "gtrace.json")
+	if err := os.MkdirAll(markerPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte("{\"enabled\":true,\"endpoint\":\"https://example.com\"}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := disable([]string{"opencode"}); err != nil {
+		t.Fatal(err)
+	}
+
+	config := readJSONFile(t, configPath)
+	if enabled, ok := config["enabled"].(bool); !ok || enabled {
+		t.Fatalf("expected enabled=false, got %#v", config["enabled"])
+	}
+}
+
 func setTestHome(t *testing.T, home string) {
 	t.Helper()
 	previousHome := os.Getenv("HOME")

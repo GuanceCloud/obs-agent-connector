@@ -23,6 +23,8 @@ func Run(args []string) error {
 	switch args[0] {
 	case "list":
 		return listPlugins()
+	case "status":
+		return status(args[1:])
 	case "discover":
 		return discover(args[1:])
 	case "install":
@@ -35,6 +37,8 @@ func Run(args []string) error {
 		return update(args[1:])
 	case "remove":
 		return remove(args[1:])
+	case "uninstall":
+		return uninstallConnector(args[1:])
 	case "version":
 		return showVersion(args[1:])
 	case "-h", "--help", "help":
@@ -53,23 +57,28 @@ Usage:
 
 Commands:
   list                  List installed Agent plugins
+  status <agent>        Show one Agent plugin status
   discover              Detect local Agents; install missing plugins, or sync all with -u
   install <agent>       Install an Agent plugin
   enable <agent>        Enable one installed Agent plugin
   disable <agent>       Disable one installed Agent plugin
   update <agent>        Update one installed Agent plugin
   remove <agent>        Remove an Agent plugin
+  uninstall             Uninstall obs-agent-connector
   version               Show version and check for updates
 
 Examples:
   obs-agent-connector discover
   obs-agent-connector discover -u
+  obs-agent-connector status codex
   obs-agent-connector install codex
+  obs-agent-connector install opencode
   obs-agent-connector install qoder
   obs-agent-connector enable codex
   obs-agent-connector disable codex
   obs-agent-connector update codex
   obs-agent-connector remove codex
+  obs-agent-connector uninstall
   obs-agent-connector version
 
 `, appName)

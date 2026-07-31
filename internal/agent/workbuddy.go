@@ -12,6 +12,7 @@ func workBuddyPlugin() Definition {
 		Name:                     "workbuddy",
 		PluginName:               "workbuddy-otel-plugin",
 		AgentCommand:             "workbuddy",
+		SupportedPlatforms:       []string{"darwin", "windows"},
 		WindowsInstaller:         "install-release.ps1",
 		PackageScript:            "scripts/install.sh",
 		PackageArgs:              []string{"--refresh"},

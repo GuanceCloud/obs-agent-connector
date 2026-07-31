@@ -98,13 +98,17 @@ func discover(args []string) error {
 	if err != nil {
 		return fmt.Errorf("discover failed: %w", err)
 	}
-	fmt.Printf("Plugin Source: %s\n", pluginDownload.Source)
-	fmt.Printf("Plugin Base URL: %s\n", pluginDownload.BaseURL)
-	fmt.Printf("Endpoint: %s\n", input.Endpoint)
-	fmt.Printf("X-Token: %s\n", input.XToken)
-	if len(input.GlobalTags) > 0 {
-		fmt.Printf("Global Tags: %s\n", strings.Join(input.GlobalTags, ", "))
+	rows = nil
+	detailRows := [][2]string{
+		{"Plugin Source", pluginDownload.Source},
+		{"Plugin Base URL", pluginDownload.BaseURL},
+		{"Endpoint", input.Endpoint},
+		{"X-Token", input.XToken},
 	}
+	if len(input.GlobalTags) > 0 {
+		detailRows = append(detailRows, [2]string{"Global Tags", strings.Join(input.GlobalTags, ", ")})
+	}
+	printDetails(detailRows)
 
 	if *dryRun {
 		return nil
@@ -120,7 +124,7 @@ func discover(args []string) error {
 			return err
 		}
 		if !ok {
-			fmt.Println("Canceled.")
+			printSingleDetail("Result", "canceled")
 			return nil
 		}
 	}

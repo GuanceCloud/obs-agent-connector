@@ -43,6 +43,22 @@ func printTableRow(values []string, widths []int) {
 	fmt.Println()
 }
 
+func printDetails(rows [][2]string) {
+	width := 0
+	for _, row := range rows {
+		if len(row[0]) > width {
+			width = len(row[0])
+		}
+	}
+	for _, row := range rows {
+		fmt.Printf("%-*s: %s\n", width, row[0], row[1])
+	}
+}
+
+func printSingleDetail(key string, value string) {
+	printDetails([][2]string{{key, value}})
+}
+
 func shellQuote(value string) string {
 	if value == "" {
 		return "''"
