@@ -136,6 +136,19 @@ func TestTargetedCommandsRejectNewRuntimeForUnsupportedAgent(t *testing.T) {
 	}
 }
 
+func TestUsageIncludesBuiltinRemovalAndConnectorUninstallBehavior(t *testing.T) {
+	output := captureStdout(t, printUsage)
+	for _, expected := range []string{
+		"remove <agent> [-n]   Remove an Agent plugin; -n removes its built-in Hook",
+		"uninstall             Uninstall obs-agent-connector and its managed built-in Hooks",
+		"obs-agent-connector remove codex -n",
+	} {
+		if !strings.Contains(output, expected) {
+			t.Fatalf("expected usage to contain %q, got:\n%s", expected, output)
+		}
+	}
+}
+
 func TestRedactInstallerArgsHidesToken(t *testing.T) {
 	args := []string{"install.sh", "--endpoint", "https://example.com", "--x-token", "secret", "--tag", "env=test"}
 	redacted := strings.Join(redactInstallerArgs(args), " ")

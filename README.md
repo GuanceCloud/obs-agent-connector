@@ -93,7 +93,7 @@ Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
-`uninstall` removes the connector binary itself, removes the connector config by default, and cleans up the PATH entry previously added by the installer when it can be identified.
+`remove <agent> -n` removes one built-in Claude/Codex Hook while preserving its config and upload state by default. `uninstall` removes the connector binary itself, removes its managed built-in Hooks, removes the connector config by default, and cleans up the PATH entry previously added by the installer when it can be identified.
 
 ## Build
 

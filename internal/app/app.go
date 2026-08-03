@@ -68,8 +68,8 @@ Commands:
   enable <agent> [-n]   Enable one installed Agent plugin
   disable <agent> [-n]  Disable one installed Agent plugin
   update <agent> [-n]   Update one installed Agent plugin
-  remove <agent> [-n]   Remove an Agent plugin
-  uninstall             Uninstall obs-agent-connector
+  remove <agent> [-n]   Remove an Agent plugin; -n removes its built-in Hook
+  uninstall             Uninstall obs-agent-connector and its managed built-in Hooks
   version               Show version and check for updates
 
 Examples:
@@ -77,14 +77,19 @@ Examples:
   obs-agent-connector discover -n
   obs-agent-connector discover -u
   obs-agent-connector status codex
+  obs-agent-connector status codex -n
   obs-agent-connector install codex
   obs-agent-connector install codex -n
   obs-agent-connector install opencode
   obs-agent-connector install qoder
   obs-agent-connector enable codex
+  obs-agent-connector enable codex -n
   obs-agent-connector disable codex
+  obs-agent-connector disable codex -n
   obs-agent-connector update codex
+  obs-agent-connector update codex -n
   obs-agent-connector remove codex
+  obs-agent-connector remove codex -n
   obs-agent-connector uninstall
   obs-agent-connector version
 

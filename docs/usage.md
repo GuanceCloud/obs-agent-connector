@@ -279,6 +279,7 @@ Parameters:
 Behavior:
 
 - removes the current connector binary
+- removes Claude and Codex Hooks managed by the connector while preserving Agent config and upload state
 - removes the connector config by default
 - removes the PATH entry previously added by the installer when it can be identified
 - on Windows, schedules self-delete after the process exits

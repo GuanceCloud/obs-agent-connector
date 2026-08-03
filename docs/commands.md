@@ -260,6 +260,7 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
+- removes Claude and Codex Hooks managed by the connector while preserving Agent config and upload state
 - removes `~/.obs-agent-connector/config.json` by default
 - keeps config when `--keep-config` is used
 - removes the installer-managed PATH export from `~/.zshrc`, `~/.bashrc`, or `~/.profile` when found
