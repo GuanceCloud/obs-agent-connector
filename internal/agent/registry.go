@@ -78,6 +78,19 @@ func ResolveForInstall(selected []Definition) ([]Definition, error) {
 	return resolved, nil
 }
 
+func ResolveForRemove(selected []Definition) []Definition {
+	resolved := make([]Definition, 0, len(selected))
+	for _, p := range selected {
+		if p.ResolveRemove != nil {
+			p = p.ResolveRemove(p)
+		} else {
+			p = Resolve(p)
+		}
+		resolved = append(resolved, p)
+	}
+	return resolved
+}
+
 func DiscoverCandidatesForOS(goos string) []Candidate {
 	names := Names()
 	out := make([]Candidate, 0, len(names))

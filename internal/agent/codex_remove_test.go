@@ -7,6 +7,126 @@ import (
 	"testing"
 )
 
+func TestResolveCodexRemoveUsesExplicitBinary(t *testing.T) {
+	dir := t.TempDir()
+	command := filepath.Join(dir, "codex")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	previous := os.Getenv("CODEX_BINARY")
+	if err := os.Setenv("CODEX_BINARY", command); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("CODEX_BINARY", previous)
+	})
+
+	definition := resolveCodexRemove(Get("codex"))
+	if len(definition.RemoveCmds) != 2 {
+		t.Fatalf("expected 2 remove commands, got %#v", definition.RemoveCmds)
+	}
+	if got := definition.RemoveCmds[0][0]; got != command {
+		t.Fatalf("expected resolved command %q, got %q", command, got)
+	}
+}
+
+func TestResolveCodexCommandPathForWindowsUsesStandaloneBinary(t *testing.T) {
+	dir := t.TempDir()
+	home := filepath.Join(dir, "home")
+	command := filepath.Join(home, ".codex", "packages", "standalone", "current", "bin", "codex.exe")
+	if err := os.MkdirAll(filepath.Dir(command), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(command, []byte("binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	previousHome := os.Getenv("HOME")
+	previousUserProfile := os.Getenv("USERPROFILE")
+	previousBinary := os.Getenv("CODEX_BINARY")
+	previousCLIPath := os.Getenv("CODEX_CLI_PATH")
+	if err := os.Setenv("HOME", home); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("USERPROFILE", home); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("CODEX_BINARY", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("CODEX_CLI_PATH", ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("HOME", previousHome)
+		_ = os.Setenv("USERPROFILE", previousUserProfile)
+		_ = os.Setenv("CODEX_BINARY", previousBinary)
+		_ = os.Setenv("CODEX_CLI_PATH", previousCLIPath)
+	})
+
+	got, ok := resolveCodexCommandPathForOS("windows")
+	if !ok {
+		t.Fatal("expected windows codex command")
+	}
+	if got != command {
+		t.Fatalf("expected standalone command %q, got %q", command, got)
+	}
+}
+
+func TestResolveCodexCommandPathForWindowsUsesNPMVendorBinary(t *testing.T) {
+	dir := t.TempDir()
+	localAppData := filepath.Join(dir, "LocalAppData")
+	command := filepath.Join(
+		localAppData,
+		"npm",
+		"node_modules",
+		"@openai",
+		"codex-win32-x64",
+		"vendor",
+		"x86_64-pc-windows-msvc",
+		"bin",
+		"codex.exe",
+	)
+	if err := os.MkdirAll(filepath.Dir(command), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(command, []byte("binary"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	previousLocalAppData := os.Getenv("LOCALAPPDATA")
+	previousAppData := os.Getenv("APPDATA")
+	previousBinary := os.Getenv("CODEX_BINARY")
+	previousCLIPath := os.Getenv("CODEX_CLI_PATH")
+	if err := os.Setenv("LOCALAPPDATA", localAppData); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("APPDATA", filepath.Join(dir, "AppData")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("CODEX_BINARY", ""); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("CODEX_CLI_PATH", ""); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		_ = os.Setenv("LOCALAPPDATA", previousLocalAppData)
+		_ = os.Setenv("APPDATA", previousAppData)
+		_ = os.Setenv("CODEX_BINARY", previousBinary)
+		_ = os.Setenv("CODEX_CLI_PATH", previousCLIPath)
+	})
+
+	got, ok := resolveCodexCommandPathForOS("windows")
+	if !ok {
+		t.Fatal("expected windows codex command")
+	}
+	if got != command {
+		t.Fatalf("expected npm vendor command %q, got %q", command, got)
+	}
+}
+
 func TestRemoveCodexConfigSectionsRemovesMarketplacePluginAndHookState(t *testing.T) {
 	dir := t.TempDir()
 	configFile := filepath.Join(dir, "config.toml")
@@ -105,5 +225,11 @@ func TestCodexDefinitionHasRemoveCleanup(t *testing.T) {
 	definition := Get("codex")
 	if definition.RemoveCleanup == nil {
 		t.Fatal("expected codex remove cleanup hook")
+	}
+	if len(definition.RemoveCleanupDetails) != 2 {
+		t.Fatalf("expected codex remove cleanup details, got %#v", definition.RemoveCleanupDetails)
+	}
+	if definition.ResolveRemove == nil {
+		t.Fatal("expected codex remove resolver")
 	}
 }

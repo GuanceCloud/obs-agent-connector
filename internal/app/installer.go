@@ -203,7 +203,9 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 	}
 
 	if p.RemoveCleanup != nil {
-		printSingleDetail("Cleanup", "agent-specific registration")
+		for _, item := range p.RemoveCleanupDetails {
+			printSingleDetail("Cleanup", item)
+		}
 		if err := p.RemoveCleanup(p); err != nil {
 			return err
 		}

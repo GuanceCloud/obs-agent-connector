@@ -3,8 +3,157 @@ package agent
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 )
+
+func resolveCodexRemove(p Definition) Definition {
+	if command, ok := resolveCodexCommandPath(); ok {
+		p.RemoveCmds = [][]string{
+			{command, "plugin", "remove", "tracing@codex-otel-plugin"},
+			{command, "plugin", "marketplace", "remove", "codex-otel-plugin"},
+		}
+		return p
+	}
+	p.RemoveCmds = nil
+	return p
+}
+
+func resolveCodexCommandPath() (string, bool) {
+	return resolveCodexCommandPathForOS(runtime.GOOS)
+}
+
+func resolveCodexCommandPathForOS(goos string) (string, bool) {
+	candidates := []string{
+		strings.TrimSpace(os.Getenv("CODEX_BINARY")),
+		strings.TrimSpace(os.Getenv("CODEX_CLI_PATH")),
+	}
+
+	if goos == "windows" {
+		candidates = append(candidates, windowsCodexCandidates()...)
+	} else {
+		candidates = append(candidates,
+			"/Applications/ChatGPT.app/Contents/Resources/codex",
+			"/Applications/Codex.app/Contents/Resources/codex",
+			"/opt/homebrew/bin/codex",
+			"/usr/local/bin/codex",
+		)
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			candidates = append(candidates,
+				filepath.Join(home, ".local", "bin", "codex"),
+				filepath.Join(home, "bin", "codex"),
+			)
+		}
+	}
+
+	if pathCommand, err := exec.LookPath("codex"); err == nil && strings.TrimSpace(pathCommand) != "" {
+		if goos == "windows" {
+			if native, ok := normalizeWindowsCodexPath(pathCommand); ok {
+				candidates = append(candidates, native)
+			}
+		}
+		candidates = append(candidates, pathCommand)
+	}
+
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, true
+		}
+	}
+
+	return "", false
+}
+
+func windowsCodexCandidates() []string {
+	candidates := make([]string, 0, 16)
+
+	if localAppData := strings.TrimSpace(os.Getenv("LOCALAPPDATA")); localAppData != "" {
+		candidates = append(candidates,
+			filepath.Join(localAppData, "OpenAI", "Codex", "bin", "codex.exe"),
+			filepath.Join(localAppData, "Programs", "Codex", "codex.exe"),
+			filepath.Join(localAppData, "Programs", "Codex", "bin", "codex.exe"),
+			filepath.Join(localAppData, "Programs", "ChatGPT", "codex.exe"),
+			filepath.Join(localAppData, "Programs", "ChatGPT", "resources", "codex.exe"),
+		)
+		candidates = append(candidates, windowsNPMNativeCandidates(filepath.Join(localAppData, "npm"))...)
+	}
+	if appData := strings.TrimSpace(os.Getenv("APPDATA")); appData != "" {
+		candidates = append(candidates,
+			filepath.Join(appData, "OpenAI", "Codex", "bin", "codex.exe"),
+		)
+		candidates = append(candidates, windowsNPMNativeCandidates(filepath.Join(appData, "npm"))...)
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		candidates = append(candidates,
+			filepath.Join(home, ".codex", "packages", "standalone", "current", "bin", "codex.exe"),
+		)
+	}
+
+	return candidates
+}
+
+func normalizeWindowsCodexPath(pathCommand string) (string, bool) {
+	pathCommand = strings.TrimSpace(pathCommand)
+	if pathCommand == "" {
+		return "", false
+	}
+	extension := strings.ToLower(filepath.Ext(pathCommand))
+	if extension != ".cmd" && extension != ".bat" && extension != ".ps1" {
+		return pathCommand, true
+	}
+	nativeCandidates := windowsNPMNativeCandidates(filepath.Dir(pathCommand))
+	for _, candidate := range nativeCandidates {
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+func windowsNPMNativeCandidates(prefix string) []string {
+	prefix = strings.TrimSpace(prefix)
+	if prefix == "" {
+		return nil
+	}
+
+	platforms := [][2]string{
+		{"codex-win32-x64", "x86_64-pc-windows-msvc"},
+		{"codex-win32-arm64", "aarch64-pc-windows-msvc"},
+	}
+	if runtime.GOARCH == "arm64" {
+		platforms[0], platforms[1] = platforms[1], platforms[0]
+	}
+
+	candidates := make([]string, 0, len(platforms)*4)
+	for _, platform := range platforms {
+		packageName := platform[0]
+		target := platform[1]
+		roots := []string{
+			filepath.Join(prefix, "node_modules", "@openai", "codex", "node_modules", "@openai", packageName),
+			filepath.Join(prefix, "node_modules", "@openai", packageName),
+		}
+		for _, root := range roots {
+			vendor := filepath.Join(root, "vendor", target)
+			candidates = append(candidates,
+				filepath.Join(vendor, "bin", "codex.exe"),
+				filepath.Join(vendor, "codex", "codex.exe"),
+			)
+		}
+	}
+
+	return candidates
+}
 
 func removeCodexRegistration(p Definition) error {
 	configFile := ExpandHome("~/.codex/config.toml")

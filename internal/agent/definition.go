@@ -18,10 +18,12 @@ type Definition struct {
 	EnabledJSONPath          []string
 	RemoveCmds               [][]string
 	RemovePaths              []string
+	RemoveCleanupDetails     []string
 	RemoveCleanup            func(Definition) error
 	Hidden                   bool
 	Resolve                  func(Definition) Definition
 	ResolveInstall           func(Definition) (Definition, error)
+	ResolveRemove            func(Definition) Definition
 	ResolveDiscovery         func(Definition) (Definition, bool)
 }
 
