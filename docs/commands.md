@@ -215,6 +215,8 @@ Preview removal:
 obs-agent-connector remove codex --dry-run
 ```
 
+With `remove codex -n`, the connector removes both its managed Codex Hook and the matching `hooks.state` trust entries from `~/.codex/config.toml`. If the Hook list is already empty, orphaned trust entries for `~/.codex/hooks.json` are also removed. Other Hook files and unrelated Codex configuration are preserved.
+
 ## Version
 
 Show the current version and check for a newer release:
@@ -260,7 +262,7 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
-- removes Claude and Codex Hooks managed by the connector while preserving Agent config and upload state
+- removes Claude and Codex Hooks managed by the connector, including matching or orphaned Codex trust entries, while preserving Agent config and upload state
 - removes `~/.obs-agent-connector/config.json` by default
 - keeps config when `--keep-config` is used
 - removes the installer-managed PATH export from `~/.zshrc`, `~/.bashrc`, or `~/.profile` when found

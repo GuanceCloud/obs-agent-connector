@@ -33,7 +33,15 @@ func remove(args []string) error {
 		return fmt.Errorf("unrecognized remove arguments: %s", strings.Join(fs.Args(), " "))
 	}
 
-	selected, err := agent.SelectInstalledForRuntime(target, *newRuntime)
+	var selected []agent.Definition
+	var err error
+	if *newRuntime {
+		// Built-in removal is intentionally idempotent so a second run can
+		// clean orphaned Codex trust state after the Hook itself is gone.
+		selected, err = agent.SelectForRuntime(target, true)
+	} else {
+		selected, err = agent.SelectInstalledForRuntime(target, false)
+	}
 	if err != nil {
 		return err
 	}
@@ -49,6 +57,9 @@ func remove(args []string) error {
 		rows = append(rows, [2]string{"Agent", p.Name})
 		if p.IsBuiltin() {
 			rows = append(rows, [2]string{"Hook", p.BuiltinHookFile + " (managed entry only)"})
+			if p.Name == "codex" {
+				rows = append(rows, [2]string{"Hook Trust", "matching and orphaned entries in ~/.codex/config.toml"})
+			}
 		}
 		for _, cmd := range p.RemoveCmds {
 			rows = append(rows, [2]string{"Command", strings.Join(cmd, " ")})

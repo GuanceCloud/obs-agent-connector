@@ -3,6 +3,7 @@ package app
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -146,6 +147,40 @@ func TestUsageIncludesBuiltinRemovalAndConnectorUninstallBehavior(t *testing.T) 
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected usage to contain %q, got:\n%s", expected, output)
 		}
+	}
+}
+
+func TestBuiltinRemoveCleansOrphanedCodexTrustWithoutInstalledHook(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	hooksPath := filepath.Join(home, ".codex", "hooks.json")
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(hooksPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(hooksPath, []byte(`{"hooks":{"Stop":[]}}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	trustKey := hooksPath + ":stop:0:0"
+	toml := "model = \"keep\"\n\n[hooks.state." + strconv.Quote(trustKey) + "]\ntrusted_hash = \"stale\"\n"
+	if err := os.WriteFile(configPath, []byte(toml), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	output := captureStdout(t, func() {
+		if err := remove([]string{"codex", "-n", "--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(output, "Hook Trust: removed") {
+		t.Fatalf("expected orphaned trust removal, got:\n%s", output)
+	}
+	updated, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(updated), "hooks.state") || !strings.Contains(string(updated), `model = "keep"`) {
+		t.Fatalf("unexpected config after removal: %s", updated)
 	}
 }
 

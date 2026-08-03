@@ -33,7 +33,7 @@ Bootstrap precedence is: explicit install options, existing Agent runtime config
 
 ## Removal
 
-`remove <agent> -n` removes the managed Hook. Runtime configuration and upload state are kept by default. `--purge-config` removes both the Agent runtime config and adapter upload state.
+`remove <agent> -n` removes the managed Hook. For Codex it also removes the matching `hooks.state` trust entries, including orphaned entries when the Hook list is already empty. Runtime configuration and upload state are kept by default. `--purge-config` removes both the Agent runtime config and adapter upload state.
 
 Removing one built-in adapter never removes the shared connector executable. The top-level `uninstall` command owns connector binary removal.
 

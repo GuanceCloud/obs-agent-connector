@@ -279,7 +279,7 @@ Parameters:
 Behavior:
 
 - removes the current connector binary
-- removes Claude and Codex Hooks managed by the connector while preserving Agent config and upload state
+- removes Claude and Codex Hooks managed by the connector, including matching or orphaned Codex trust entries, while preserving Agent config and upload state
 - removes the connector config by default
 - removes the PATH entry previously added by the installer when it can be identified
 - on Windows, schedules self-delete after the process exits
@@ -419,6 +419,7 @@ Notes:
 
 - by default the plugin is removed and the config is kept
 - `remove` accepts a single Agent target only
+- `remove codex -n` also removes matching or orphaned trust entries for `~/.codex/hooks.json` while preserving unrelated Hook trust and TOML settings
 
 ## `version`
 

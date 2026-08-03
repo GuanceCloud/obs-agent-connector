@@ -74,6 +74,13 @@ func removeBuiltinAdapter(p agent.Definition, purgeConfig, purgeState bool) erro
 		return err
 	}
 	printSingleDetail("Hook", removedOrKept(result.HookRemoved))
+	if p.Name == "codex" {
+		trustStatus := "not found"
+		if result.TrustRemoved {
+			trustStatus = "removed"
+		}
+		printSingleDetail("Hook Trust", trustStatus)
+	}
 	printSingleDetail("Config", removedOrKept(result.ConfigRemoved))
 	if purgeState {
 		printSingleDetail("State", removedOrKept(result.StatePurged))
