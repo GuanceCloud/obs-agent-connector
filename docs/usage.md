@@ -81,7 +81,7 @@ Field reference:
 
 Behavior notes:
 
-- reinstalling the connector overwrites the old `config.json`
+- reinstalling the connector merges known values into the existing `config.json` and preserves unknown fields
 - if `plugin_source` is omitted, it defaults to `oss`
 
 ## Installer Script Parameters
@@ -150,6 +150,7 @@ obs-agent-connector status codex
 obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
+obs-agent-connector install codex -n
 obs-agent-connector install opencode
 obs-agent-connector update codex
 obs-agent-connector enable codex
@@ -177,6 +178,8 @@ The output includes:
 - installed plugin path
 
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
+
+Pass `-n` (or `--new-runtime`) to `list`, `status`, `discover`, `install`, `enable`, `disable`, `update`, and `remove` when managing the opt-in Claude/Codex built-in runtime. Without `-n`, all commands retain the previous external-plugin behavior.
 
 ## `status`
 
@@ -233,6 +236,7 @@ obs-agent-connector discover --update
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the plan only |
 | `-u`, `--update` | Update installed plugins and install missing plugins in one pass |
+| `-n`, `--new-runtime` | Use built-in adapters for detected Claude and Codex Agents |
 
 ### Behavior
 
@@ -287,6 +291,12 @@ Install a single Agent plugin:
 obs-agent-connector install codex
 ```
 
+Use the built-in runtime instead of the default external plugin:
+
+```bash
+obs-agent-connector install codex -n
+```
+
 Parameters:
 
 | Parameter | Description |
@@ -295,9 +305,17 @@ Parameters:
 | `--x-token` | Set the authentication token |
 | `--agent-id` | Override the generated `agent_id` |
 | `--agent-name` | Override the generated `agent_name` |
-| `--static-base` | Override the plugin download base URL |
+| `--trace-path` | Override the Trace upload path for built-in adapters |
+| `--metrics-path` | Override the Metrics upload path for built-in adapters |
+| `--header` | Add a built-in adapter HTTP header; may be repeated |
+| `--tag` | Add a resource attribute; may be repeated |
+| `--capture-content` | Set built-in content capture to `none`, `preview`, or `full` |
+| `--max-chars` | Set the built-in content length limit |
+| `--enable` / `--disable` | Set the runtime enabled state |
+| `--static-base` | Override the external plugin download base URL |
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the install plan and command preview only |
+| `-n`, `--new-runtime` | Use the built-in runtime; supported for Claude and Codex |
 
 Example:
 
@@ -315,6 +333,8 @@ Notes:
 - if `--agent-id` is omitted, the CLI generates `agid_<uuidv4-without-dashes>`
 - if `--agent-name` is omitted, the CLI generates `<hostname>_<agent>_<YYYYMMDD>`
 - `install` accepts a single Agent target only
+- `-n` installation replaces legacy `agent-telemetry`, `gtrace-agent`, and standalone Claude/Codex Hook entries while preserving unrelated Hooks
+- existing runtime configuration and upload state are preserved unless explicitly changed or purged
 
 ## `update`
 
@@ -331,12 +351,14 @@ Parameters:
 | `--static-base` | Override the plugin download base URL for this run |
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the update plan and command preview only |
+| `-n`, `--new-runtime` | Reconcile the built-in Claude/Codex Hook instead of updating the external plugin |
 
 Notes:
 
 - `update` accepts a single Agent target only
 - the command preserves the existing runtime config
-- internally it passes `--no-config` to the plugin installer
+- built-in adapters reconcile their Hook without modifying `gtrace.json`
+- external plugin installers receive `--no-config`
 
 ## `enable` / `disable`
 
@@ -357,6 +379,7 @@ Parameters:
 | Parameter | Description |
 | --- | --- |
 | `--dry-run` | Print the config change without writing it |
+| `-n`, `--new-runtime` | Select an installed built-in Claude/Codex adapter |
 
 Notes:
 
@@ -388,7 +411,8 @@ Parameters:
 | --- | --- |
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the removal plan only |
-| `--purge-config` | Also remove the plugin config file |
+| `--purge-config` | Also remove the plugin config file and built-in adapter upload state |
+| `-n`, `--new-runtime` | Remove the built-in Claude/Codex Hook instead of the external plugin |
 
 Notes:
 
@@ -515,6 +539,6 @@ obs-agent-connector version -u
 
 ## Additional Notes
 
-- runtime config content is owned by each Agent plugin installer, not generated directly by `obs-agent-connector`
+- runtime config content is owned by the matching built-in or external Agent installer, not by connector command handlers
 - plugin version detection is best-effort; if the plugin layout changes, the version column may show `-`
 - the installer verifies package integrity and stops on checksum failures

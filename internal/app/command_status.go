@@ -13,6 +13,8 @@ import (
 func status(args []string) error {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	newRuntime := fs.Bool("n", false, "Use the new built-in runtime (Claude and Codex only)")
+	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime (Claude and Codex only)")
 
 	target := ""
 	flagArgs := args
@@ -30,7 +32,7 @@ func status(args []string) error {
 		return fmt.Errorf("unrecognized status arguments: %s", strings.Join(fs.Args(), " "))
 	}
 
-	selected, err := agent.Select(target)
+	selected, err := agent.SelectForRuntime(target, *newRuntime)
 	if err != nil {
 		return err
 	}
@@ -45,7 +47,7 @@ func status(args []string) error {
 		{"Command", p.AgentCommand},
 		{"Supported", yesNo(agent.SupportsPlatform(p, currentGOOS))},
 		{"Installed", yesNo(installed)},
-		{"Version", displayVersion(agent.InstalledVersion(p))},
+		{"Version", displayVersion(installedPluginVersion(p))},
 		{"Config", displayPathOrDash(configPath)},
 		{"Path", displayPathOrDash(installedPath)},
 		{"Enabled", enabledStatus},

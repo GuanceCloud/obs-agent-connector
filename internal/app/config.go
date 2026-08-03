@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"unicode/utf16"
 )
@@ -119,6 +120,9 @@ func loadConnectorConfig() (connectorConfig, string, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if err := mergeLegacyTelemetryDefaults(&cfg); err != nil {
+				return cfg, path, err
+			}
 			return cfg, path, nil
 		}
 		return cfg, path, err
@@ -158,8 +162,124 @@ func loadConnectorConfig() (connectorConfig, string, error) {
 			cfg.GlobalTags = append(cfg.GlobalTags, value)
 		}
 	}
+	if strings.TrimSpace(disk.TracePath) != "" {
+		cfg.TracePath = strings.Trim(strings.TrimSpace(disk.TracePath), "/")
+	}
+	if strings.TrimSpace(disk.MetricsPath) != "" {
+		cfg.MetricsPath = strings.Trim(strings.TrimSpace(disk.MetricsPath), "/")
+	}
+	if len(disk.Headers) > 0 {
+		cfg.Headers = make(map[string]string, len(disk.Headers))
+		for key, value := range disk.Headers {
+			key = strings.TrimSpace(key)
+			value = strings.TrimSpace(value)
+			if key != "" && value != "" {
+				cfg.Headers[key] = value
+			}
+		}
+	}
+	if mode := strings.ToLower(strings.TrimSpace(disk.CaptureContent)); mode != "" {
+		cfg.CaptureContent = mode
+	}
+	if disk.MaxChars > 0 {
+		cfg.MaxChars = disk.MaxChars
+	}
+	if disk.Enabled != nil {
+		value := *disk.Enabled
+		cfg.Enabled = &value
+	}
+	if err := mergeLegacyTelemetryDefaults(&cfg); err != nil {
+		return cfg, path, err
+	}
 
 	return cfg, path, nil
+}
+
+type legacyTelemetryConfig struct {
+	Endpoint           string            `json:"endpoint"`
+	TracePath          string            `json:"trace_path"`
+	MetricsPath        string            `json:"metrics_path"`
+	XToken             string            `json:"x_token"`
+	Headers            map[string]string `json:"headers"`
+	ResourceAttributes map[string]string `json:"resource_attributes"`
+	CaptureContent     string            `json:"capture_content"`
+	MaxChars           int               `json:"max_chars"`
+	Enabled            *bool             `json:"enabled"`
+}
+
+func mergeLegacyTelemetryDefaults(cfg *connectorConfig) error {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	path := filepath.Join(home, ".agent-telemetry", "config.json")
+	body, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	var legacy legacyTelemetryConfig
+	if err := json.Unmarshal(body, &legacy); err != nil {
+		// The legacy file is only a best-effort bootstrap source and must not
+		// make an otherwise valid connector installation unusable.
+		return nil
+	}
+	if strings.TrimSpace(cfg.Endpoint) == "" {
+		cfg.Endpoint = strings.TrimSpace(legacy.Endpoint)
+	}
+	if strings.TrimSpace(cfg.XToken) == "" {
+		cfg.XToken = strings.TrimSpace(legacy.XToken)
+	}
+	if strings.TrimSpace(cfg.TracePath) == "" {
+		cfg.TracePath = strings.Trim(strings.TrimSpace(legacy.TracePath), "/")
+	}
+	if strings.TrimSpace(cfg.MetricsPath) == "" {
+		cfg.MetricsPath = strings.Trim(strings.TrimSpace(legacy.MetricsPath), "/")
+	}
+	if len(cfg.Headers) == 0 && len(legacy.Headers) > 0 {
+		cfg.Headers = copyStringMap(legacy.Headers)
+	}
+	if len(cfg.GlobalTags) == 0 && len(legacy.ResourceAttributes) > 0 {
+		cfg.GlobalTags = sortedMapEntries(legacy.ResourceAttributes)
+	}
+	if strings.TrimSpace(cfg.CaptureContent) == "" {
+		cfg.CaptureContent = strings.ToLower(strings.TrimSpace(legacy.CaptureContent))
+	}
+	if cfg.MaxChars == 0 {
+		cfg.MaxChars = legacy.MaxChars
+	}
+	if cfg.Enabled == nil && legacy.Enabled != nil {
+		value := *legacy.Enabled
+		cfg.Enabled = &value
+	}
+	return nil
+}
+
+func copyStringMap(values map[string]string) map[string]string {
+	result := make(map[string]string, len(values))
+	for key, value := range values {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key != "" && value != "" {
+			result[key] = value
+		}
+	}
+	return result
+}
+
+func sortedMapEntries(values map[string]string) []string {
+	entries := make([]string, 0, len(values))
+	for key, value := range values {
+		key = strings.TrimSpace(key)
+		value = strings.TrimSpace(value)
+		if key != "" && value != "" {
+			entries = append(entries, key+"="+value)
+		}
+	}
+	sort.Strings(entries)
+	return entries
 }
 
 func latestMetadataURL(cfg connectorConfig) string {

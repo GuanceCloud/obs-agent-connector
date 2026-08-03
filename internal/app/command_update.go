@@ -29,6 +29,8 @@ func updatePlugins(args []string) error {
 	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without updating")
+	newRuntime := fs.Bool("n", false, "Use the new built-in runtime (Claude and Codex only)")
+	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime (Claude and Codex only)")
 
 	target := ""
 	flagArgs := args
@@ -43,7 +45,7 @@ func updatePlugins(args []string) error {
 		return fmt.Errorf("unrecognized update arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	if target != "" {
-		selectedTarget, err := agent.Select(target)
+		selectedTarget, err := agent.SelectForRuntime(target, *newRuntime)
 		if err != nil {
 			return err
 		}
@@ -52,7 +54,7 @@ func updatePlugins(args []string) error {
 		}
 	}
 
-	selected, err := agent.SelectInstalled(target)
+	selected, err := agent.SelectInstalledForRuntime(target, *newRuntime)
 	if err != nil {
 		return err
 	}
@@ -61,37 +63,50 @@ func updatePlugins(args []string) error {
 		return nil
 	}
 
-	cfg, _, err := loadConnectorConfig()
-	if err != nil {
-		return err
-	}
-	pluginDownload, err := pluginDownloadSettings(*staticBaseFlag, cfg, "")
-	if err != nil {
-		return err
+	var pluginDownload pluginDownloadConfig
+	if !selected[0].IsBuiltin() {
+		cfg, _, err := loadConnectorConfig()
+		if err != nil {
+			return err
+		}
+		pluginDownload, err = pluginDownloadSettings(*staticBaseFlag, cfg, "")
+		if err != nil {
+			return err
+		}
 	}
 	fmt.Println("Update plan:")
 	targets := make([]string, 0, len(selected))
 	for _, p := range selected {
 		p = agent.Resolve(p)
+		if p.IsBuiltin() {
+			targets = append(targets, fmt.Sprintf("%s (reconcile built-in adapter)", p.Name))
+			continue
+		}
 		url, err := downloadSourceURL(pluginDownload, p, currentGOOS)
 		if err != nil {
 			return err
 		}
 		targets = append(targets, fmt.Sprintf("%s (%s)", p.Name, url))
 	}
-	printDetails([][2]string{
+	rows := [][2]string{
 		{"Targets", strings.Join(targets, ", ")},
-		{"Plugin Source", pluginDownload.Source},
-		{"Plugin Base URL", pluginDownload.BaseURL},
 		{"Config", "will not be modified"},
-	})
+	}
+	if !selected[0].IsBuiltin() {
+		rows = append(rows, [2]string{"Plugin Source", pluginDownload.Source}, [2]string{"Plugin Base URL", pluginDownload.BaseURL})
+	}
+	printDetails(rows)
 
 	if *dryRun {
 		fmt.Println()
 		fmt.Println("Command preview:")
 		for _, p := range selected {
 			p = agent.Resolve(p)
-			fmt.Println(renderPluginUpdateCommand(pluginDownload, p))
+			if p.IsBuiltin() {
+				fmt.Printf("reconcile %s hook with the current obs-agent-connector runtime\n", p.Name)
+			} else {
+				fmt.Println(renderPluginUpdateCommand(pluginDownload, p))
+			}
 		}
 		return nil
 	}

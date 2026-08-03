@@ -281,9 +281,6 @@ tmp_dir="$(mktemp -d)"
 trap 'rm -rf "$tmp_dir"' EXIT INT TERM
 
 mkdir -p "$INSTALL_DIR" "$CONFIG_DIR"
-if [ "${BINARY_ONLY}" -eq 0 ] && [ -f "$config_path" ]; then
-  rm -f "$config_path"
-fi
 
 curl -fsSL -o "$tmp_dir/$asset_name" "$download_url"
 curl -fsSL -o "$tmp_dir/SHA256SUMS" "$checksums_url"
@@ -304,17 +301,14 @@ tar -xzf "$tmp_dir/$asset_name" -C "$tmp_dir"
 install -m 0755 "$tmp_dir/$binary_name" "$INSTALL_DIR/$APP_NAME"
 
 if [ "${BINARY_ONLY}" -eq 0 ]; then
-  global_tags_json="$(json_array_from_lines "${GLOBAL_TAGS_LINES}")"
-  cat > "$config_path" <<EOF
-{
-  "download_base_url": "$(json_escape "${DOWNLOAD_BASE_URL}")",
-  "plugin_source": "$(json_escape "${PLUGIN_SOURCE}")",
-  "plugin_base_url": "$(json_escape "${PLUGIN_BASE_URL}")",
-  "endpoint": "$(json_escape "${ENDPOINT}")",
-  "x_token": "$(json_escape "${X_TOKEN}")",
-  "global_tags": ${global_tags_json}
-}
-EOF
+  "$INSTALL_DIR/$APP_NAME" internal merge-config \
+    --path "$config_path" \
+    --download-base-url "$DOWNLOAD_BASE_URL" \
+    --plugin-source "$PLUGIN_SOURCE" \
+    --plugin-base-url "$PLUGIN_BASE_URL" \
+    --endpoint "$ENDPOINT" \
+    --x-token "$X_TOKEN" \
+    --global-tags "$GLOBAL_TAGS_LINES"
 fi
 
 printf 'Installed %s %s to %s\n' "$APP_NAME" "$current_version" "$INSTALL_DIR/$APP_NAME"

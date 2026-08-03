@@ -2,7 +2,7 @@
 
 ## Project
 
-This repository contains `obs-agent-connector`, a Go-based CLI for installing and managing OBS/GTrace Agent plugins.
+This repository contains the single `obs-agent-connector` Go binary for managing OBS/GTrace Agent integrations and running built-in telemetry adapters.
 
 The CLI supports plugin lifecycle operations for:
 
@@ -29,7 +29,9 @@ Prefer small, focused changes. Keep each Agent definition and its variant-specif
 
 Do not add Agent-specific branches to `internal/agent/registry.go`. Use the resolver hooks on `agent.Definition` when an Agent needs custom installation or discovery behavior.
 
-Do not generate Agent runtime configuration directly in this CLI. Runtime configuration files such as `gtrace.json`, `config.yaml`, or `openclaw.json` are owned by each Agent plugin installer.
+Do not generate Agent runtime configuration in command handlers. Runtime configuration files such as `gtrace.json`, `config.yaml`, or `openclaw.json` are owned by the matching built-in or external Agent installer.
+
+Shared telemetry behavior belongs in `internal/core`. Product-specific collection behavior belongs in `internal/adapters/<product>`. Claude and Codex provide opt-in built-in adapters through `-n`; their external plugins remain the default. Other Agents remain external only until their runtime implementations migrate into this repository.
 
 ## Commands
 
@@ -68,7 +70,7 @@ Rules:
 - `update` must require one explicit Agent name and must not support `all`.
 - `update cli` is intentionally unsupported. Future CLI version management should be implemented under a separate `version` command.
 - `install` resolves `Endpoint` and `X-Token` from flags or connector config, and generates `Agent ID` and `Agent Name` unless explicitly provided.
-- `install` always passes `--type gtrace` to plugin installers.
+- `install` always uses the GTrace upload profile for built-in and external installers.
 - `update` must preserve existing configuration by passing `--no-config`.
 - `remove` must keep configuration files by default; only delete config files when `--purge-config` is provided.
 

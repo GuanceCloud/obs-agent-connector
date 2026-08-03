@@ -40,9 +40,43 @@ func Select(target string) ([]Definition, error) {
 	return []Definition{p}, nil
 }
 
-func SelectInstalled(target string) ([]Definition, error) {
-	normalizedTarget := strings.TrimSpace(strings.ToLower(target))
+func SelectForRuntime(target string, useBuiltin bool) ([]Definition, error) {
 	selected, err := Select(target)
+	if err != nil || !useBuiltin {
+		return selected, err
+	}
+
+	normalizedTarget := strings.TrimSpace(strings.ToLower(target))
+	for i, p := range selected {
+		builtin, ok := p.WithBuiltin()
+		if !ok {
+			if normalizedTarget != "" {
+				return nil, fmt.Errorf("%s does not support -n/--new-runtime; supported agents: %s", p.Name, strings.Join(BuiltinNames(), ", "))
+			}
+			continue
+		}
+		selected[i] = builtin
+	}
+	return selected, nil
+}
+
+func BuiltinNames() []string {
+	names := make([]string, 0, len(definitions))
+	for _, name := range Names() {
+		if definitions[name].BuiltinAvailable {
+			names = append(names, name)
+		}
+	}
+	return names
+}
+
+func SelectInstalled(target string) ([]Definition, error) {
+	return SelectInstalledForRuntime(target, false)
+}
+
+func SelectInstalledForRuntime(target string, useBuiltin bool) ([]Definition, error) {
+	normalizedTarget := strings.TrimSpace(strings.ToLower(target))
+	selected, err := SelectForRuntime(target, useBuiltin)
 	if err != nil {
 		return nil, err
 	}
@@ -79,10 +113,19 @@ func ResolveForInstall(selected []Definition) ([]Definition, error) {
 }
 
 func DiscoverCandidatesForOS(goos string) []Candidate {
+	return DiscoverCandidatesForOSRuntime(goos, false)
+}
+
+func DiscoverCandidatesForOSRuntime(goos string, useBuiltin bool) []Candidate {
 	names := Names()
 	out := make([]Candidate, 0, len(names))
 	for _, name := range names {
 		p := definitions[name]
+		if useBuiltin {
+			if builtin, ok := p.WithBuiltin(); ok {
+				p = builtin
+			}
+		}
 		if !SupportsPlatform(p, goos) {
 			continue
 		}
@@ -151,6 +194,9 @@ func SupportsPlatform(p Definition, goos string) bool {
 	goos = strings.ToLower(strings.TrimSpace(goos))
 	if goos == "" {
 		return true
+	}
+	if p.IsBuiltin() {
+		return goos == "linux" || goos == "darwin" || goos == "windows"
 	}
 	if len(p.SupportedPlatforms) > 0 {
 		for _, platform := range p.SupportedPlatforms {

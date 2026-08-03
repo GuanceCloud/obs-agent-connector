@@ -22,7 +22,7 @@ func Run(args []string) error {
 
 	switch args[0] {
 	case "list":
-		return listPlugins()
+		return listPlugins(args[1:])
 	case "status":
 		return status(args[1:])
 	case "discover":
@@ -41,6 +41,11 @@ func Run(args []string) error {
 		return uninstallConnector(args[1:])
 	case "version":
 		return showVersion(args[1:])
+	case "internal":
+		if len(args) >= 2 && args[1] == "merge-config" {
+			return mergeConnectorConfig(args[2:])
+		}
+		return fmt.Errorf("unknown internal command")
 	case "-h", "--help", "help":
 		printUsage()
 		return nil
@@ -56,22 +61,24 @@ Usage:
   obs-agent-connector <command> [arguments]
 
 Commands:
-  list                  List installed Agent plugins
-  status <agent>        Show one Agent plugin status
-  discover              Detect local Agents; install missing plugins, or sync all with -u
-  install <agent>       Install an Agent plugin
-  enable <agent>        Enable one installed Agent plugin
-  disable <agent>       Disable one installed Agent plugin
-  update <agent>        Update one installed Agent plugin
-  remove <agent>        Remove an Agent plugin
+  list [-n]             List installed Agent plugins
+  status <agent> [-n]   Show one Agent plugin status
+  discover [-n]         Detect local Agents; install missing plugins, or sync all with -u
+  install <agent> [-n]  Install an Agent plugin
+  enable <agent> [-n]   Enable one installed Agent plugin
+  disable <agent> [-n]  Disable one installed Agent plugin
+  update <agent> [-n]   Update one installed Agent plugin
+  remove <agent> [-n]   Remove an Agent plugin
   uninstall             Uninstall obs-agent-connector
   version               Show version and check for updates
 
 Examples:
   obs-agent-connector discover
+  obs-agent-connector discover -n
   obs-agent-connector discover -u
   obs-agent-connector status codex
   obs-agent-connector install codex
+  obs-agent-connector install codex -n
   obs-agent-connector install opencode
   obs-agent-connector install qoder
   obs-agent-connector enable codex

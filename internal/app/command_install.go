@@ -8,6 +8,14 @@ import (
 	"strings"
 )
 
+type repeatedValue []string
+
+func (v *repeatedValue) String() string { return strings.Join(*v, ",") }
+func (v *repeatedValue) Set(value string) error {
+	*v = append(*v, value)
+	return nil
+}
+
 func install(args []string) error {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -15,9 +23,21 @@ func install(args []string) error {
 	xToken := fs.String("x-token", "", "GTrace X-Token")
 	agentID := fs.String("agent-id", "", "GTrace agent_id tag")
 	agentName := fs.String("agent-name", "", "GTrace agent_name tag")
+	tracePath := fs.String("trace-path", "", "Trace upload path for built-in adapters")
+	metricsPath := fs.String("metrics-path", "", "Metrics upload path for built-in adapters")
+	captureContent := fs.String("capture-content", "", "Content capture mode for built-in adapters: none, preview, or full")
+	maxChars := fs.Int("max-chars", 0, "Maximum captured characters per value for built-in adapters")
+	enable := fs.Bool("enable", false, "Enable telemetry in the Agent runtime config")
+	disable := fs.Bool("disable", false, "Disable telemetry in the Agent runtime config")
+	var headers repeatedValue
+	var tags repeatedValue
+	fs.Var(&headers, "header", "HTTP header KEY=VALUE for built-in adapters; may be repeated")
+	fs.Var(&tags, "tag", "Resource attribute KEY=VALUE; may be repeated")
 	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without installing")
+	newRuntime := fs.Bool("n", false, "Use the new built-in runtime (Claude and Codex only)")
+	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime (Claude and Codex only)")
 
 	target := ""
 	flagArgs := args
@@ -32,11 +52,27 @@ func install(args []string) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unrecognized install arguments: %s", strings.Join(fs.Args(), " "))
 	}
+	if *enable && *disable {
+		return fmt.Errorf("--enable and --disable cannot be used together")
+	}
+	if *maxChars < 0 {
+		return fmt.Errorf("--max-chars must be positive")
+	}
+	mode := strings.ToLower(strings.TrimSpace(*captureContent))
+	if mode != "" && mode != "none" && mode != "preview" && mode != "full" {
+		return fmt.Errorf("unsupported --capture-content %q", *captureContent)
+	}
+	if err := validateAssignments(headers, "--header"); err != nil {
+		return err
+	}
+	if err := validateAssignments(tags, "--tag"); err != nil {
+		return err
+	}
 	if strings.TrimSpace(target) == "" {
 		return fmt.Errorf("install requires a single agent, for example: install codex")
 	}
 
-	selected, err := agent.Select(target)
+	selected, err := agent.SelectForRuntime(target, *newRuntime)
 	if err != nil {
 		return err
 	}
@@ -53,25 +89,43 @@ func install(args []string) error {
 		return err
 	}
 
-	input, err := resolveInstallInput(installInput{
-		Endpoint:  strings.TrimSpace(*endpoint),
-		XToken:    strings.TrimSpace(*xToken),
-		AgentID:   strings.TrimSpace(*agentID),
-		AgentName: strings.TrimSpace(*agentName),
-	}, cfg, selected[0].Name)
+	inputDefaults := installInput{
+		Endpoint:       strings.TrimSpace(*endpoint),
+		TracePath:      strings.Trim(strings.TrimSpace(*tracePath), "/"),
+		MetricsPath:    strings.Trim(strings.TrimSpace(*metricsPath), "/"),
+		XToken:         strings.TrimSpace(*xToken),
+		Headers:        append([]string{}, headers...),
+		AgentID:        strings.TrimSpace(*agentID),
+		AgentName:      strings.TrimSpace(*agentName),
+		GlobalTags:     append([]string{}, tags...),
+		CaptureContent: mode,
+		MaxChars:       *maxChars,
+	}
+	if *enable || *disable {
+		value := *enable
+		inputDefaults.Enabled = &value
+	}
+	input, err := resolveInstallInput(inputDefaults, cfg, selected[0].Name)
 	if err != nil {
 		return err
 	}
 
-	pluginDownload, err := pluginDownloadSettings(*staticBaseFlag, cfg, input.Endpoint)
-	if err != nil {
-		return err
+	var pluginDownload pluginDownloadConfig
+	if !selected[0].IsBuiltin() {
+		pluginDownload, err = pluginDownloadSettings(*staticBaseFlag, cfg, input.Endpoint)
+		if err != nil {
+			return err
+		}
 	}
 	fmt.Println()
 	fmt.Println("Install plan:")
 	targets := make([]string, 0, len(selected))
 	for _, p := range selected {
 		p = agent.Resolve(p)
+		if p.IsBuiltin() {
+			targets = append(targets, fmt.Sprintf("%s (built into obs-agent-connector)", p.Name))
+			continue
+		}
 		url, err := downloadSourceURL(pluginDownload, p, currentGOOS)
 		if err != nil {
 			return err
@@ -80,11 +134,12 @@ func install(args []string) error {
 	}
 	rows := [][2]string{
 		{"Targets", strings.Join(targets, ", ")},
-		{"Plugin Source", pluginDownload.Source},
-		{"Plugin Base URL", pluginDownload.BaseURL},
 		{"Type", fixedType},
 		{"Endpoint", input.Endpoint},
-		{"X-Token", input.XToken},
+		{"X-Token", "<configured>"},
+	}
+	if !selected[0].IsBuiltin() {
+		rows = append(rows, [2]string{"Plugin Source", pluginDownload.Source}, [2]string{"Plugin Base URL", pluginDownload.BaseURL})
 	}
 	if len(input.GlobalTags) > 0 {
 		rows = append(rows, [2]string{"Global Tags", strings.Join(input.GlobalTags, ", ")})
@@ -100,7 +155,13 @@ func install(args []string) error {
 		fmt.Println("Command preview:")
 		for _, p := range selected {
 			p = agent.Resolve(p)
-			fmt.Println(renderInstallCommand(pluginDownload, p, input))
+			if p.IsBuiltin() {
+				fmt.Printf("register %s hook with the current obs-agent-connector runtime\n", p.Name)
+				continue
+			}
+			preview := input
+			preview.XToken = "<redacted>"
+			fmt.Println(renderInstallCommand(pluginDownload, p, preview))
 		}
 		return nil
 	}
@@ -123,5 +184,15 @@ func install(args []string) error {
 		}
 	}
 
+	return nil
+}
+
+func validateAssignments(values []string, flagName string) error {
+	for _, value := range values {
+		key, item, ok := strings.Cut(value, "=")
+		if !ok || strings.TrimSpace(key) == "" || strings.TrimSpace(item) == "" {
+			return fmt.Errorf("%s must use non-empty KEY=VALUE syntax: %q", flagName, value)
+		}
+	}
 	return nil
 }

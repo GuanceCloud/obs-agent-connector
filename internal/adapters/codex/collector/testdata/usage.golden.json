@@ -1,0 +1,496 @@
+{
+  "spans": [
+    {
+      "key": "assistant|step=1|message=0|run=turn-1",
+      "name": "assistant",
+      "parent_key": "invoke_agent|run=turn-1",
+      "duration_ms": 300,
+      "status_code": "STATUS_CODE_UNSET",
+      "attributes": {
+        "assistant_message_event_time": "2026-06-03T10:00:04.300Z",
+        "assistant_message_start_time": "2026-06-03T10:00:04.000Z",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.output.type": "text",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "session_id": "sess-basic"
+      }
+    },
+    {
+      "key": "invoke_agent|run=turn-1",
+      "name": "invoke_agent",
+      "duration_ms": 3400,
+      "status_code": "STATUS_CODE_UNSET",
+      "attributes": {
+        "final_status": "completed",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "invoke_agent",
+        "gen_ai.output.type": "json",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.choice.count": 2,
+        "gen_ai.request.frequency_penalty": 0.4,
+        "gen_ai.request.max_tokens": 512,
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.request.presence_penalty": 0.3,
+        "gen_ai.request.seed": 7,
+        "gen_ai.request.stop_sequences": [
+          "DONE"
+        ],
+        "gen_ai.request.temperature": 0.2,
+        "gen_ai.request.top_p": 0.9,
+        "gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.system_instructions": [
+          {
+            "content": "You are a file assistant.",
+            "type": "text"
+          },
+          {
+            "content": "Keep answers concise.",
+            "type": "text"
+          }
+        ],
+        "gen_ai.tool.definitions": [
+          {
+            "description": "Run a shell command",
+            "name": "exec_command",
+            "parameters": {
+              "properties": {
+                "command": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "type": "function"
+          }
+        ],
+        "gen_ai.usage.cache_read.input_tokens": 50,
+        "gen_ai.usage.input_tokens": 250,
+        "gen_ai.usage.output_tokens": 50,
+        "gen_ai.usage.reasoning.output_tokens": 5,
+        "session_id": "sess-basic",
+        "tool_count": 1
+      }
+    },
+    {
+      "key": "llm|step=1|run=turn-1",
+      "name": "llm",
+      "parent_key": "invoke_agent|run=turn-1",
+      "duration_ms": 1100,
+      "status_code": "STATUS_CODE_UNSET",
+      "attributes": {
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.output.type": "json",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.choice.count": 2,
+        "gen_ai.request.frequency_penalty": 0.4,
+        "gen_ai.request.max_tokens": 512,
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.request.presence_penalty": 0.3,
+        "gen_ai.request.seed": 7,
+        "gen_ai.request.stop_sequences": [
+          "DONE"
+        ],
+        "gen_ai.request.temperature": 0.2,
+        "gen_ai.request.top_p": 0.9,
+        "gen_ai.response.finish_reasons": [
+          "stop"
+        ],
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.system_instructions": [
+          {
+            "content": "You are a file assistant.",
+            "type": "text"
+          },
+          {
+            "content": "Keep answers concise.",
+            "type": "text"
+          }
+        ],
+        "gen_ai.tool.definitions": [
+          {
+            "description": "Run a shell command",
+            "name": "exec_command",
+            "parameters": {
+              "properties": {
+                "command": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "type": "function"
+          }
+        ],
+        "gen_ai.usage.cache_read.input_tokens": 50,
+        "gen_ai.usage.input_tokens": 150,
+        "gen_ai.usage.output_tokens": 30,
+        "gen_ai.usage.reasoning.output_tokens": 0,
+        "session_id": "sess-basic",
+        "ttft": 900
+      }
+    },
+    {
+      "key": "llm|step=0|run=turn-1",
+      "name": "llm",
+      "parent_key": "invoke_agent|run=turn-1",
+      "duration_ms": 1600,
+      "status_code": "STATUS_CODE_UNSET",
+      "attributes": {
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.output.type": "json",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.choice.count": 2,
+        "gen_ai.request.frequency_penalty": 0.4,
+        "gen_ai.request.max_tokens": 512,
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.request.presence_penalty": 0.3,
+        "gen_ai.request.seed": 7,
+        "gen_ai.request.stop_sequences": [
+          "DONE"
+        ],
+        "gen_ai.request.temperature": 0.2,
+        "gen_ai.request.top_p": 0.9,
+        "gen_ai.response.finish_reasons": [
+          "tool_call"
+        ],
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.system_instructions": [
+          {
+            "content": "You are a file assistant.",
+            "type": "text"
+          },
+          {
+            "content": "Keep answers concise.",
+            "type": "text"
+          }
+        ],
+        "gen_ai.tool.definitions": [
+          {
+            "description": "Run a shell command",
+            "name": "exec_command",
+            "parameters": {
+              "properties": {
+                "command": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "type": "object"
+            },
+            "type": "function"
+          }
+        ],
+        "gen_ai.usage.cache_read.input_tokens": 0,
+        "gen_ai.usage.input_tokens": 100,
+        "gen_ai.usage.output_tokens": 20,
+        "gen_ai.usage.reasoning.output_tokens": 5,
+        "session_id": "sess-basic",
+        "ttft": 1000
+      }
+    },
+    {
+      "key": "tool:exec_command|call=call-1",
+      "name": "tool:exec_command",
+      "parent_key": "invoke_agent|run=turn-1",
+      "duration_ms": 1000,
+      "status_code": "STATUS_CODE_UNSET",
+      "attributes": {
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.skill.name": "plugin-creator",
+        "gen_ai.skill.result.status": "completed",
+        "gen_ai.skill.source.type": "system",
+        "gen_ai.skill.version": "2.1.0",
+        "gen_ai.tool.call.id": "call-1",
+        "gen_ai.tool.name": "exec_command",
+        "session_id": "sess-basic",
+        "skill.name": "plugin-creator",
+        "skill.result_status": "completed",
+        "skill.source.type": "system",
+        "tool_command": "sed -n 1,120p \u003cTMPDIR\u003e/.codex/skills/.system/plugin-creator/SKILL.md",
+        "triggered_by.key": "llm|step=0|run=turn-1"
+      }
+    },
+    {
+      "key": "skill:plugin-creator|call=call-1",
+      "name": "skill:plugin-creator",
+      "parent_key": "tool:exec_command|call=call-1",
+      "duration_ms": 1000,
+      "status_code": "STATUS_CODE_UNSET",
+      "attributes": {
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "skill",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.skill.name": "plugin-creator",
+        "gen_ai.skill.result.status": "completed",
+        "gen_ai.skill.source.type": "system",
+        "gen_ai.skill.version": "2.1.0",
+        "session_id": "sess-basic",
+        "skill.name": "plugin-creator",
+        "skill.result_status": "completed",
+        "skill.source.type": "system",
+        "tool_count": 1
+      }
+    }
+  ],
+  "metrics": [
+    {
+      "name": "gen_ai.workflow.duration",
+      "unit": "s",
+      "value": 3.4,
+      "attributes": {
+        "agent_runtime": "codex",
+        "final_status": "completed",
+        "gen_ai.conversation.id": "sess-basic",
+        "session_id": "sess-basic",
+        "status": "completed"
+      }
+    },
+    {
+      "name": "gen_ai.client.token.usage",
+      "unit": "{token}",
+      "value": 100,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.token.type": "input",
+        "operation_name": "model",
+        "provider_name": "openai",
+        "request_model": "gpt-5.4",
+        "response_model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.client.token.usage",
+      "unit": "{token}",
+      "value": 150,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.token.type": "input",
+        "operation_name": "model",
+        "provider_name": "openai",
+        "request_model": "gpt-5.4",
+        "response_model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.client.token.usage",
+      "unit": "{token}",
+      "value": 20,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.token.type": "output",
+        "operation_name": "model",
+        "provider_name": "openai",
+        "request_model": "gpt-5.4",
+        "response_model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.client.token.usage",
+      "unit": "{token}",
+      "value": 30,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.token.type": "output",
+        "operation_name": "model",
+        "provider_name": "openai",
+        "request_model": "gpt-5.4",
+        "response_model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.agent.operation.duration",
+      "unit": "ms",
+      "value": 1100,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "operation_name": "model",
+        "provider_name": "openai",
+        "request_model": "gpt-5.4",
+        "response_model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.agent.operation.duration",
+      "unit": "ms",
+      "value": 1600,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "operation_name": "model",
+        "provider_name": "openai",
+        "request_model": "gpt-5.4",
+        "response_model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.agent.operation.count",
+      "unit": "",
+      "value": 1,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.agent.operation.count",
+      "unit": "",
+      "value": 1,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "chat",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.agent.operation.duration",
+      "unit": "ms",
+      "value": 1000,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.skill.name": "plugin-creator",
+        "gen_ai.tool.name": "exec_command",
+        "operation_name": "tool",
+        "provider_name": "openai",
+        "request_model": "gpt-5.4",
+        "response_model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "skill.name": "plugin-creator",
+        "skill_name": "plugin-creator",
+        "status": "ok",
+        "tool_name": "exec_command"
+      }
+    },
+    {
+      "name": "gen_ai.agent.operation.count",
+      "unit": "",
+      "value": 1,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "execute_tool",
+        "gen_ai.tool.name": "exec_command",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.agent.operation.duration",
+      "unit": "ms",
+      "value": 1000,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "skill",
+        "gen_ai.provider.name": "openai",
+        "gen_ai.request.model": "gpt-5.4",
+        "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.skill.name": "plugin-creator",
+        "gen_ai.skill.result.status": "completed",
+        "gen_ai.skill.source.type": "system",
+        "gen_ai.skill.version": "2.1.0",
+        "operation_name": "skill",
+        "provider_name": "openai",
+        "request_model": "gpt-5.4",
+        "response_model": "gpt-5.4",
+        "session_id": "sess-basic",
+        "skill.name": "plugin-creator",
+        "skill.result_status": "completed",
+        "skill.source.type": "system",
+        "skill_name": "plugin-creator",
+        "skill_source": "system",
+        "status": "ok"
+      }
+    },
+    {
+      "name": "gen_ai.agent.operation.count",
+      "unit": "",
+      "value": 1,
+      "attributes": {
+        "agent_runtime": "codex",
+        "gen_ai.conversation.id": "sess-basic",
+        "gen_ai.operation.name": "skill",
+        "gen_ai.skill.name": "plugin-creator",
+        "session_id": "sess-basic",
+        "status": "ok"
+      }
+    }
+  ]
+}

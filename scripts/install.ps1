@@ -146,9 +146,6 @@ try {
   New-Item -ItemType Directory -Path $TempDir | Out-Null
   New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
   New-Item -ItemType Directory -Force -Path $ConfigDir | Out-Null
-  if ((-not $BinaryOnly) -and (Test-Path -LiteralPath $ConfigPath)) {
-    Remove-Item -LiteralPath $ConfigPath -Force
-  }
 
   $ZipPath = Join-Path $TempDir $AssetName
   $ChecksumsPath = Join-Path $TempDir "SHA256SUMS"
@@ -176,15 +173,24 @@ try {
   Copy-Item -LiteralPath (Join-Path $TempDir $BinaryName) -Destination (Join-Path $InstallDir "$AppName.exe") -Force
 
   if (-not $BinaryOnly) {
-    $ConfigJson = [ordered]@{
-      download_base_url = $DownloadBaseUrl
-      plugin_source = $PluginSource
-      plugin_base_url = $PluginBaseUrl
-      endpoint = $Endpoint
-      x_token = $XToken
-      global_tags = @($Tag)
-    } | ConvertTo-Json
-    [System.IO.File]::WriteAllText($ConfigPath, $ConfigJson, (New-Object System.Text.UTF8Encoding($false)))
+    $ConnectorPath = Join-Path $InstallDir "$AppName.exe"
+    $GlobalTagsValue = @($Tag) -join "`n"
+    $MergeArgs = @(
+      "internal", "merge-config",
+      "--path", $ConfigPath,
+      "--download-base-url", $DownloadBaseUrl,
+      "--plugin-source", $PluginSource,
+      "--plugin-base-url", $PluginBaseUrl,
+      "--endpoint", $Endpoint,
+      "--x-token", $XToken
+    )
+    if ($GlobalTagsValue) {
+      $MergeArgs += @("--global-tags", $GlobalTagsValue)
+    }
+    & $ConnectorPath @MergeArgs
+    if ($LASTEXITCODE -ne 0) {
+      throw "Failed to merge connector config"
+    }
   }
 
   if (-not $NoPathUpdate) {

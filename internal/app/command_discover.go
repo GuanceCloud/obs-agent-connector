@@ -23,6 +23,8 @@ func discover(args []string) error {
 	dryRun := fs.Bool("dry-run", false, "Print planned actions without installing")
 	updateMode := fs.Bool("u", false, "Update installed plugins and install missing ones")
 	fs.BoolVar(updateMode, "update", false, "Update installed plugins and install missing ones")
+	newRuntime := fs.Bool("n", false, "Use the new built-in runtime for Claude and Codex")
+	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime for Claude and Codex")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -43,7 +45,7 @@ func discover(args []string) error {
 		return fmt.Errorf("discover failed: %w", err)
 	}
 
-	candidates := agent.DiscoverCandidatesForOS(currentGOOS)
+	candidates := agent.DiscoverCandidatesForOSRuntime(currentGOOS, *newRuntime)
 	if len(candidates) == 0 {
 		fmt.Println("No supported Agents detected.")
 		return nil
@@ -94,16 +96,27 @@ func discover(args []string) error {
 		return nil
 	}
 
-	pluginDownload, err := pluginDownloadSettings(*staticBaseFlag, cfg, input.Endpoint)
-	if err != nil {
-		return fmt.Errorf("discover failed: %w", err)
+	needsExternalDownload := false
+	for _, step := range steps {
+		if !step.Candidate.Plugin.IsBuiltin() {
+			needsExternalDownload = true
+			break
+		}
+	}
+	var pluginDownload pluginDownloadConfig
+	if needsExternalDownload {
+		pluginDownload, err = pluginDownloadSettings(*staticBaseFlag, cfg, input.Endpoint)
+		if err != nil {
+			return fmt.Errorf("discover failed: %w", err)
+		}
 	}
 	rows = nil
 	detailRows := [][2]string{
-		{"Plugin Source", pluginDownload.Source},
-		{"Plugin Base URL", pluginDownload.BaseURL},
 		{"Endpoint", input.Endpoint},
-		{"X-Token", input.XToken},
+		{"X-Token", "<configured>"},
+	}
+	if needsExternalDownload {
+		detailRows = append(detailRows, [2]string{"Plugin Source", pluginDownload.Source}, [2]string{"Plugin Base URL", pluginDownload.BaseURL})
 	}
 	if len(input.GlobalTags) > 0 {
 		detailRows = append(detailRows, [2]string{"Global Tags", strings.Join(input.GlobalTags, ", ")})
@@ -150,7 +163,7 @@ func discover(args []string) error {
 		}
 
 		if candidate.InstalledPath != "" {
-			beforeVersion := candidate.InstalledVersion
+			beforeVersion := installedPluginVersion(candidate.Plugin)
 			if err := updatePluginOne(pluginDownload, candidate.Plugin); err != nil {
 				hadFailure = true
 				results = append(results, discoverResult{
@@ -160,7 +173,7 @@ func discover(args []string) error {
 				})
 				continue
 			}
-			afterVersion := agent.InstalledVersion(candidate.Plugin)
+			afterVersion := installedPluginVersion(candidate.Plugin)
 			detail := fmt.Sprintf("version=%s", displayVersion(afterVersion))
 			if beforeVersion != "" && afterVersion != "" && beforeVersion != afterVersion {
 				detail = fmt.Sprintf("version %s -> %s", beforeVersion, afterVersion)
@@ -197,7 +210,7 @@ func discover(args []string) error {
 			continue
 		}
 
-		installedVersion := agent.InstalledVersion(candidate.Plugin)
+		installedVersion := installedPluginVersion(candidate.Plugin)
 		results = append(results, discoverResult{
 			Agent:  candidate.Plugin.Name,
 			Result: "installed",

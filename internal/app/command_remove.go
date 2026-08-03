@@ -13,7 +13,9 @@ func remove(args []string) error {
 	fs.SetOutput(os.Stderr)
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print what would be removed")
-	purgeConfig := fs.Bool("purge-config", false, "Also remove plugin configuration files")
+	purgeConfig := fs.Bool("purge-config", false, "Also remove plugin configuration files and built-in adapter upload state")
+	newRuntime := fs.Bool("n", false, "Use the new built-in runtime (Claude and Codex only)")
+	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime (Claude and Codex only)")
 
 	target := ""
 	flagArgs := args
@@ -31,7 +33,7 @@ func remove(args []string) error {
 		return fmt.Errorf("unrecognized remove arguments: %s", strings.Join(fs.Args(), " "))
 	}
 
-	selected, err := agent.SelectInstalled(target)
+	selected, err := agent.SelectInstalledForRuntime(target, *newRuntime)
 	if err != nil {
 		return err
 	}
@@ -45,6 +47,9 @@ func remove(args []string) error {
 	for _, p := range selected {
 		p = agent.Resolve(p)
 		rows = append(rows, [2]string{"Agent", p.Name})
+		if p.IsBuiltin() {
+			rows = append(rows, [2]string{"Hook", p.BuiltinHookFile + " (managed entry only)"})
+		}
 		for _, cmd := range p.RemoveCmds {
 			rows = append(rows, [2]string{"Command", strings.Join(cmd, " ")})
 		}

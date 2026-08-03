@@ -3,6 +3,7 @@ package app
 import (
 	"bufio"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	"io"
@@ -19,9 +20,14 @@ import (
 var currentGOOS = runtime.GOOS
 
 func resolveInstallInput(defaults installInput, cfg connectorConfig, agent string) (installInput, error) {
-	input, err := resolveCommonInstallInput(defaults, cfg)
+	input := mergeExistingRuntimeDefaults(defaults, agent)
+	input, err := resolveCommonInstallInput(input, cfg)
 	if err != nil {
 		return input, err
+	}
+	existingID, existingName := existingAgentIdentity(agent)
+	if strings.TrimSpace(input.AgentID) == "" {
+		input.AgentID = existingID
 	}
 	if strings.TrimSpace(input.AgentID) == "" {
 		agentID, err := generateAgentID()
@@ -31,9 +37,108 @@ func resolveInstallInput(defaults installInput, cfg connectorConfig, agent strin
 		input.AgentID = agentID
 	}
 	if strings.TrimSpace(input.AgentName) == "" {
+		input.AgentName = existingName
+	}
+	if strings.TrimSpace(input.AgentName) == "" {
 		input.AgentName = defaultAgentName(agent, time.Now())
 	}
 	return input, nil
+}
+
+func existingAgentIdentity(name string) (string, string) {
+	value := existingAgentConfig(name)
+	resource, _ := value["resourceAttributes"].(map[string]any)
+	agentID, _ := resource["agent_id"].(string)
+	agentName, _ := resource["agent_name"].(string)
+	return strings.TrimSpace(agentID), strings.TrimSpace(agentName)
+}
+
+func mergeExistingRuntimeDefaults(input installInput, name string) installInput {
+	value := existingAgentConfig(name)
+	if len(value) == 0 {
+		return input
+	}
+	if strings.TrimSpace(input.Endpoint) == "" {
+		input.Endpoint, _ = value["endpoint"].(string)
+	}
+	if strings.TrimSpace(input.TracePath) == "" {
+		input.TracePath, _ = value["tracePath"].(string)
+	}
+	if strings.TrimSpace(input.MetricsPath) == "" {
+		input.MetricsPath, _ = value["metricsPath"].(string)
+	}
+	if len(input.Headers) == 0 {
+		headers := stringMapFromJSON(value["headers"])
+		for key, headerValue := range headers {
+			if strings.EqualFold(strings.TrimSpace(key), "X-Token") {
+				if strings.TrimSpace(input.XToken) == "" {
+					input.XToken = strings.TrimSpace(headerValue)
+				} else {
+					delete(headers, key)
+				}
+			}
+		}
+		input.Headers = sortedMapEntries(headers)
+	}
+	if strings.TrimSpace(input.CaptureContent) == "" {
+		input.CaptureContent, _ = value["captureContent"].(string)
+		if input.CaptureContent == "" {
+			input.CaptureContent, _ = value["capture_content"].(string)
+		}
+	}
+	if input.MaxChars == 0 {
+		if maxChars, ok := value["max_chars"].(float64); ok && maxChars > 0 {
+			input.MaxChars = int(maxChars)
+		}
+	}
+	if input.Enabled == nil {
+		if enabled, ok := value["enabled"].(bool); ok {
+			input.Enabled = &enabled
+		}
+	}
+	if len(input.GlobalTags) == 0 {
+		resource := stringMapFromJSON(value["resourceAttributes"])
+		delete(resource, "agent_id")
+		delete(resource, "agent_name")
+		input.GlobalTags = sortedMapEntries(resource)
+	}
+	return input
+}
+
+func existingAgentConfig(name string) map[string]any {
+	p := agent.Resolve(agent.Get(strings.ToLower(strings.TrimSpace(name))))
+	if p.Name == "" {
+		return nil
+	}
+	path := agent.FirstExistingPath(p.ConfigFiles)
+	if path == "" {
+		return nil
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	body, err = normalizeJSONBytes(body)
+	if err != nil {
+		return nil
+	}
+	var value map[string]any
+	if json.Unmarshal(body, &value) != nil {
+		return nil
+	}
+	return value
+}
+
+func stringMapFromJSON(value any) map[string]string {
+	current, _ := value.(map[string]any)
+	result := make(map[string]string, len(current))
+	for key, raw := range current {
+		text, ok := raw.(string)
+		if ok && strings.TrimSpace(key) != "" && strings.TrimSpace(text) != "" {
+			result[strings.TrimSpace(key)] = strings.TrimSpace(text)
+		}
+	}
+	return result
 }
 
 func resolveCommonInstallInput(defaults installInput, cfg connectorConfig) (installInput, error) {
@@ -46,6 +151,25 @@ func resolveCommonInstallInput(defaults installInput, cfg connectorConfig) (inst
 	}
 	if len(input.GlobalTags) == 0 && len(cfg.GlobalTags) > 0 {
 		input.GlobalTags = append([]string{}, cfg.GlobalTags...)
+	}
+	if strings.TrimSpace(input.TracePath) == "" {
+		input.TracePath = strings.Trim(strings.TrimSpace(cfg.TracePath), "/")
+	}
+	if strings.TrimSpace(input.MetricsPath) == "" {
+		input.MetricsPath = strings.Trim(strings.TrimSpace(cfg.MetricsPath), "/")
+	}
+	if len(input.Headers) == 0 && len(cfg.Headers) > 0 {
+		input.Headers = sortedMapEntries(cfg.Headers)
+	}
+	if strings.TrimSpace(input.CaptureContent) == "" {
+		input.CaptureContent = strings.ToLower(strings.TrimSpace(cfg.CaptureContent))
+	}
+	if input.MaxChars == 0 {
+		input.MaxChars = cfg.MaxChars
+	}
+	if input.Enabled == nil && cfg.Enabled != nil {
+		value := *cfg.Enabled
+		input.Enabled = &value
 	}
 	if strings.TrimSpace(input.Endpoint) == "" {
 		return input, fmt.Errorf("endpoint is required; pass --endpoint or configure it in %s", configFileName)
@@ -87,6 +211,13 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 		{"Action", "install"},
 		{"Agent", p.Name},
 	})
+	if p.IsBuiltin() {
+		if err := installBuiltinAdapter(p, input, false); err != nil {
+			return err
+		}
+		printSingleDetail("Result", "installed")
+		return nil
+	}
 
 	if usesPackageArchive(currentGOOS, p) {
 		return runPackageInstaller(download, p, "installation", func(extractDir string) []string {
@@ -107,13 +238,13 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 
 	if currentGOOS == "windows" {
 		command := renderPowerShellInstallCommand(scriptPath, p, input)
-		printSingleDetail("Command", command)
+		printSingleDetail("Command", redactSecret(command, input.XToken))
 		if err := runPowerShell(command); err != nil {
 			return fmt.Errorf("%s installation failed: %w", p.Name, err)
 		}
 	} else {
 		args := buildInstallArgs(scriptPath, p, input)
-		printSingleDetail("Command", renderBashCommand(args))
+		printSingleDetail("Command", renderBashCommand(redactInstallerArgs(args)))
 
 		cmd := exec.Command("bash", args...)
 		cmd.Stdout = os.Stdout
@@ -135,6 +266,13 @@ func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 		{"Action", "update"},
 		{"Agent", p.Name},
 	})
+	if p.IsBuiltin() {
+		if err := installBuiltinAdapter(p, installInput{}, true); err != nil {
+			return err
+		}
+		printSingleDetail("Result", "reconciled")
+		return nil
+	}
 
 	if usesPackageArchive(currentGOOS, p) {
 		return runPackageInstaller(download, p, "update", func(extractDir string) []string {
@@ -183,6 +321,11 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 		{"Action", "remove"},
 		{"Agent", p.Name},
 	})
+	if p.IsBuiltin() {
+		if err := removeBuiltinAdapter(p, purgeConfig, purgeConfig); err != nil {
+			return err
+		}
+	}
 
 	for _, command := range p.RemoveCmds {
 		if len(command) == 0 {
@@ -467,7 +610,7 @@ func runPackageInstaller(download pluginDownloadConfig, p agent.Definition, acti
 	}
 
 	args := argsFn(extractDir)
-	printSingleDetail("Command", renderBashCommand(append([]string{scriptPath}, args...)))
+	printSingleDetail("Command", renderBashCommand(redactInstallerArgs(append([]string{scriptPath}, args...))))
 
 	cmd := exec.Command("bash", append([]string{scriptPath}, args...)...)
 	cmd.Stdout = os.Stdout
@@ -688,4 +831,22 @@ func normalizeAgentNameHost(value string) string {
 
 	normalized := strings.Trim(builder.String(), "_")
 	return normalized
+}
+
+func redactInstallerArgs(args []string) []string {
+	redacted := append([]string{}, args...)
+	for i := 0; i < len(redacted)-1; i++ {
+		if redacted[i] == "--x-token" || strings.EqualFold(redacted[i], "-XToken") {
+			redacted[i+1] = "<redacted>"
+			i++
+		}
+	}
+	return redacted
+}
+
+func redactSecret(value, secret string) string {
+	if strings.TrimSpace(secret) == "" {
+		return value
+	}
+	return strings.ReplaceAll(value, secret, "<redacted>")
 }

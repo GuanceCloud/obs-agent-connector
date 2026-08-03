@@ -10,16 +10,18 @@ obs-agent-connector <command> [arguments]
 
 | Command | Purpose |
 | --- | --- |
-| `list` | List installed Agent plugins detected on the local machine, including best-effort plugin version detection. |
+| `list` | List installed Agent plugins detected on the local machine, including best-effort plugin version detection. Add `-n` to inspect new-mode Claude/Codex Hooks. |
 | `status <agent>` | Show one Agent plugin status, including install state, config path, plugin path, version, and runtime `enabled` state when supported. |
 | `discover` | Detect supported local Agents and install any missing plugins by using connector defaults from `config.json`. Use `discover -u` to update installed plugins and install any missing plugins in one run. |
-| `install <agent>` | Install one Agent plugin using the remote plugin installer or release package. |
+| `install <agent>` | Install one external Agent plugin by default. Add `-n` to register the built-in Claude or Codex adapter. |
 | `enable <agent>` | Enable one installed Agent plugin by setting its runtime JSON `enabled` switch to `true`. |
 | `disable <agent>` | Disable one installed Agent plugin by setting its runtime JSON `enabled` switch to `false`. |
 | `update <agent>` | Update one installed Agent plugin without modifying its current configuration. |
 | `remove <agent>` | Remove one installed Agent plugin. Configuration files are kept unless `--purge-config` is used. |
 | `uninstall` | Uninstall `obs-agent-connector` itself. By default this removes the binary, connector config, and managed PATH entry when present. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print or run a matching self-update action when a newer release is available. |
+
+`-n` (also `--new-runtime`) selects the new built-in runtime. It is supported for targeted Claude/Codex lifecycle commands and makes `discover`/`list` use the built-in representation for those two Agents. A targeted command for any other Agent fails immediately and lists the supported new-runtime Agents; it never silently falls back to the external plugin. Omitting `-n` preserves the previous external-plugin behavior.
 
 ## Bootstrap
 
@@ -45,6 +47,12 @@ Auto-install missing plugins for detected local Agents:
 
 ```bash
 obs-agent-connector discover
+```
+
+Use the new built-in runtime for detected Claude and Codex installations while leaving other Agents external:
+
+```bash
+obs-agent-connector discover -n
 ```
 
 Update installed plugins and install any missing plugins in one run:
@@ -83,6 +91,8 @@ Show one Agent plugin status:
 obs-agent-connector status codex
 ```
 
+Use `status codex -n` to inspect the built-in Hook instead of the legacy plugin installation.
+
 The output includes:
 
 - Agent name
@@ -104,6 +114,12 @@ Install one plugin with stored connector defaults:
 obs-agent-connector install codex
 ```
 
+Install the new built-in runtime explicitly:
+
+```bash
+obs-agent-connector install codex -n
+```
+
 Override stored defaults or identity values:
 
 ```bash
@@ -119,8 +135,8 @@ By default, `install` reuses the CLI download source recorded in `~/.obs-agent-c
 If that source is unavailable, `install` derives the installer base from `--endpoint`.
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
 Use `--static-base` when you need to override the installer base.
-On Windows, plugin installation does not use the OSS shell installer. The CLI downloads each supported plugin's GitHub release PowerShell installer instead.
-Only `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are currently supported on Windows. Unsupported Agents return a friendly error.
+On Windows, new-mode Claude and Codex adapters register the current connector executable directly. External plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
+The default mode supports `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` on Windows. Claude is supported on Windows with `-n`.
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 
@@ -143,9 +159,11 @@ Update one installed plugin:
 obs-agent-connector update codex
 ```
 
+Use `update codex -n` to reconcile the built-in Hook. The same mode flag must be used for `status`, `enable`, `disable`, and `remove` when managing a built-in installation.
+
 `update` intentionally requires a single Agent name.
 
-Plugin updates preserve existing configuration by passing `--no-config` to the plugin installer.
+Updates preserve existing configuration. Built-in adapters reconcile their Hook with the current connector runtime; external plugins receive `--no-config`.
 On Windows, `update` also uses the plugin's GitHub release PowerShell installer and follows the same support matrix as `install`.
 
 For `qoder`, the CLI also detects the local layout and passes the matching `--variant cn` or `--variant global` flag before running the installer.

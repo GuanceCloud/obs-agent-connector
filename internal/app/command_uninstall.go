@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
 var currentExecutable = os.Executable
@@ -45,6 +47,7 @@ func uninstallConnector(args []string) error {
 	fmt.Println("Uninstall plan:")
 	rows := make([][2]string, 0, 4+len(unixPathFiles))
 	rows = append(rows, [2]string{"Binary", executablePath})
+	rows = append(rows, [2]string{"Built-in Hooks", "remove claude and codex; keep Agent config and state"})
 	if *keepConfig {
 		rows = append(rows, [2]string{"Config", "keep " + configPath})
 	} else {
@@ -75,6 +78,11 @@ func uninstallConnector(args []string) error {
 		if !ok {
 			printSingleDetail("Result", "canceled")
 			return nil
+		}
+	}
+	for _, adapter := range []string{"claude", "codex"} {
+		if _, err := telemetryinstall.RemoveAdapter(adapter, "", telemetryinstall.RemoveOptions{ConnectorOnly: true}); err != nil {
+			return fmt.Errorf("remove %s built-in Hook: %w", adapter, err)
 		}
 	}
 

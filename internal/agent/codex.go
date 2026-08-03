@@ -3,6 +3,8 @@ package agent
 func codexPlugin() Definition {
 	return Definition{
 		Name:             "codex",
+		BuiltinAvailable: true,
+		BuiltinHookFile:  "~/.codex/hooks.json",
 		PluginName:       "codex-otel-plugin",
 		AgentCommand:     "codex",
 		WindowsInstaller: "install-release.ps1",

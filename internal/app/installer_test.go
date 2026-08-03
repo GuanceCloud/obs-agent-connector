@@ -2,6 +2,8 @@ package app
 
 import (
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
+	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 	"testing"
@@ -54,25 +56,92 @@ func TestResolveInstallInputLoadsGlobalTagsFromConfig(t *testing.T) {
 	}
 }
 
+func TestResolveInstallInputPreservesExistingAgentIdentity(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".codex", "gtrace.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := `{
+  "endpoint":"https://existing.example.com",
+  "tracePath":"existing/traces",
+  "metricsPath":"existing/metrics",
+  "headers":{"X-Token":"existing-token","Authorization":"keep"},
+  "captureContent":"none",
+  "max_chars":321,
+  "enabled":false,
+  "resourceAttributes":{"agent_id":"existing-id","agent_name":"existing-name","env":"existing"}
+}`
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input, err := resolveInstallInput(installInput{}, connectorConfig{
+		Endpoint: "https://llm-openway.guance.com",
+		XToken:   "agent_test",
+	}, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.AgentID != "existing-id" || input.AgentName != "existing-name" {
+		t.Fatalf("existing identity was not preserved: %#v", input)
+	}
+	if input.Endpoint != "https://existing.example.com" || input.XToken != "existing-token" || input.TracePath != "existing/traces" || input.MetricsPath != "existing/metrics" {
+		t.Fatalf("existing transport config was not preserved: %#v", input)
+	}
+	if input.CaptureContent != "none" || input.MaxChars != 321 || input.Enabled == nil || *input.Enabled {
+		t.Fatalf("existing privacy config was not preserved: %#v", input)
+	}
+	if strings.Join(input.GlobalTags, ",") != "env=existing" || strings.Join(input.Headers, ",") != "Authorization=keep,X-Token=existing-token" {
+		t.Fatalf("existing headers/resource attributes were not preserved: %#v", input)
+	}
+}
+
+func TestResolveInstallInputExplicitTransportOverridesExistingConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".codex", "gtrace.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	config := `{"endpoint":"https://existing.example.com","headers":{"X-Token":"existing-token","Authorization":"keep"}}`
+	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input, err := resolveInstallInput(installInput{
+		Endpoint: "https://explicit.example.com",
+		XToken:   "explicit-token",
+	}, connectorConfig{}, "codex")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.Endpoint != "https://explicit.example.com" || input.XToken != "explicit-token" {
+		t.Fatalf("explicit transport values did not win: %#v", input)
+	}
+	if strings.Contains(strings.Join(input.Headers, ","), "existing-token") {
+		t.Fatalf("legacy X-Token remained in merged headers: %#v", input.Headers)
+	}
+}
+
 func TestInstallerURLForWindowsUsesOSSReleaseScript(t *testing.T) {
-	definition := agentDefinitionForTest("codex")
+	definition := agentDefinitionForTest("openclaw")
 	url, err := installerURLForOS(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, definition, "windows")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://static.example.com/codex-otel-plugin/install-release.ps1"
+	expected := "https://static.example.com/openclaw-otel-plugin/install-release.ps1"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
 }
 
 func TestInstallerURLForWindowsUsesGitHubReleaseScript(t *testing.T) {
-	definition := agentDefinitionForTest("codex")
+	definition := agentDefinitionForTest("openclaw")
 	url, err := installerURLForOS(pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: "https://github.com/GuanceCloud"}, definition, "windows")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://github.com/GuanceCloud/codex-otel-plugin/releases/latest/download/install-release.ps1"
+	expected := "https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.ps1"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
@@ -130,12 +199,12 @@ func TestBuildInstallArgsIncludesGlobalTagsBeforeAgentIdentity(t *testing.T) {
 }
 
 func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
-	err := unsupportedPlatformError(agentDefinitionForTest("claude"), "windows")
+	err := unsupportedPlatformError(agentDefinitionForTest("hermes"), "windows")
 	if err == nil {
 		t.Fatal("expected unsupported Windows error")
 	}
 	message := err.Error()
-	if !strings.Contains(message, "claude is not supported on Windows") {
+	if !strings.Contains(message, "hermes is not supported on Windows") {
 		t.Fatalf("unexpected error message %q", message)
 	}
 	if !strings.Contains(message, "codex, openclaw, opencode, qoder, workbuddy") {
@@ -143,12 +212,12 @@ func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	}
 }
 
-func TestDownloadSourceURLUsesOSSArchiveForCodexOnUnix(t *testing.T) {
-	url, err := downloadSourceURL(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("codex"), "linux")
+func TestDownloadSourceURLUsesOSSArchiveForQoderOnUnix(t *testing.T) {
+	url, err := downloadSourceURL(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("qoder"), "linux")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://static.example.com/codex-otel-plugin/codex-otel-plugin.tar.gz"
+	expected := "https://static.example.com/qoder-otel-plugin/qoder-otel-plugin.tar.gz"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
@@ -170,12 +239,12 @@ func TestRenderPluginUpdateCommandUsesOSSArchiveForQoder(t *testing.T) {
 	}
 }
 
-func TestDownloadSourceURLUsesGitHubArchiveForCodexOnUnix(t *testing.T) {
-	url, err := downloadSourceURL(pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: "https://github.com/GuanceCloud"}, agentDefinitionForTest("codex"), "linux")
+func TestDownloadSourceURLUsesGitHubArchiveForOpencodeOnUnix(t *testing.T) {
+	url, err := downloadSourceURL(pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: "https://github.com/GuanceCloud"}, agentDefinitionForTest("opencode"), "linux")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://github.com/GuanceCloud/codex-otel-plugin/releases/latest/download/codex-otel-plugin.tar.gz"
+	expected := "https://github.com/GuanceCloud/opencode-otel-plugin/releases/latest/download/opencode-otel-plugin.tar.gz"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}

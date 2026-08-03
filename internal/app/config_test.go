@@ -4,11 +4,13 @@ import (
 	"encoding/binary"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"unicode/utf16"
 )
 
 func TestLoadConnectorConfigAcceptsUTF8BOM(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	path := filepath.Join(t.TempDir(), "config.json")
 	data := append(
 		[]byte{0xEF, 0xBB, 0xBF},
@@ -41,6 +43,7 @@ func TestLoadConnectorConfigAcceptsUTF8BOM(t *testing.T) {
 }
 
 func TestLoadConnectorConfigAcceptsUTF16LEBOM(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	path := filepath.Join(t.TempDir(), "config.json")
 	text := `{"download_base_url":"https://static.example.com/obs-agent-connector","endpoint":"https://example.com","x_token":"test-token"}`
 	encoded := encodeUTF16WithBOM(text, binary.LittleEndian, []byte{0xFF, 0xFE})
@@ -64,6 +67,103 @@ func TestLoadConnectorConfigAcceptsUTF16LEBOM(t *testing.T) {
 	}
 	if cfg.XToken != "test-token" {
 		t.Fatalf("unexpected x-token %q", cfg.XToken)
+	}
+}
+
+func TestLoadConnectorConfigFallsBackToLegacyTelemetryDefaults(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", filepath.Join(home, ".obs-agent-connector", "config.json"))
+	legacyPath := filepath.Join(home, ".agent-telemetry", "config.json")
+	if err := os.MkdirAll(filepath.Dir(legacyPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	legacy := `{
+  "endpoint": "https://legacy.example.com",
+  "trace_path": "v1/write/otel-llm",
+  "metrics_path": "v1/write/otel-metrics",
+  "x_token": "legacy-token",
+  "headers": {"To-Headless": "true"},
+  "resource_attributes": {"env": "prod", "team": "platform"},
+  "capture_content": "none",
+  "max_chars": 4096,
+  "enabled": false
+}`
+	if err := os.WriteFile(legacyPath, []byte(legacy), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, _, err := loadConnectorConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Endpoint != "https://legacy.example.com" || cfg.XToken != "legacy-token" {
+		t.Fatalf("legacy endpoint/token were not loaded: %#v", cfg)
+	}
+	if cfg.TracePath != "v1/write/otel-llm" || cfg.MetricsPath != "v1/write/otel-metrics" {
+		t.Fatalf("legacy signal paths were not loaded: %#v", cfg)
+	}
+	if cfg.CaptureContent != "none" || cfg.MaxChars != 4096 || cfg.Enabled == nil || *cfg.Enabled {
+		t.Fatalf("legacy privacy settings were not loaded: %#v", cfg)
+	}
+	if strings.Join(cfg.GlobalTags, ",") != "env=prod,team=platform" {
+		t.Fatalf("legacy resource attributes were not loaded: %#v", cfg.GlobalTags)
+	}
+}
+
+func TestConnectorConfigOverridesLegacyDefaults(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	connectorPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", connectorPath)
+	legacyPath := filepath.Join(home, ".agent-telemetry", "config.json")
+	for _, path := range []string{connectorPath, legacyPath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(connectorPath, []byte(`{"endpoint":"https://connector.example.com","x_token":"connector-token"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyPath, []byte(`{"endpoint":"https://legacy.example.com","x_token":"legacy-token","capture_content":"preview"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, _, err := loadConnectorConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Endpoint != "https://connector.example.com" || cfg.XToken != "connector-token" {
+		t.Fatalf("connector values must override legacy defaults: %#v", cfg)
+	}
+	if cfg.CaptureContent != "preview" {
+		t.Fatalf("missing connector fields should inherit legacy defaults: %#v", cfg)
+	}
+}
+
+func TestMalformedLegacyConfigDoesNotBlockConnector(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	connectorPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	legacyPath := filepath.Join(home, ".agent-telemetry", "config.json")
+	for _, path := range []string{connectorPath, legacyPath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", connectorPath)
+	if err := os.WriteFile(connectorPath, []byte(`{"endpoint":"https://connector.example.com","x_token":"connector-token"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(legacyPath, []byte(`{invalid`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, _, err := loadConnectorConfig()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.Endpoint != "https://connector.example.com" || cfg.XToken != "connector-token" {
+		t.Fatalf("connector config was not retained: %#v", cfg)
 	}
 }
 

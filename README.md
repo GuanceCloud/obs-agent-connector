@@ -1,13 +1,14 @@
 # obs-agent-connector
 
-`obs-agent-connector` is a command-line tool for installing and managing OBS/GTrace Agent plugins across multiple AI coding agents.
+`obs-agent-connector` is the single command-line runtime for installing, managing, and collecting OBS/GTrace telemetry across multiple AI coding agents.
 
-The tool provides a single entry point for plugin installation, update, removal, automatic discovery, and local status inspection. It delegates the final runtime configuration generation to each Agent plugin installer.
+The tool provides one binary and one version for connector lifecycle operations and optional built-in telemetry adapters. Existing external plugin installation remains the default. Pass `-n` to use the new built-in runtime for Claude or Codex.
 
 ## Features
 
 - Bootstrap the CLI and OBS defaults with one installer command.
-- Install Agent plugins through the official remote installer scripts.
+- Opt into built-in Claude and Codex terminal-hook adapters with `-n`, without Node.js, Python, a Go toolchain, or an external OpenTelemetry SDK.
+- Install transitional external Agent plugins through their official remote installer scripts.
 - Auto-discover local Agents, install missing plugins, and sync all plugins with `discover -u`.
 - Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
 - Update one installed Agent plugin without modifying existing configuration.
@@ -26,8 +27,8 @@ The tool provides a single entry point for plugin installation, update, removal,
 
 | Agent | Plugin | macOS | Linux | Windows | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `claude` | `claude-otel-plugin` | `✅` | `✅` | `❌` | Claude plugin |
-| `codex` | `codex-otel-plugin` | `✅` | `✅` | `✅` | Codex plugin |
+| `claude` | `claude-otel-plugin`; built-in with `-n` | `✅` | `✅` | `-n` only | Stop / SessionEnd Hook plus transcript replay in new mode |
+| `codex` | `codex-otel-plugin`; built-in with `-n` | `✅` | `✅` | `✅` | Stop Hook plus rollout replay in new mode |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
@@ -42,6 +43,7 @@ obs-agent-connector status codex
 obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
+obs-agent-connector install codex -n
 obs-agent-connector install opencode
 obs-agent-connector install qoder
 obs-agent-connector install workbuddy
@@ -66,8 +68,8 @@ Use `--static-base` to override this behavior.
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, only `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are currently supported for plugin installation and update.
-- Windows plugin installation uses each plugin's GitHub release PowerShell installer instead of the OSS shell installer.
+- On Windows, the default mode supports `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`; Claude is supported through the new `-n` mode.
+- New-mode adapters register the connector directly; external plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
 
 Bootstrap the CLI with shared defaults:
 
@@ -81,6 +83,7 @@ For example, `https://llm-openway.guance.com` maps to `https://static.guance.com
 The downloaded package is verified against `SHA256SUMS` before installation.
 
 After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
+These commands preserve the legacy external-plugin behavior by default. Add `-n` to lifecycle commands for the Claude/Codex built-in runtime, for example `install codex -n`, `status codex -n`, and `update codex -n`.
 `install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
 The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
@@ -134,8 +137,11 @@ GitHub Actions:
 ├── cmd/
 │   └── obs-agent-connector/  Executable entry point
 ├── internal/
+│   ├── adapters/         Built-in Agent telemetry adapters
 │   ├── agent/            Agent definitions, discovery, and registry
-│   └── app/              Commands, installation, config, and version flows
+│   ├── app/              Commands, installation, config, and version flows
+│   ├── core/             Turn, Trace, Metrics, OTLP, privacy, and state logic
+│   └── install/          Built-in Hook and runtime-config installers
 ├── go.mod
 └── README.md
 ```
@@ -146,3 +152,4 @@ GitHub Actions:
 - [Command reference](docs/commands.md)
 - [Plugin matrix](docs/plugins.md)
 - [Distribution guide](docs/distribution.md)
+- [agent-telemetry migration](docs/agent-telemetry-migration.md)
