@@ -121,12 +121,15 @@ func DiscoverCandidatesForOSRuntime(goos string, useBuiltin bool) []Candidate {
 	out := make([]Candidate, 0, len(names))
 	for _, name := range names {
 		p := definitions[name]
+		runtimeSupported := true
 		if useBuiltin {
 			if builtin, ok := p.WithBuiltin(); ok {
 				p = builtin
+			} else {
+				runtimeSupported = false
 			}
 		}
-		if !SupportsPlatform(p, goos) {
+		if runtimeSupported && !SupportsPlatform(p, goos) {
 			continue
 		}
 		if p.ResolveDiscovery != nil {
@@ -146,13 +149,17 @@ func DiscoverCandidatesForOSRuntime(goos string, useBuiltin bool) []Candidate {
 			command = "data-dir"
 		}
 		installedPath, _ := InstalledMarker(p)
-		out = append(out, Candidate{
+		candidate := Candidate{
 			Plugin:           p,
 			DetectedCmd:      command,
 			InstalledPath:    installedPath,
 			InstalledVersion: InstalledVersion(p),
-			Supported:        true,
-		})
+			Supported:        runtimeSupported,
+		}
+		if !runtimeSupported {
+			candidate.UnsupportedReason = "new runtime is not supported; rerun without -n to manage the external plugin"
+		}
+		out = append(out, candidate)
 	}
 	return out
 }

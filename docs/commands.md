@@ -49,7 +49,7 @@ Auto-install missing plugins for detected local Agents:
 obs-agent-connector discover
 ```
 
-Use the new built-in runtime for detected Claude and Codex installations while leaving other Agents external:
+Use the new built-in runtime for detected Claude and Codex installations. Detected Agents that do not support the new runtime are reported as `unsupported` and skipped; `discover -n` never falls back to their external plugins:
 
 ```bash
 obs-agent-connector discover -n

@@ -243,6 +243,7 @@ obs-agent-connector discover --update
 - discovers supported local Agents
 - installs missing plugins by default
 - switches to sync mode when `-u` or `--update` is used
+- with `-n`, installs or updates only built-in Claude/Codex adapters and reports every other detected Agent as unsupported without falling back to an external plugin
 - auto-generates:
   - `agent_id` as `agid_<32 lowercase hex chars>`
   - `agent_name` as `<hostname>_<agent>_<YYYYMMDD>`

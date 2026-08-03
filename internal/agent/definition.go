@@ -54,9 +54,10 @@ func (d Definition) WithBuiltin() (Definition, bool) {
 }
 
 type Candidate struct {
-	Plugin           Definition
-	DetectedCmd      string
-	InstalledPath    string
-	InstalledVersion string
-	Supported        bool
+	Plugin            Definition
+	DetectedCmd       string
+	InstalledPath     string
+	InstalledVersion  string
+	Supported         bool
+	UnsupportedReason string
 }

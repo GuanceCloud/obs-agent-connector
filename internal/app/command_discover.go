@@ -54,10 +54,12 @@ func discover(args []string) error {
 	rows := make([][]string, 0, len(candidates))
 	steps := make([]discoverStep, 0, len(candidates))
 	hasUnsupported := false
+	unsupportedNames := []string{}
 	for _, candidate := range candidates {
 		version := displayVersion(candidate.InstalledVersion)
 		if !candidate.Supported {
 			hasUnsupported = true
+			unsupportedNames = append(unsupportedNames, candidate.Plugin.Name)
 			rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, "n/a", version, "unsupported"})
 			continue
 		}
@@ -78,6 +80,9 @@ func discover(args []string) error {
 
 	fmt.Println("Discover plan:")
 	printTable([]string{"AGENT", "COMMAND", "PLUGIN", "VERSION", "ACTION"}, rows)
+	if *newRuntime && len(unsupportedNames) > 0 {
+		fmt.Printf("New runtime unsupported (skipped): %s. Rerun without -n to manage their external plugins.\n", strings.Join(unsupportedNames, ", "))
+	}
 
 	if len(steps) == 0 {
 		if *updateMode {
@@ -146,10 +151,14 @@ func discover(args []string) error {
 	hadFailure := false
 	for _, candidate := range candidates {
 		if !candidate.Supported {
+			detail := candidate.UnsupportedReason
+			if strings.TrimSpace(detail) == "" {
+				detail = "not supported on this platform"
+			}
 			results = append(results, discoverResult{
 				Agent:  candidate.Plugin.Name,
 				Result: "skipped",
-				Detail: "not supported on windows",
+				Detail: detail,
 			})
 			continue
 		}

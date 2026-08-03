@@ -106,6 +106,38 @@ func TestBuiltinClaudeSupportsWindowsWithoutChangingLegacySupport(t *testing.T) 
 	}
 }
 
+func TestDiscoverNewRuntimeMarksUnsupportedAgentWithoutExternalFallback(t *testing.T) {
+	home := t.TempDir()
+	binDir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", binDir)
+	for _, name := range []string{"codex", "opencode"} {
+		if err := os.WriteFile(filepath.Join(binDir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	candidates := DiscoverCandidatesForOSRuntime("linux", true)
+	found := map[string]Candidate{}
+	for _, candidate := range candidates {
+		found[candidate.Plugin.Name] = candidate
+	}
+	codex, ok := found["codex"]
+	if !ok || !codex.Supported || !codex.Plugin.IsBuiltin() {
+		t.Fatalf("expected supported built-in Codex candidate, got %#v", codex)
+	}
+	opencode, ok := found["opencode"]
+	if !ok {
+		t.Fatal("expected detected OpenCode candidate")
+	}
+	if opencode.Supported || opencode.Plugin.IsBuiltin() {
+		t.Fatalf("OpenCode must not fall back to its external plugin in -n mode: %#v", opencode)
+	}
+	if !strings.Contains(opencode.UnsupportedReason, "new runtime is not supported") {
+		t.Fatalf("expected explicit new-runtime reason, got %q", opencode.UnsupportedReason)
+	}
+}
+
 func TestLinuxSupportFlags(t *testing.T) {
 	cases := map[string]bool{
 		"claude":    true,

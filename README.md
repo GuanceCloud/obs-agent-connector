@@ -84,6 +84,7 @@ The downloaded package is verified against `SHA256SUMS` before installation.
 
 After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
 These commands preserve the legacy external-plugin behavior by default. Add `-n` to lifecycle commands for the Claude/Codex built-in runtime, for example `install codex -n`, `status codex -n`, and `update codex -n`.
+`discover -n` never mixes modes: it skips detected Agents that do not yet have a built-in runtime and tells you to rerun without `-n` if you want their external plugins.
 `install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
 The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
