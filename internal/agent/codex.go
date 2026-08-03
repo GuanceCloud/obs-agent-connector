@@ -22,5 +22,6 @@ func codexPlugin() Definition {
 			"~/.codex/plugin-sources/codex-otel-plugin",
 			"~/.codex/plugins/cache/codex-otel-plugin",
 		},
+		RemoveCleanup: removeCodexRegistration,
 	}
 }

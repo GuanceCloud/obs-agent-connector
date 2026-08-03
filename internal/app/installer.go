@@ -202,6 +202,13 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 		}
 	}
 
+	if p.RemoveCleanup != nil {
+		printSingleDetail("Cleanup", "agent-specific registration")
+		if err := p.RemoveCleanup(p); err != nil {
+			return err
+		}
+	}
+
 	for _, path := range p.RemovePaths {
 		expanded := agent.ExpandHome(path)
 		if !agent.PathExists(expanded) {
