@@ -3,14 +3,13 @@ package app
 import (
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 )
 
-func TestBuiltinUpdateReconcilesLegacyHookAndPreservesConfigState(t *testing.T) {
+func TestCodeBuddyBuiltinUpdateReconcilesLegacyHookAndPreservesConfigState(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", t.TempDir())
@@ -19,15 +18,15 @@ func TestBuiltinUpdateReconcilesLegacyHookAndPreservesConfigState(t *testing.T) 
 	currentExecutable = func() (string, error) { return executable, nil }
 	t.Cleanup(func() { currentExecutable = originalExecutable })
 
-	settingsPath := filepath.Join(home, ".claude", "settings.json")
-	configPath := filepath.Join(home, ".claude", "gtrace.json")
-	statePath := filepath.Join(home, ".claude", "state", "gtrace-agent", "uploads", "turn", "completed.json")
+	settingsPath := filepath.Join(home, ".codebuddy", "settings.json")
+	configPath := filepath.Join(home, ".codebuddy", "gtrace.json")
+	statePath := filepath.Join(home, ".codebuddy", "gtrace", "uploads", "turn", "completed.json")
 	for _, path := range []string{settingsPath, configPath, statePath} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
-	settings := `{"theme":"dark","hooks":{"Stop":[{"hooks":[{"type":"command","command":"/tmp/agent-telemetry","args":["hook","claude"]}]},{"hooks":[{"type":"command","command":"echo keep"}]}]}}`
+	settings := `{"theme":"dark","hooks":{"Stop":[{"hooks":[{"type":"command","command":"/tmp/codebuddy-otel-plugin/bin/codebuddy-hook"}]},{"hooks":[{"type":"command","command":"echo keep"}]}]}}`
 	config := []byte(`{"enabled":false,"endpoint":"https://existing.example.com","captureContent":"none","unknown":{"keep":true}}` + "\n")
 	if err := os.WriteFile(settingsPath, []byte(settings), 0o600); err != nil {
 		t.Fatal(err)
@@ -39,10 +38,7 @@ func TestBuiltinUpdateReconcilesLegacyHookAndPreservesConfigState(t *testing.T) 
 		t.Fatal(err)
 	}
 
-	plugin, ok := agent.Get("claude").WithBuiltin()
-	if !ok {
-		t.Fatal("claude must support the built-in runtime")
-	}
+	plugin := agent.Get("codebuddy")
 	if err := installBuiltinAdapter(plugin, installInput{}, true); err != nil {
 		t.Fatal(err)
 	}
@@ -51,7 +47,7 @@ func TestBuiltinUpdateReconcilesLegacyHookAndPreservesConfigState(t *testing.T) 
 		t.Fatal(err)
 	}
 	text := string(updatedSettings)
-	if !strings.Contains(text, executable) || !strings.Contains(text, "echo keep") || strings.Contains(text, "/tmp/agent-telemetry") {
+	if !strings.Contains(text, executable) || !strings.Contains(text, "echo keep") || strings.Contains(text, "/tmp/codebuddy-otel-plugin") {
 		t.Fatalf("legacy Hook was not safely reconciled: %s", text)
 	}
 	updatedConfig, err := os.ReadFile(configPath)
@@ -66,7 +62,7 @@ func TestBuiltinUpdateReconcilesLegacyHookAndPreservesConfigState(t *testing.T) 
 	}
 }
 
-func TestBuiltinInstallDryRunDoesNotPrintToken(t *testing.T) {
+func TestCodeBuddyBuiltinInstallDryRunDoesNotPrintToken(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
@@ -80,7 +76,7 @@ func TestBuiltinInstallDryRunDoesNotPrintToken(t *testing.T) {
 	}
 
 	output := captureStdout(t, func() {
-		if err := install([]string{"codex", "-n", "--dry-run", "--yes"}); err != nil {
+		if err := install([]string{"codebuddy", "--dry-run", "--yes"}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -92,7 +88,7 @@ func TestBuiltinInstallDryRunDoesNotPrintToken(t *testing.T) {
 	}
 }
 
-func TestInstallDefaultsToLegacyPlugin(t *testing.T) {
+func TestCodexInstallUsesExternalPlugin(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
@@ -110,11 +106,11 @@ func TestInstallDefaultsToLegacyPlugin(t *testing.T) {
 		}
 	})
 	if !strings.Contains(output, "codex-otel-plugin") || strings.Contains(output, "built into obs-agent-connector") {
-		t.Fatalf("default install must use the legacy plugin: %s", output)
+		t.Fatalf("Codex install must use the external plugin: %s", output)
 	}
 }
 
-func TestCodeBuddyInstallUsesBuiltinWithoutNewRuntimeFlag(t *testing.T) {
+func TestCodeBuddyInstallUsesBuiltin(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
@@ -135,7 +131,7 @@ func TestCodeBuddyInstallUsesBuiltinWithoutNewRuntimeFlag(t *testing.T) {
 	}
 }
 
-func TestTargetedCommandsRejectNewRuntimeForUnsupportedAgent(t *testing.T) {
+func TestLifecycleCommandsRejectRemovedNewRuntimeFlag(t *testing.T) {
 	tests := map[string]func([]string) error{
 		"install": install,
 		"status":  status,
@@ -147,61 +143,22 @@ func TestTargetedCommandsRejectNewRuntimeForUnsupportedAgent(t *testing.T) {
 	for name, command := range tests {
 		t.Run(name, func(t *testing.T) {
 			err := command([]string{"opencode", "-n"})
-			if err == nil {
-				t.Fatal("expected unsupported new runtime error")
-			}
-			want := "opencode does not support -n/--new-runtime; supported agents: claude, codex"
-			if !strings.Contains(err.Error(), want) {
-				t.Fatalf("expected %q, got %v", want, err)
+			if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -n") {
+				t.Fatalf("expected removed -n flag error, got %v", err)
 			}
 		})
 	}
 }
 
-func TestUsageIncludesBuiltinRemovalAndConnectorUninstallBehavior(t *testing.T) {
+func TestUsageDoesNotAdvertiseNewRuntimeMode(t *testing.T) {
 	output := captureStdout(t, printUsage)
-	for _, expected := range []string{
-		"remove <agent> [-n]   Remove an Agent plugin; -n removes its built-in Hook",
-		"uninstall             Uninstall obs-agent-connector and its managed built-in Hooks",
-		"obs-agent-connector remove codex -n",
-	} {
+	if strings.Contains(output, "[-n]") || strings.Contains(output, "new-runtime") || strings.Contains(output, "codex -n") {
+		t.Fatalf("usage must not advertise the removed runtime mode:\n%s", output)
+	}
+	for _, expected := range []string{"install codebuddy", "install codex", "remove codex"} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected usage to contain %q, got:\n%s", expected, output)
 		}
-	}
-}
-
-func TestBuiltinRemoveCleansOrphanedCodexTrustWithoutInstalledHook(t *testing.T) {
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	hooksPath := filepath.Join(home, ".codex", "hooks.json")
-	configPath := filepath.Join(home, ".codex", "config.toml")
-	if err := os.MkdirAll(filepath.Dir(hooksPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(hooksPath, []byte(`{"hooks":{"Stop":[]}}`+"\n"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	trustKey := hooksPath + ":stop:0:0"
-	toml := "model = \"keep\"\n\n[hooks.state." + strconv.Quote(trustKey) + "]\ntrusted_hash = \"stale\"\n"
-	if err := os.WriteFile(configPath, []byte(toml), 0o600); err != nil {
-		t.Fatal(err)
-	}
-
-	output := captureStdout(t, func() {
-		if err := remove([]string{"codex", "-n", "--yes"}); err != nil {
-			t.Fatal(err)
-		}
-	})
-	if !strings.Contains(output, "Hook Trust: removed") {
-		t.Fatalf("expected orphaned trust removal, got:\n%s", output)
-	}
-	updated, err := os.ReadFile(configPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if strings.Contains(string(updated), "hooks.state") || !strings.Contains(string(updated), `model = "keep"`) {
-		t.Fatalf("unexpected config after removal: %s", updated)
 	}
 }
 

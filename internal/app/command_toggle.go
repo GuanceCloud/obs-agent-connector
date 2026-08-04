@@ -29,8 +29,6 @@ func togglePlugin(args []string, enabled bool) error {
 	fs := flag.NewFlagSet(commandName, flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	dryRun := fs.Bool("dry-run", false, "Print the config change without writing")
-	newRuntime := fs.Bool("n", false, "Use the new built-in runtime (Claude and Codex only)")
-	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime (Claude and Codex only)")
 
 	target := ""
 	flagArgs := args
@@ -48,7 +46,7 @@ func togglePlugin(args []string, enabled bool) error {
 		return fmt.Errorf("unrecognized %s arguments: %s", commandName, strings.Join(fs.Args(), " "))
 	}
 
-	selected, err := agent.SelectInstalledForRuntime(target, *newRuntime)
+	selected, err := agent.SelectInstalled(target)
 	if err != nil {
 		return err
 	}

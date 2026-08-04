@@ -23,21 +23,19 @@ func install(args []string) error {
 	xToken := fs.String("x-token", "", "GTrace X-Token")
 	agentID := fs.String("agent-id", "", "GTrace agent_id tag")
 	agentName := fs.String("agent-name", "", "GTrace agent_name tag")
-	tracePath := fs.String("trace-path", "", "Trace upload path for built-in adapters")
-	metricsPath := fs.String("metrics-path", "", "Metrics upload path for built-in adapters")
-	captureContent := fs.String("capture-content", "", "Content capture mode for built-in adapters: none, preview, or full")
-	maxChars := fs.Int("max-chars", 0, "Maximum captured characters per value for built-in adapters")
+	tracePath := fs.String("trace-path", "", "Trace upload path for the built-in CodeBuddy adapter")
+	metricsPath := fs.String("metrics-path", "", "Metrics upload path for the built-in CodeBuddy adapter")
+	captureContent := fs.String("capture-content", "", "CodeBuddy content capture mode: none, preview, or full")
+	maxChars := fs.Int("max-chars", 0, "Maximum captured characters per CodeBuddy value")
 	enable := fs.Bool("enable", false, "Enable telemetry in the Agent runtime config")
 	disable := fs.Bool("disable", false, "Disable telemetry in the Agent runtime config")
 	var headers repeatedValue
 	var tags repeatedValue
-	fs.Var(&headers, "header", "HTTP header KEY=VALUE for built-in adapters; may be repeated")
+	fs.Var(&headers, "header", "CodeBuddy HTTP header KEY=VALUE; may be repeated")
 	fs.Var(&tags, "tag", "Resource attribute KEY=VALUE; may be repeated")
 	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without installing")
-	newRuntime := fs.Bool("n", false, "Use the new built-in runtime (Claude and Codex only)")
-	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime (Claude and Codex only)")
 
 	target := ""
 	flagArgs := args
@@ -72,7 +70,7 @@ func install(args []string) error {
 		return fmt.Errorf("install requires a single agent, for example: install codex")
 	}
 
-	selected, err := agent.SelectForRuntime(target, *newRuntime)
+	selected, err := agent.Select(target)
 	if err != nil {
 		return err
 	}

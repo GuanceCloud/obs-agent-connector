@@ -13,9 +13,7 @@ func remove(args []string) error {
 	fs.SetOutput(os.Stderr)
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print what would be removed")
-	purgeConfig := fs.Bool("purge-config", false, "Also remove plugin configuration files and built-in adapter upload state")
-	newRuntime := fs.Bool("n", false, "Use the new built-in runtime (Claude and Codex only)")
-	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime (Claude and Codex only)")
+	purgeConfig := fs.Bool("purge-config", false, "Also remove plugin configuration files and CodeBuddy upload state")
 
 	target := ""
 	flagArgs := args
@@ -33,15 +31,7 @@ func remove(args []string) error {
 		return fmt.Errorf("unrecognized remove arguments: %s", strings.Join(fs.Args(), " "))
 	}
 
-	var selected []agent.Definition
-	var err error
-	if *newRuntime {
-		// Built-in removal is intentionally idempotent so a second run can
-		// clean orphaned Codex trust state after the Hook itself is gone.
-		selected, err = agent.SelectForRuntime(target, true)
-	} else {
-		selected, err = agent.SelectInstalledForRuntime(target, false)
-	}
+	selected, err := agent.SelectInstalled(target)
 	if err != nil {
 		return err
 	}
@@ -57,9 +47,6 @@ func remove(args []string) error {
 		rows = append(rows, [2]string{"Agent", p.Name})
 		if p.IsBuiltin() {
 			rows = append(rows, [2]string{"Hook", p.BuiltinHookFile + " (managed entry only)"})
-			if p.Name == "codex" {
-				rows = append(rows, [2]string{"Hook Trust", "matching and orphaned entries in ~/.codex/config.toml"})
-			}
 		}
 		for _, cmd := range p.RemoveCmds {
 			rows = append(rows, [2]string{"Command", strings.Join(cmd, " ")})

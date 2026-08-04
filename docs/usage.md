@@ -18,7 +18,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`; Claude is available with `-n`
+- Windows currently supports `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`; Claude is not currently supported
 
 ## Install obs-agent-connector
 
@@ -151,7 +151,6 @@ obs-agent-connector status codex
 obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
-obs-agent-connector install codex -n
 obs-agent-connector install codebuddy
 obs-agent-connector install opencode
 obs-agent-connector update codex
@@ -181,8 +180,7 @@ The output includes:
 
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
 
-Pass `-n` (or `--new-runtime`) to `list`, `status`, `discover`, `install`, `enable`, `disable`, `update`, and `remove` when managing the opt-in Claude/Codex built-in runtime. Without `-n`, all commands retain the previous external-plugin behavior.
-CodeBuddy always uses the built-in runtime and never requires `-n`.
+CodeBuddy uses the built-in runtime. Claude, Codex, and other Agents use their external plugins.
 
 ## `status`
 
@@ -239,14 +237,12 @@ obs-agent-connector discover --update
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the plan only |
 | `-u`, `--update` | Update installed plugins and install missing plugins in one pass |
-| `-n`, `--new-runtime` | Use built-in adapters for detected Claude and Codex Agents |
 
 ### Behavior
 
 - discovers supported local Agents
 - installs missing plugins by default
 - switches to sync mode when `-u` or `--update` is used
-- with `-n`, installs or updates only built-in Claude/Codex adapters and reports every other detected Agent as unsupported without falling back to an external plugin
 - auto-generates:
   - `agent_id` as `agid_<32 lowercase hex chars>`
   - `agent_name` as `<hostname>_<agent>_<YYYYMMDD>`
@@ -283,7 +279,7 @@ Parameters:
 Behavior:
 
 - removes the current connector binary
-- removes Claude and Codex Hooks managed by the connector, including matching or orphaned Codex trust entries, while preserving Agent config and upload state
+- removes the managed CodeBuddy Hook while preserving its config and upload state
 - removes the connector config by default
 - removes the PATH entry previously added by the installer when it can be identified
 - on Windows, schedules self-delete after the process exits
@@ -294,12 +290,6 @@ Install a single Agent plugin:
 
 ```bash
 obs-agent-connector install codex
-```
-
-Use the built-in runtime instead of the default external plugin:
-
-```bash
-obs-agent-connector install codex -n
 ```
 
 Install the built-in CodeBuddy adapter with the ordinary command:
@@ -316,17 +306,16 @@ Parameters:
 | `--x-token` | Set the authentication token |
 | `--agent-id` | Override the generated `agent_id` |
 | `--agent-name` | Override the generated `agent_name` |
-| `--trace-path` | Override the Trace upload path for built-in adapters |
-| `--metrics-path` | Override the Metrics upload path for built-in adapters |
-| `--header` | Add a built-in adapter HTTP header; may be repeated |
+| `--trace-path` | Override the Trace upload path for the built-in CodeBuddy adapter |
+| `--metrics-path` | Override the Metrics upload path for the built-in CodeBuddy adapter |
+| `--header` | Add a CodeBuddy HTTP header; may be repeated |
 | `--tag` | Add a resource attribute; may be repeated |
-| `--capture-content` | Set built-in content capture to `none`, `preview`, or `full` |
-| `--max-chars` | Set the built-in content length limit |
+| `--capture-content` | Set CodeBuddy content capture to `none`, `preview`, or `full` |
+| `--max-chars` | Set the CodeBuddy content length limit |
 | `--enable` / `--disable` | Set the runtime enabled state |
 | `--static-base` | Override the external plugin download base URL |
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the install plan and command preview only |
-| `-n`, `--new-runtime` | Use the built-in runtime; supported for Claude and Codex |
 
 Example:
 
@@ -344,7 +333,6 @@ Notes:
 - if `--agent-id` is omitted, the CLI generates `agid_<uuidv4-without-dashes>`
 - if `--agent-name` is omitted, the CLI generates `<hostname>_<agent>_<YYYYMMDD>`
 - `install` accepts a single Agent target only
-- `-n` installation replaces legacy `agent-telemetry`, `gtrace-agent`, and standalone Claude/Codex Hook entries while preserving unrelated Hooks
 - CodeBuddy installation replaces legacy `codebuddy-hook` entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - existing runtime configuration and upload state are preserved unless explicitly changed or purged
 
@@ -363,13 +351,12 @@ Parameters:
 | `--static-base` | Override the plugin download base URL for this run |
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the update plan and command preview only |
-| `-n`, `--new-runtime` | Reconcile the built-in Claude/Codex Hook instead of updating the external plugin |
 
 Notes:
 
 - `update` accepts a single Agent target only
 - the command preserves the existing runtime config
-- built-in adapters reconcile their Hook without modifying `gtrace.json`
+- the built-in CodeBuddy adapter reconciles its Hook without modifying `gtrace.json`
 - external plugin installers receive `--no-config`
 
 ## `enable` / `disable`
@@ -391,7 +378,6 @@ Parameters:
 | Parameter | Description |
 | --- | --- |
 | `--dry-run` | Print the config change without writing it |
-| `-n`, `--new-runtime` | Select an installed built-in Claude/Codex adapter |
 
 Notes:
 
@@ -424,14 +410,12 @@ Parameters:
 | --- | --- |
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the removal plan only |
-| `--purge-config` | Also remove the plugin config file and built-in adapter upload state |
-| `-n`, `--new-runtime` | Remove the built-in Claude/Codex Hook instead of the external plugin |
+| `--purge-config` | Also remove the plugin config file and CodeBuddy upload state |
 
 Notes:
 
 - by default the plugin is removed and the config is kept
 - `remove` accepts a single Agent target only
-- `remove codex -n` also removes matching or orphaned trust entries for `~/.codex/hooks.json` while preserving unrelated Hook trust and TOML settings
 - `remove codebuddy` removes only connector-owned CodeBuddy Hooks; `--purge-config` additionally removes `~/.codebuddy/gtrace.json` and upload state
 
 ## `version`

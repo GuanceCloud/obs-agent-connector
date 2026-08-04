@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestDiscoverNewRuntimeSkipsUnsupportedExternalPlugins(t *testing.T) {
+func TestDiscoverRejectsRemovedNewRuntimeFlag(t *testing.T) {
 	home := t.TempDir()
 	binDir := t.TempDir()
 	t.Setenv("HOME", home)
@@ -29,21 +29,8 @@ func TestDiscoverNewRuntimeSkipsUnsupportedExternalPlugins(t *testing.T) {
 	currentGOOS = "linux"
 	t.Cleanup(func() { currentGOOS = previousGOOS })
 
-	output := captureStdout(t, func() {
-		if err := discover([]string{"-n", "--dry-run"}); err != nil {
-			t.Fatal(err)
-		}
-	})
-	if !strings.Contains(output, "New runtime unsupported (skipped): opencode") {
-		t.Fatalf("expected explicit unsupported notice, got:\n%s", output)
-	}
-	if !strings.Contains(output, "opencode") || !strings.Contains(output, "unsupported") {
-		t.Fatalf("expected unsupported OpenCode plan row, got:\n%s", output)
-	}
-	if strings.Contains(output, "Plugin Source") || strings.Contains(output, "opencode-otel-plugin") {
-		t.Fatalf("-n discover must not plan an external OpenCode install:\n%s", output)
-	}
-	if strings.Contains(output, "secret") {
-		t.Fatalf("discover output exposed X-Token: %s", output)
+	err := discover([]string{"-n", "--dry-run"})
+	if err == nil || !strings.Contains(err.Error(), "flag provided but not defined: -n") {
+		t.Fatalf("expected removed -n flag error, got %v", err)
 	}
 }

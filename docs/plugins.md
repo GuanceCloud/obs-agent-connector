@@ -1,14 +1,14 @@
 # Plugin Matrix
 
-`obs-agent-connector` contains a default built-in CodeBuddy adapter and optional Claude and Codex adapters. Claude and Codex retain their external plugins as the default and use `-n` for the built-in runtime. Other Agents delegate installation and configuration generation to external plugin installers.
+`obs-agent-connector` contains a built-in CodeBuddy adapter. Claude, Codex, and other Agents delegate installation and configuration generation to external plugin installers.
 
 ## Supported Agents
 
 | Agent | Edition | Installer | Default Config | Default Install Marker |
 | --- | --- | --- | --- | --- |
-| `claude` | Claude | Default: `claude-otel-plugin`; `-n`: current connector | `~/.claude/gtrace.json` | Default: standalone plugin paths; `-n`: managed Hook in `~/.claude/settings.json` |
-| `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector, no `-n` required | `~/.codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
-| `codex` | Codex | Default: `codex-otel-plugin`; `-n`: current connector | `~/.codex/gtrace.json` | Default: standalone plugin paths; `-n`: managed Hook in `~/.codex/hooks.json` |
+| `claude` | Claude | `claude-otel-plugin` | `~/.claude/gtrace.json` | Standalone plugin paths |
+| `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector | `~/.codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
+| `codex` | Codex | `codex-otel-plugin` | `~/.codex/gtrace.json` | Standalone plugin paths |
 | `hermes` | Hermes | `https://static.guance.com/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://github.com/GuanceCloud/opencode-otel-plugin/releases/latest/download/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
 | `openclaw` | OpenClaw | Unix: `https://static.guance.com/openclaw-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.ps1` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
@@ -30,7 +30,7 @@ This prevents the international and China editions from overwriting each other's
 
 ## Windows Support
 
-Default-mode Windows plugin installation and update are currently supported only for:
+Windows plugin installation and update are currently supported only for:
 
 - `codex`
 - `codebuddy`
@@ -39,7 +39,7 @@ Default-mode Windows plugin installation and update are currently supported only
 - `qoder`
 - `workbuddy`
 
-Claude is additionally supported on Windows with `-n`. New-mode adapters register the current connector executable directly. External plugins download their PowerShell installer from the plugin's GitHub release instead of using the OSS shell installer.
+CodeBuddy registers the current connector executable directly. External plugins download their PowerShell installer from the plugin's GitHub release instead of using the OSS shell installer.
 If a user tries `install` or `update` with an unsupported Agent, the CLI returns a friendly error with the supported Windows Agent list.
 
 ## Install Parameters
@@ -54,7 +54,7 @@ At plugin install time, the CLI uses:
 | `Agent ID` | auto-generated `agid_<uuidv4-without-dashes>` or `--agent-id` override | `--tag agent_id=<value>` |
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
-Built-in adapters accept `--trace-path`, `--metrics-path`, repeated `--header`, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. CodeBuddy receives these options without `-n`; Claude and Codex require `-n`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
+The built-in CodeBuddy adapter accepts `--trace-path`, `--metrics-path`, repeated `--header`, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
 
 The CLI always uses `--type gtrace`.
 

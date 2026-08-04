@@ -23,8 +23,6 @@ func discover(args []string) error {
 	dryRun := fs.Bool("dry-run", false, "Print planned actions without installing")
 	updateMode := fs.Bool("u", false, "Update installed plugins and install missing ones")
 	fs.BoolVar(updateMode, "update", false, "Update installed plugins and install missing ones")
-	newRuntime := fs.Bool("n", false, "Use the new built-in runtime for Claude and Codex")
-	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime for Claude and Codex")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -45,7 +43,7 @@ func discover(args []string) error {
 		return fmt.Errorf("discover failed: %w", err)
 	}
 
-	candidates := agent.DiscoverCandidatesForOSRuntime(currentGOOS, *newRuntime)
+	candidates := agent.DiscoverCandidatesForOS(currentGOOS)
 	if len(candidates) == 0 {
 		fmt.Println("No supported Agents detected.")
 		return nil
@@ -54,12 +52,10 @@ func discover(args []string) error {
 	rows := make([][]string, 0, len(candidates))
 	steps := make([]discoverStep, 0, len(candidates))
 	hasUnsupported := false
-	unsupportedNames := []string{}
 	for _, candidate := range candidates {
 		version := displayVersion(candidate.InstalledVersion)
 		if !candidate.Supported {
 			hasUnsupported = true
-			unsupportedNames = append(unsupportedNames, candidate.Plugin.Name)
 			rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, "n/a", version, "unsupported"})
 			continue
 		}
@@ -80,10 +76,6 @@ func discover(args []string) error {
 
 	fmt.Println("Discover plan:")
 	printTable([]string{"AGENT", "COMMAND", "PLUGIN", "VERSION", "ACTION"}, rows)
-	if *newRuntime && len(unsupportedNames) > 0 {
-		fmt.Printf("New runtime unsupported (skipped): %s. Rerun without -n to manage their external plugins.\n", strings.Join(unsupportedNames, ", "))
-	}
-
 	if len(steps) == 0 {
 		if *updateMode {
 			if hasUnsupported {

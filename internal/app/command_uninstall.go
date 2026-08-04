@@ -47,7 +47,7 @@ func uninstallConnector(args []string) error {
 	fmt.Println("Uninstall plan:")
 	rows := make([][2]string, 0, 4+len(unixPathFiles))
 	rows = append(rows, [2]string{"Binary", executablePath})
-	rows = append(rows, [2]string{"Built-in Hooks", "remove claude, codebuddy, and codex; keep Agent config and state"})
+	rows = append(rows, [2]string{"Built-in Hook", "remove codebuddy; keep Agent config and state"})
 	if *keepConfig {
 		rows = append(rows, [2]string{"Config", "keep " + configPath})
 	} else {
@@ -80,10 +80,8 @@ func uninstallConnector(args []string) error {
 			return nil
 		}
 	}
-	for _, adapter := range []string{"claude", "codebuddy", "codex"} {
-		if _, err := telemetryinstall.RemoveAdapter(adapter, "", telemetryinstall.RemoveOptions{ConnectorOnly: true}); err != nil {
-			return fmt.Errorf("remove %s built-in Hook: %w", adapter, err)
-		}
+	if _, err := telemetryinstall.RemoveAdapter("codebuddy", "", telemetryinstall.RemoveOptions{ConnectorOnly: true}); err != nil {
+		return fmt.Errorf("remove codebuddy built-in Hook: %w", err)
 	}
 
 	if currentGOOS == "windows" {

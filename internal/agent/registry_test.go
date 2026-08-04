@@ -69,26 +69,20 @@ func TestWindowsSupportFlags(t *testing.T) {
 	}
 }
 
-func TestSelectForRuntimeKeepsLegacyByDefaultAndOptsIntoBuiltin(t *testing.T) {
-	legacy, err := SelectForRuntime("codex", false)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if legacy[0].IsBuiltin() || legacy[0].PluginName != "codex-otel-plugin" {
-		t.Fatalf("default must keep the legacy plugin: %#v", legacy[0])
-	}
-
-	builtin, err := SelectForRuntime("codex", true)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !builtin[0].IsBuiltin() || builtin[0].PluginName != "obs-agent-connector" || builtin[0].Markers[0] != "~/.codex/hooks.json" {
-		t.Fatalf("-n must select the built-in runtime: %#v", builtin[0])
+func TestClaudeAndCodexRemainExternalPlugins(t *testing.T) {
+	for _, name := range []string{"claude", "codex"} {
+		selected, err := Select(name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if selected[0].IsBuiltin() || selected[0].PluginName != name+"-otel-plugin" {
+			t.Fatalf("%s must use its external plugin: %#v", name, selected[0])
+		}
 	}
 }
 
-func TestCodeBuddyUsesBuiltinRuntimeWithoutNewMode(t *testing.T) {
-	selected, err := SelectForRuntime("codebuddy", false)
+func TestCodeBuddyUsesBuiltinRuntime(t *testing.T) {
+	selected, err := Select("codebuddy")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -97,56 +91,27 @@ func TestCodeBuddyUsesBuiltinRuntimeWithoutNewMode(t *testing.T) {
 	}
 }
 
-func TestSelectForRuntimeRejectsUnsupportedAgent(t *testing.T) {
-	_, err := SelectForRuntime("opencode", true)
-	if err == nil || !strings.Contains(err.Error(), "opencode does not support -n/--new-runtime; supported agents: claude, codex") {
-		t.Fatalf("expected unsupported new runtime error, got %v", err)
-	}
-}
-
-func TestBuiltinClaudeSupportsWindowsWithoutChangingLegacySupport(t *testing.T) {
-	legacy := Get("claude")
-	builtin, ok := legacy.WithBuiltin()
-	if !ok {
-		t.Fatal("claude must support the built-in runtime")
-	}
-	if SupportsPlatform(legacy, "windows") {
-		t.Fatal("legacy Claude installer must remain unsupported on Windows")
-	}
-	if !SupportsPlatform(builtin, "windows") {
-		t.Fatal("built-in Claude runtime must support Windows")
-	}
-}
-
-func TestDiscoverNewRuntimeMarksUnsupportedAgentWithoutExternalFallback(t *testing.T) {
+func TestDiscoverUsesExternalClaudeAndCodexDefinitions(t *testing.T) {
 	home := t.TempDir()
 	binDir := t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("PATH", binDir)
-	for _, name := range []string{"codex", "opencode"} {
+	for _, name := range []string{"claude", "codex"} {
 		if err := os.WriteFile(filepath.Join(binDir, name), []byte("#!/bin/sh\n"), 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
 
-	candidates := DiscoverCandidatesForOSRuntime("linux", true)
+	candidates := DiscoverCandidatesForOS("linux")
 	found := map[string]Candidate{}
 	for _, candidate := range candidates {
 		found[candidate.Plugin.Name] = candidate
 	}
-	codex, ok := found["codex"]
-	if !ok || !codex.Supported || !codex.Plugin.IsBuiltin() {
-		t.Fatalf("expected supported built-in Codex candidate, got %#v", codex)
-	}
-	opencode, ok := found["opencode"]
-	if !ok {
-		t.Fatal("expected detected OpenCode candidate")
-	}
-	if opencode.Supported || opencode.Plugin.IsBuiltin() {
-		t.Fatalf("OpenCode must not fall back to its external plugin in -n mode: %#v", opencode)
-	}
-	if !strings.Contains(opencode.UnsupportedReason, "new runtime is not supported") {
-		t.Fatalf("expected explicit new-runtime reason, got %q", opencode.UnsupportedReason)
+	for _, name := range []string{"claude", "codex"} {
+		candidate, ok := found[name]
+		if !ok || !candidate.Supported || candidate.Plugin.IsBuiltin() || candidate.Plugin.PluginName != name+"-otel-plugin" {
+			t.Fatalf("expected external %s candidate, got %#v", name, candidate)
+		}
 	}
 }
 

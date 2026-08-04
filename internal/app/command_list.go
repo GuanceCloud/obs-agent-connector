@@ -11,8 +11,6 @@ import (
 func listPlugins(args []string) error {
 	fs := flag.NewFlagSet("list", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	newRuntime := fs.Bool("n", false, "Use the new built-in runtime for Claude and Codex")
-	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime for Claude and Codex")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -22,7 +20,7 @@ func listPlugins(args []string) error {
 
 	rows := [][]string{}
 	found := false
-	selected, err := agent.SelectForRuntime("", *newRuntime)
+	selected, err := agent.Select("")
 	if err != nil {
 		return err
 	}

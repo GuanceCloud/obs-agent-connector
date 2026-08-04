@@ -10,10 +10,10 @@ obs-agent-connector <command> [arguments]
 
 | Command | Purpose |
 | --- | --- |
-| `list` | List installed Agent plugins detected on the local machine, including best-effort plugin version detection. Add `-n` to inspect new-mode Claude/Codex Hooks. |
+| `list` | List installed Agent plugins detected on the local machine, including best-effort plugin version detection. |
 | `status <agent>` | Show one Agent plugin status, including install state, config path, plugin path, version, and runtime `enabled` state when supported. |
 | `discover` | Detect supported local Agents and install any missing plugins by using connector defaults from `config.json`. Use `discover -u` to update installed plugins and install any missing plugins in one run. |
-| `install <agent>` | Install one Agent integration. CodeBuddy is built in by default; add `-n` to register the built-in Claude or Codex adapter. |
+| `install <agent>` | Install one Agent integration. CodeBuddy is built in; other Agents use their external plugins. |
 | `enable <agent>` | Enable one installed Agent plugin by setting its runtime JSON `enabled` switch to `true`. |
 | `disable <agent>` | Disable one installed Agent plugin by setting its runtime JSON `enabled` switch to `false`. |
 | `update <agent>` | Update one installed Agent plugin without modifying its current configuration. |
@@ -21,9 +21,7 @@ obs-agent-connector <command> [arguments]
 | `uninstall` | Uninstall `obs-agent-connector` itself. By default this removes the binary, connector config, and managed PATH entry when present. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print or run a matching self-update action when a newer release is available. |
 
-`-n` (also `--new-runtime`) selects the new built-in runtime. It is supported for targeted Claude/Codex lifecycle commands and makes `discover`/`list` use the built-in representation for those two Agents. A targeted command for any other Agent fails immediately and lists the supported new-runtime Agents; it never silently falls back to the external plugin. Omitting `-n` preserves the previous external-plugin behavior.
-
-CodeBuddy is an exception to the compatibility mode: it is always built into the connector and all CodeBuddy lifecycle commands run without `-n`.
+CodeBuddy is built into the connector. Claude, Codex, and other Agents use their external plugins.
 
 ## Bootstrap
 
@@ -49,12 +47,6 @@ Auto-install missing plugins for detected local Agents:
 
 ```bash
 obs-agent-connector discover
-```
-
-Use the new built-in runtime for detected Claude and Codex installations. Detected Agents that do not support the new runtime are reported as `unsupported` and skipped; `discover -n` never falls back to their external plugins:
-
-```bash
-obs-agent-connector discover -n
 ```
 
 Update installed plugins and install any missing plugins in one run:
@@ -94,8 +86,6 @@ Show one Agent plugin status:
 obs-agent-connector status codex
 ```
 
-Use `status codex -n` to inspect the built-in Hook instead of the legacy plugin installation.
-
 The output includes:
 
 - Agent name
@@ -115,12 +105,6 @@ Install one plugin with stored connector defaults:
 
 ```bash
 obs-agent-connector install codex
-```
-
-Install the new built-in runtime explicitly:
-
-```bash
-obs-agent-connector install codex -n
 ```
 
 Install the default built-in CodeBuddy adapter:
@@ -144,8 +128,8 @@ By default, `install` reuses the CLI download source recorded in `~/.obs-agent-c
 If that source is unavailable, `install` derives the installer base from `--endpoint`.
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
 Use `--static-base` when you need to override the installer base.
-On Windows, CodeBuddy and new-mode Claude/Codex adapters register the current connector executable directly. External plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
-The default mode supports `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` on Windows. Claude is supported on Windows with `-n`.
+On Windows, CodeBuddy registers the current connector executable directly. External plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
+CodeBuddy, Codex, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows. Claude is not currently supported on Windows.
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 
@@ -168,11 +152,9 @@ Update one installed plugin:
 obs-agent-connector update codex
 ```
 
-Use `update codex -n` to reconcile the built-in Hook. The same mode flag must be used for `status`, `enable`, `disable`, and `remove` when managing a built-in installation.
-
 `update` intentionally requires a single Agent name.
 
-Updates preserve existing configuration. Built-in adapters reconcile their Hook with the current connector runtime; external plugins receive `--no-config`.
+Updates preserve existing configuration. CodeBuddy reconciles its Hook with the current connector runtime; external plugins receive `--no-config`.
 On Windows, `update` also uses the plugin's GitHub release PowerShell installer and follows the same support matrix as `install`.
 
 For `qoder`, the CLI also detects the local layout and passes the matching `--variant cn` or `--variant global` flag before running the installer.
@@ -224,8 +206,6 @@ Preview removal:
 obs-agent-connector remove codex --dry-run
 ```
 
-With `remove codex -n`, the connector removes both its managed Codex Hook and the matching `hooks.state` trust entries from `~/.codex/config.toml`. If the Hook list is already empty, orphaned trust entries for `~/.codex/hooks.json` are also removed. Other Hook files and unrelated Codex configuration are preserved.
-
 `remove codebuddy` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.codebuddy/settings.json` and preserves unrelated Hooks. Add `--purge-config` to also delete `~/.codebuddy/gtrace.json` and `~/.codebuddy/gtrace` upload state.
 
 ## Version
@@ -273,7 +253,7 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
-- removes Claude and Codex Hooks managed by the connector, including matching or orphaned Codex trust entries, while preserving Agent config and upload state
+- removes the managed CodeBuddy Hook while preserving its config and upload state
 - removes `~/.obs-agent-connector/config.json` by default
 - keeps config when `--keep-config` is used
 - removes the installer-managed PATH export from `~/.zshrc`, `~/.bashrc`, or `~/.profile` when found

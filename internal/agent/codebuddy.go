@@ -6,7 +6,6 @@ func codeBuddyPlugin() Definition {
 	return Definition{
 		Name:                     "codebuddy",
 		Backend:                  BackendBuiltin,
-		BuiltinAvailable:         true,
 		BuiltinHookFile:          "~/.codebuddy/settings.json",
 		PluginName:               "obs-agent-connector",
 		AgentCommand:             "codebuddy",

@@ -77,10 +77,10 @@ func TestUninstallDryRun(t *testing.T) {
 
 	for _, expected := range []string{
 		"Uninstall plan:",
-		"Binary        : " + executablePath,
-		"Built-in Hooks: remove claude, codebuddy, and codex; keep Agent config and state",
-		"Config        : remove " + configPath,
-		"Shell PATH    : remove managed entry from " + zshrcPath,
+		"Binary       : " + executablePath,
+		"Built-in Hook: remove codebuddy; keep Agent config and state",
+		"Config       : remove " + configPath,
+		"Shell PATH   : remove managed entry from " + zshrcPath,
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected output to contain %q, got:\n%s", expected, output)

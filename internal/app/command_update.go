@@ -29,8 +29,6 @@ func updatePlugins(args []string) error {
 	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without updating")
-	newRuntime := fs.Bool("n", false, "Use the new built-in runtime (Claude and Codex only)")
-	fs.BoolVar(newRuntime, "new-runtime", false, "Use the new built-in runtime (Claude and Codex only)")
 
 	target := ""
 	flagArgs := args
@@ -45,7 +43,7 @@ func updatePlugins(args []string) error {
 		return fmt.Errorf("unrecognized update arguments: %s", strings.Join(fs.Args(), " "))
 	}
 	if target != "" {
-		selectedTarget, err := agent.SelectForRuntime(target, *newRuntime)
+		selectedTarget, err := agent.Select(target)
 		if err != nil {
 			return err
 		}
@@ -54,7 +52,7 @@ func updatePlugins(args []string) error {
 		}
 	}
 
-	selected, err := agent.SelectInstalledForRuntime(target, *newRuntime)
+	selected, err := agent.SelectInstalled(target)
 	if err != nil {
 		return err
 	}
