@@ -45,6 +45,7 @@ func remove(args []string) error {
 	if err != nil {
 		return err
 	}
+	selected = agent.ResolveForRemove(selected)
 	if len(selected) == 0 {
 		fmt.Println("No installed plugin found to remove.")
 		return nil
@@ -53,7 +54,6 @@ func remove(args []string) error {
 	fmt.Println("Remove plan:")
 	rows := make([][2]string, 0, len(selected)*3)
 	for _, p := range selected {
-		p = agent.Resolve(p)
 		rows = append(rows, [2]string{"Agent", p.Name})
 		if p.IsBuiltin() {
 			rows = append(rows, [2]string{"Hook", p.BuiltinHookFile + " (managed entry only)"})
@@ -63,6 +63,9 @@ func remove(args []string) error {
 		}
 		for _, cmd := range p.RemoveCmds {
 			rows = append(rows, [2]string{"Command", strings.Join(cmd, " ")})
+		}
+		for _, item := range p.RemoveCleanupDetails {
+			rows = append(rows, [2]string{"Cleanup", item})
 		}
 		for _, path := range p.RemovePaths {
 			rows = append(rows, [2]string{"Path", path})
@@ -96,7 +99,6 @@ func remove(args []string) error {
 	}
 
 	for _, p := range selected {
-		p = agent.Resolve(p)
 		if err := removeOne(p, *purgeConfig); err != nil {
 			return err
 		}

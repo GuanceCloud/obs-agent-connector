@@ -16,13 +16,15 @@ func codexPlugin() Definition {
 		},
 		ConfigFiles:     []string{"~/.codex/gtrace.json"},
 		EnabledJSONPath: []string{"enabled"},
-		RemoveCmds: [][]string{
-			{"codex", "plugin", "remove", "tracing@codex-otel-plugin"},
-			{"codex", "plugin", "marketplace", "remove", "codex-otel-plugin"},
-		},
 		RemovePaths: []string{
 			"~/.codex/plugin-sources/codex-otel-plugin",
 			"~/.codex/plugins/cache/codex-otel-plugin",
 		},
+		RemoveCleanupDetails: []string{
+			"~/.codex/config.toml (remove marketplace and plugin registration)",
+			"~/.codex/hooks.json (remove managed Stop hooks)",
+		},
+		RemoveCleanup: removeCodexRegistration,
+		ResolveRemove: resolveCodexRemove,
 	}
 }
