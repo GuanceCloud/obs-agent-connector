@@ -1,0 +1,7 @@
+{
+  "messages": [
+    {"id":"u2","role":"user","isComplete":true},
+    {"id":"a3","role":"assistant","isComplete":false}
+  ],
+  "requests": [{"id":"generation-2","type":"craft","messages":["u2","a3"],"state":"running","startedAt":1767225600000}]
+}

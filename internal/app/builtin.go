@@ -50,6 +50,17 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 		if err == nil {
 			printSingleDetail("Note", "Restart Claude Code to load the reconciled Hook.")
 		}
+	case "codebuddy":
+		_, err = telemetryinstall.InstallCodeBuddy(telemetryinstall.CodeBuddyOptions{
+			SourceExecutable: options.SourceExecutable, DestinationExecutable: options.DestinationExecutable,
+			Endpoint: options.Endpoint, TracePath: options.TracePath, MetricsPath: options.MetricsPath,
+			InstallType: options.InstallType, XToken: options.XToken, Headers: options.Headers,
+			ResourceAttributes: options.ResourceAttributes, CaptureContent: options.CaptureContent,
+			MaxChars: options.MaxChars, Enabled: options.Enabled, NoConfig: options.NoConfig,
+		})
+		if err == nil {
+			printSingleDetail("Note", "Restart CodeBuddy if the reconciled Hook is not picked up automatically.")
+		}
 	case "codex":
 		var result telemetryinstall.CodexResult
 		result, err = telemetryinstall.InstallCodex(options)

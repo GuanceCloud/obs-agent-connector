@@ -7,6 +7,7 @@ This repository contains the single `obs-agent-connector` Go binary for managing
 The CLI supports plugin lifecycle operations for:
 
 - `claude`
+- `codebuddy`
 - `codex`
 - `hermes`
 - `openclaw`
@@ -31,7 +32,7 @@ Do not add Agent-specific branches to `internal/agent/registry.go`. Use the reso
 
 Do not generate Agent runtime configuration in command handlers. Runtime configuration files such as `gtrace.json`, `config.yaml`, or `openclaw.json` are owned by the matching built-in or external Agent installer.
 
-Shared telemetry behavior belongs in `internal/core`. Product-specific collection behavior belongs in `internal/adapters/<product>`. Claude and Codex provide opt-in built-in adapters through `-n`; their external plugins remain the default. Other Agents remain external only until their runtime implementations migrate into this repository.
+Shared telemetry behavior belongs in `internal/core`. Product-specific collection behavior belongs in `internal/adapters/<product>`. CodeBuddy uses its built-in adapter by default. Claude and Codex provide opt-in built-in adapters through `-n`; their external plugins remain the default. Other Agents remain external only until their runtime implementations migrate into this repository.
 
 ## Commands
 

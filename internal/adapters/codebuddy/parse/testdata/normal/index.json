@@ -1,0 +1,16 @@
+{
+  "messages": [
+    {"id":"u1","role":"user","isComplete":true},
+    {"id":"a1","role":"assistant","isComplete":true},
+    {"id":"t1","role":"tool","isComplete":true},
+    {"id":"a2","role":"assistant","isComplete":false}
+  ],
+  "requests": [{
+    "id":"generation-1",
+    "type":"craft",
+    "messages":["u1","a1","t1","a2"],
+    "state":"complete",
+    "startedAt":1767225600000,
+    "usage":{"inputTokens":120,"outputTokens":32,"cacheTokens":20,"reasoningTokens":4}
+  }]
+}

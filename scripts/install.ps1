@@ -170,6 +170,26 @@ try {
   Write-Host "Verified SHA-256 for $AssetName"
 
   Expand-Archive -LiteralPath $ZipPath -DestinationPath $TempDir -Force
+
+  if (-not $BinaryOnly) {
+    $ExtractedConnectorPath = Join-Path $TempDir $BinaryName
+    $ProbeConfigPath = Join-Path $TempDir "capability-probe-config.json"
+    $ProbeArgs = @(
+      "internal", "merge-config",
+      "--path", $ProbeConfigPath,
+      "--download-base-url", "https://example.invalid/obs-agent-connector",
+      "--plugin-source", "oss",
+      "--plugin-base-url", "https://example.invalid",
+      "--endpoint", "https://example.invalid",
+      "--x-token", "capability-probe"
+    )
+    & $ExtractedConnectorPath @ProbeArgs *> $null
+    if ($LASTEXITCODE -ne 0) {
+      throw "Downloaded $AppName $Version is incompatible with this installer (missing internal merge-config support). Use the installer from the same published release, or build the current source tree for development validation."
+    }
+    Remove-Item -LiteralPath $ProbeConfigPath -Force
+  }
+
   Copy-Item -LiteralPath (Join-Path $TempDir $BinaryName) -Destination (Join-Path $InstallDir "$AppName.exe") -Force
 
   if (-not $BinaryOnly) {

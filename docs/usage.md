@@ -7,6 +7,7 @@
 Supported Agents:
 
 - `claude`
+- `codebuddy`
 - `codex`
 - `hermes`
 - `opencode`
@@ -17,7 +18,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` only
+- Windows currently supports `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`; Claude is available with `-n`
 
 ## Install obs-agent-connector
 
@@ -151,6 +152,7 @@ obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codex -n
+obs-agent-connector install codebuddy
 obs-agent-connector install opencode
 obs-agent-connector update codex
 obs-agent-connector enable codex
@@ -180,6 +182,7 @@ The output includes:
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
 
 Pass `-n` (or `--new-runtime`) to `list`, `status`, `discover`, `install`, `enable`, `disable`, `update`, and `remove` when managing the opt-in Claude/Codex built-in runtime. Without `-n`, all commands retain the previous external-plugin behavior.
+CodeBuddy always uses the built-in runtime and never requires `-n`.
 
 ## `status`
 
@@ -299,6 +302,12 @@ Use the built-in runtime instead of the default external plugin:
 obs-agent-connector install codex -n
 ```
 
+Install the built-in CodeBuddy adapter with the ordinary command:
+
+```bash
+obs-agent-connector install codebuddy
+```
+
 Parameters:
 
 | Parameter | Description |
@@ -336,6 +345,7 @@ Notes:
 - if `--agent-name` is omitted, the CLI generates `<hostname>_<agent>_<YYYYMMDD>`
 - `install` accepts a single Agent target only
 - `-n` installation replaces legacy `agent-telemetry`, `gtrace-agent`, and standalone Claude/Codex Hook entries while preserving unrelated Hooks
+- CodeBuddy installation replaces legacy `codebuddy-hook` entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - existing runtime configuration and upload state are preserved unless explicitly changed or purged
 
 ## `update`
@@ -388,6 +398,7 @@ Notes:
 - these commands update the Agent runtime config in place
 - currently supported:
   - `claude`
+  - `codebuddy`
   - `codex`
   - `qoder`
   - `openclaw`
@@ -421,6 +432,7 @@ Notes:
 - by default the plugin is removed and the config is kept
 - `remove` accepts a single Agent target only
 - `remove codex -n` also removes matching or orphaned trust entries for `~/.codex/hooks.json` while preserving unrelated Hook trust and TOML settings
+- `remove codebuddy` removes only connector-owned CodeBuddy Hooks; `--purge-config` additionally removes `~/.codebuddy/gtrace.json` and upload state
 
 ## `version`
 
@@ -460,6 +472,7 @@ Notes:
 
 Supported Agents on Windows:
 
+- `codebuddy`
 - `codex`
 - `openclaw`
 - `qoder`

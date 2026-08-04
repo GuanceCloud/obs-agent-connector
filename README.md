@@ -2,12 +2,13 @@
 
 `obs-agent-connector` is the single command-line runtime for installing, managing, and collecting OBS/GTrace telemetry across multiple AI coding agents.
 
-The tool provides one binary and one version for connector lifecycle operations and optional built-in telemetry adapters. Existing external plugin installation remains the default. Pass `-n` to use the new built-in runtime for Claude or Codex.
+The tool provides one binary and one version for connector lifecycle operations and built-in telemetry adapters. CodeBuddy uses the built-in runtime by default. Existing external plugin installation remains the default for Claude and Codex unless `-n` is supplied.
 
 ## Features
 
 - Bootstrap the CLI and OBS defaults with one installer command.
 - Opt into built-in Claude and Codex terminal-hook adapters with `-n`, without Node.js, Python, a Go toolchain, or an external OpenTelemetry SDK.
+- Collect CodeBuddy terminal turns through the built-in `Stop` and `SessionEnd` adapter without a separate repository or `-n` flag.
 - Install transitional external Agent plugins through their official remote installer scripts.
 - Auto-discover local Agents, install missing plugins, and sync all plugins with `discover -u`.
 - Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
@@ -28,6 +29,7 @@ The tool provides one binary and one version for connector lifecycle operations 
 | Agent | Plugin | macOS | Linux | Windows | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `claude` | `claude-otel-plugin`; built-in with `-n` | `✅` | `✅` | `-n` only | Stop / SessionEnd Hook plus transcript replay in new mode |
+| `codebuddy` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook plus native `index.json` replay; Linux x64 is product-validated |
 | `codex` | `codex-otel-plugin`; built-in with `-n` | `✅` | `✅` | `✅` | Stop Hook plus rollout replay in new mode |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
@@ -44,6 +46,7 @@ obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codex -n
+obs-agent-connector install codebuddy
 obs-agent-connector install opencode
 obs-agent-connector install qoder
 obs-agent-connector install workbuddy
@@ -68,7 +71,7 @@ Use `--static-base` to override this behavior.
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, the default mode supports `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`; Claude is supported through the new `-n` mode.
+- On Windows, the default mode supports `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`; Claude is supported through the new `-n` mode.
 - New-mode adapters register the connector directly; external plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
 
 Bootstrap the CLI with shared defaults:
@@ -84,6 +87,7 @@ The downloaded package is verified against `SHA256SUMS` before installation.
 
 After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
 These commands preserve the legacy external-plugin behavior by default. Add `-n` to lifecycle commands for the Claude/Codex built-in runtime, for example `install codex -n`, `status codex -n`, and `update codex -n`.
+CodeBuddy is always managed as a built-in adapter with ordinary commands such as `install codebuddy`, `status codebuddy`, and `remove codebuddy`; it does not require `-n`.
 `discover -n` never mixes modes: it skips detected Agents that do not yet have a built-in runtime and tells you to rerun without `-n` if you want their external plugins.
 `install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
 The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
@@ -94,7 +98,7 @@ Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
-`remove <agent> -n` removes one built-in Claude/Codex Hook and its Codex trust metadata while preserving runtime config and upload state by default. `uninstall` removes the connector binary itself, removes its managed built-in Hooks and Codex trust metadata, removes the connector config by default, and cleans up the PATH entry previously added by the installer when it can be identified.
+`remove codebuddy` removes only the managed CodeBuddy Hook and preserves `gtrace.json` and upload state unless `--purge-config` is supplied. `remove <agent> -n` provides equivalent built-in removal for Claude/Codex. `uninstall` removes the connector binary and all of its managed built-in Hooks while preserving Agent config and state.
 
 ## Build
 

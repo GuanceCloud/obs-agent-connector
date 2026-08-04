@@ -9,6 +9,7 @@ import (
 
 var definitions = map[string]Definition{
 	"claude":    claudePlugin(),
+	"codebuddy": codeBuddyPlugin(),
 	"codex":     codexPlugin(),
 	"hermes":    hermesPlugin(),
 	"opencode":  opencodePlugin(),
@@ -42,12 +43,18 @@ func Select(target string) ([]Definition, error) {
 
 func SelectForRuntime(target string, useBuiltin bool) ([]Definition, error) {
 	selected, err := Select(target)
-	if err != nil || !useBuiltin {
+	if err != nil {
 		return selected, err
+	}
+	if !useBuiltin {
+		return selected, nil
 	}
 
 	normalizedTarget := strings.TrimSpace(strings.ToLower(target))
 	for i, p := range selected {
+		if p.IsBuiltin() {
+			continue
+		}
 		builtin, ok := p.WithBuiltin()
 		if !ok {
 			if normalizedTarget != "" {
@@ -63,7 +70,7 @@ func SelectForRuntime(target string, useBuiltin bool) ([]Definition, error) {
 func BuiltinNames() []string {
 	names := make([]string, 0, len(definitions))
 	for _, name := range Names() {
-		if definitions[name].BuiltinAvailable {
+		if definitions[name].BuiltinAvailable && !definitions[name].IsBuiltin() {
 			names = append(names, name)
 		}
 	}
@@ -135,7 +142,7 @@ func DiscoverCandidatesForOSRuntime(goos string, useBuiltin bool) []Candidate {
 	for _, name := range names {
 		p := definitions[name]
 		runtimeSupported := true
-		if useBuiltin {
+		if useBuiltin && !p.IsBuiltin() {
 			if builtin, ok := p.WithBuiltin(); ok {
 				p = builtin
 			} else {

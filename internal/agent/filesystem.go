@@ -53,6 +53,9 @@ func containsManagedHook(value any, adapter string) bool {
 			strings.Contains(command, "agent-telemetry") ||
 			strings.Contains(command, "gtrace-agent") ||
 			strings.Contains(command, adapter+"-otel-plugin")
+		if adapter == "codebuddy" && (strings.Contains(command, "codebuddy-hook") || strings.Contains(command, "codebuddy-otel-plugin")) {
+			return true
+		}
 		if managedRuntime && strings.Contains(command, "hook "+adapter) {
 			return true
 		}

@@ -1,12 +1,13 @@
 # Plugin Matrix
 
-`obs-agent-connector` contains optional Claude and Codex telemetry adapters. Their existing external plugins remain the default; `-n` selects the built-in runtime. Other Agents always delegate installation and configuration generation to their external plugin installers.
+`obs-agent-connector` contains a default built-in CodeBuddy adapter and optional Claude and Codex adapters. Claude and Codex retain their external plugins as the default and use `-n` for the built-in runtime. Other Agents delegate installation and configuration generation to external plugin installers.
 
 ## Supported Agents
 
 | Agent | Edition | Installer | Default Config | Default Install Marker |
 | --- | --- | --- | --- | --- |
 | `claude` | Claude | Default: `claude-otel-plugin`; `-n`: current connector | `~/.claude/gtrace.json` | Default: standalone plugin paths; `-n`: managed Hook in `~/.claude/settings.json` |
+| `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector, no `-n` required | `~/.codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
 | `codex` | Codex | Default: `codex-otel-plugin`; `-n`: current connector | `~/.codex/gtrace.json` | Default: standalone plugin paths; `-n`: managed Hook in `~/.codex/hooks.json` |
 | `hermes` | Hermes | `https://static.guance.com/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://github.com/GuanceCloud/opencode-otel-plugin/releases/latest/download/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
@@ -32,6 +33,7 @@ This prevents the international and China editions from overwriting each other's
 Default-mode Windows plugin installation and update are currently supported only for:
 
 - `codex`
+- `codebuddy`
 - `opencode`
 - `openclaw`
 - `qoder`
@@ -52,7 +54,7 @@ At plugin install time, the CLI uses:
 | `Agent ID` | auto-generated `agid_<uuidv4-without-dashes>` or `--agent-id` override | `--tag agent_id=<value>` |
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
-With `-n`, built-in adapters additionally accept `--trace-path`, `--metrics-path`, repeated `--header`, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. These values are merged into the existing `gtrace.json`; unknown fields remain unchanged.
+Built-in adapters accept `--trace-path`, `--metrics-path`, repeated `--header`, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. CodeBuddy receives these options without `-n`; Claude and Codex require `-n`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
 
 The CLI always uses `--type gtrace`.
 
@@ -63,6 +65,7 @@ The CLI always uses `--type gtrace`.
 | Agent | Updated JSON path |
 | --- | --- |
 | `claude` | `enabled` |
+| `codebuddy` | `enabled` |
 | `codex` | `enabled` |
 | `opencode` | `enabled` |
 | `openclaw` | `plugins.entries.openclaw-otel-plugin.enabled` |

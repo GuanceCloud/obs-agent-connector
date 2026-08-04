@@ -37,11 +37,54 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 	switch adapter {
 	case "claude":
 		return removeClaude(home, options)
+	case "codebuddy":
+		return removeCodeBuddy(home, options)
 	case "codex":
 		return removeCodex(home, options)
 	default:
 		return RemoveResult{}, errors.New("unsupported adapter " + adapter)
 	}
+}
+
+func removeCodeBuddy(home string, options RemoveOptions) (RemoveResult, error) {
+	result := RemoveResult{Adapter: "codebuddy", HookFile: filepath.Join(home, ".codebuddy", "settings.json"), ConfigFile: filepath.Join(home, ".codebuddy", "gtrace.json")}
+	settings, exists, err := readJSONObjectIfExists(result.HookFile)
+	if err != nil {
+		return result, err
+	}
+	if exists {
+		hooks, _ := settings["hooks"].(map[string]any)
+		managed := managedCodeBuddyHook
+		if options.ConnectorOnly {
+			managed = connectorManagedHook
+		}
+		for _, event := range []string{"Stop", "SessionEnd"} {
+			groups, _ := hooks[event].([]any)
+			next, changed := removeManagedGroups(groups, managed)
+			if changed {
+				hooks[event] = next
+				result.HookRemoved = true
+			}
+		}
+		if result.HookRemoved {
+			if err := writeJSONAtomic(result.HookFile, settings); err != nil {
+				return result, err
+			}
+		}
+	}
+	if options.PurgeConfig {
+		if err := removeFileIfExists(result.ConfigFile); err != nil {
+			return result, err
+		}
+		result.ConfigRemoved = true
+	}
+	if options.PurgeState {
+		if err := os.RemoveAll(filepath.Join(home, ".codebuddy", "gtrace")); err != nil {
+			return result, err
+		}
+		result.StatePurged = true
+	}
+	return result, nil
 }
 
 func RemoveRuntime(home string) error {

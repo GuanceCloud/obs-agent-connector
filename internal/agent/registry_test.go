@@ -10,6 +10,7 @@ import (
 func TestRegisteredPluginNames(t *testing.T) {
 	expected := map[string]string{
 		"claude":    "claude-otel-plugin",
+		"codebuddy": "obs-agent-connector",
 		"codex":     "codex-otel-plugin",
 		"hermes":    "hermes-otel-plugin",
 		"opencode":  "opencode-otel-plugin",
@@ -32,7 +33,7 @@ func TestRegisteredPluginNames(t *testing.T) {
 }
 
 func TestSupportedNamesForWindows(t *testing.T) {
-	expected := []string{"codex", "openclaw", "opencode", "qoder", "workbuddy"}
+	expected := []string{"codebuddy", "codex", "openclaw", "opencode", "qoder", "workbuddy"}
 	got := SupportedNames("windows")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Windows supported names %v, got %v", expected, got)
@@ -40,7 +41,7 @@ func TestSupportedNamesForWindows(t *testing.T) {
 }
 
 func TestSupportedNamesForLinux(t *testing.T) {
-	expected := []string{"claude", "codex", "hermes", "openclaw", "opencode", "qoder"}
+	expected := []string{"claude", "codebuddy", "codex", "hermes", "openclaw", "opencode", "qoder"}
 	got := SupportedNames("linux")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Linux supported names %v, got %v", expected, got)
@@ -50,6 +51,7 @@ func TestSupportedNamesForLinux(t *testing.T) {
 func TestWindowsSupportFlags(t *testing.T) {
 	cases := map[string]bool{
 		"claude":    false,
+		"codebuddy": true,
 		"codex":     true,
 		"hermes":    false,
 		"opencode":  true,
@@ -82,6 +84,16 @@ func TestSelectForRuntimeKeepsLegacyByDefaultAndOptsIntoBuiltin(t *testing.T) {
 	}
 	if !builtin[0].IsBuiltin() || builtin[0].PluginName != "obs-agent-connector" || builtin[0].Markers[0] != "~/.codex/hooks.json" {
 		t.Fatalf("-n must select the built-in runtime: %#v", builtin[0])
+	}
+}
+
+func TestCodeBuddyUsesBuiltinRuntimeWithoutNewMode(t *testing.T) {
+	selected, err := SelectForRuntime("codebuddy", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected) != 1 || !selected[0].IsBuiltin() || selected[0].PluginName != "obs-agent-connector" {
+		t.Fatalf("unexpected CodeBuddy definition: %#v", selected)
 	}
 }
 
@@ -141,6 +153,7 @@ func TestDiscoverNewRuntimeMarksUnsupportedAgentWithoutExternalFallback(t *testi
 func TestLinuxSupportFlags(t *testing.T) {
 	cases := map[string]bool{
 		"claude":    true,
+		"codebuddy": true,
 		"codex":     true,
 		"hermes":    true,
 		"opencode":  true,

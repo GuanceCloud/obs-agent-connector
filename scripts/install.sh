@@ -298,6 +298,23 @@ fi
 printf 'Verified SHA-256 for %s\n' "$asset_name"
 
 tar -xzf "$tmp_dir/$asset_name" -C "$tmp_dir"
+
+if [ "${BINARY_ONLY}" -eq 0 ]; then
+  probe_config_path="$tmp_dir/capability-probe-config.json"
+  if ! "$tmp_dir/$binary_name" internal merge-config \
+    --path "$probe_config_path" \
+    --download-base-url "https://example.invalid/obs-agent-connector" \
+    --plugin-source "oss" \
+    --plugin-base-url "https://example.invalid" \
+    --endpoint "https://example.invalid" \
+    --x-token "capability-probe" >/dev/null 2>&1; then
+    echo "Downloaded $APP_NAME $current_version is incompatible with this installer (missing internal merge-config support)." >&2
+    echo "Use the installer from the same published release, or build the current source tree for development validation." >&2
+    exit 1
+  fi
+  rm -f "$probe_config_path"
+fi
+
 install -m 0755 "$tmp_dir/$binary_name" "$INSTALL_DIR/$APP_NAME"
 
 if [ "${BINARY_ONLY}" -eq 0 ]; then

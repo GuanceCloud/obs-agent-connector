@@ -114,6 +114,27 @@ func TestInstallDefaultsToLegacyPlugin(t *testing.T) {
 	}
 }
 
+func TestCodeBuddyInstallUsesBuiltinWithoutNewRuntimeFlag(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", configPath)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"endpoint":"https://example.com","x_token":"synthetic-secret"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := captureStdout(t, func() {
+		if err := install([]string{"codebuddy", "--dry-run", "--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(output, "codebuddy (built into obs-agent-connector)") || strings.Contains(output, "codebuddy-otel-plugin") {
+		t.Fatalf("unexpected install plan: %s", output)
+	}
+}
+
 func TestTargetedCommandsRejectNewRuntimeForUnsupportedAgent(t *testing.T) {
 	tests := map[string]func([]string) error{
 		"install": install,
