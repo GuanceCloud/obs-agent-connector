@@ -308,16 +308,18 @@ func mergeCodexGTraceConfig(current map[string]any, options CodexOptions, existe
 	if endpoint := strings.TrimSpace(options.Endpoint); endpoint != "" {
 		next["endpoint"] = strings.TrimRight(endpoint, "/")
 	}
+	currentTracePath := strings.Trim(strings.TrimSpace(firstJSONObjectString(next, "tracePath", "trace_path")), "/")
+	currentMetricsPath := strings.Trim(strings.TrimSpace(firstJSONObjectString(next, "metricsPath", "metrics_path")), "/")
 	tracePath := strings.Trim(strings.TrimSpace(options.TracePath), "/")
 	metricsPath := strings.Trim(strings.TrimSpace(options.MetricsPath), "/")
-	if tracePath == "" && options.Endpoint != "" {
+	if tracePath == "" && options.Endpoint != "" && currentTracePath == "" {
 		if options.InstallType == "otlp" {
 			tracePath = "v1/traces"
 		} else {
 			tracePath = "v1/write/otel-llm"
 		}
 	}
-	if metricsPath == "" && options.Endpoint != "" {
+	if metricsPath == "" && options.Endpoint != "" && currentMetricsPath == "" {
 		if options.InstallType == "otlp" {
 			metricsPath = "v1/metrics"
 		} else {
@@ -423,6 +425,16 @@ func stringObject(value any) map[string]string {
 		}
 	}
 	return out
+}
+
+func firstJSONObjectString(values map[string]any, names ...string) string {
+	for _, name := range names {
+		value, ok := values[name].(string)
+		if ok && strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func splitKeyValue(value string) (string, string, bool) {

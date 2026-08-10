@@ -14,6 +14,7 @@ obs-agent-connector <command> [arguments]
 | `status <agent>` | Show one Agent plugin status, including install state, config path, plugin path, version, and runtime `enabled` state when supported. |
 | `discover` | Detect supported local Agents and install any missing plugins by using connector defaults from `config.json`. Use `discover -u` to update installed plugins and install any missing plugins in one run. |
 | `install <agent>` | Install one Agent integration. CodeBuddy is built in; other Agents use their external plugins. |
+| `config <agent>` | List or edit the managed runtime `gtrace.json` for supported Agents. |
 | `enable <agent>` | Enable one installed Agent plugin by setting its runtime JSON `enabled` switch to `true`. |
 | `disable <agent>` | Disable one installed Agent plugin by setting its runtime JSON `enabled` switch to `false`. |
 | `update <agent>` | Update one installed Agent plugin without modifying its current configuration. |
@@ -98,6 +99,42 @@ The output includes:
 - runtime `enabled` state for Agents that use a supported JSON config
 
 For plugins such as `hermes`, whose runtime config is YAML, the `enabled` field is reported as `unsupported`.
+
+## Config
+
+List the current managed runtime config:
+
+```bash
+obs-agent-connector config codex list
+```
+
+Edit one or more runtime parameters:
+
+```bash
+obs-agent-connector config codex edit \
+  --enabled=false \
+  --endpoint=https://llm-openway.truewatch.com
+```
+
+Supported edit parameters:
+
+| Parameter | Description |
+| --- | --- |
+| `--enabled=<true|false>` | Set runtime enabled state |
+| `--endpoint` | Set the OBS / GTrace endpoint |
+| `--trace-path` | Set the trace upload path |
+| `--metrics-path` | Set the metrics upload path |
+| `--x-token` | Set the `X-Token` header |
+| `--header` | Add one HTTP header. Supports one or more `--header` parameters |
+| `--tag` | Add one resource attribute. Supports one or more `--tag` parameters |
+| `--capture-content` | Set content capture mode to `none`, `preview`, or `full` |
+| `--max-chars` | Set the maximum captured characters |
+
+Notes:
+
+- `edit` merges the supplied values into the existing config and rewrites the file atomically
+- supported Agents: `claude`, `codebuddy`, `codex`, `opencode`, `qoder`, and `workbuddy`
+- `hermes` and `openclaw` are excluded because they do not use the managed `gtrace.json` layout
 
 ## Install
 

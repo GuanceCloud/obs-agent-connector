@@ -2,7 +2,9 @@ package hook
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -14,6 +16,7 @@ import (
 
 	codebuddyconfig "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codebuddy/config"
 	codebuddyparse "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codebuddy/parse"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/proto"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
 )
 
@@ -132,6 +135,59 @@ func TestRunWorkerUploadsAndRemovesQueue(t *testing.T) {
 	}
 	if bytes.Contains(logBody, []byte("Inspect the synthetic project")) {
 		t.Fatalf("log leaked content: %s", logBody)
+	}
+}
+
+func TestExportTurnUsesGzipUploadByDefault(t *testing.T) {
+	var traces, metricRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		if request.Header.Get("Content-Encoding") != "gzip" {
+			t.Fatalf("unexpected content-encoding %q", request.Header.Get("Content-Encoding"))
+		}
+		reader, err := gzip.NewReader(request.Body)
+		if err != nil {
+			t.Fatalf("new gzip reader: %v", err)
+		}
+		body, err := io.ReadAll(reader)
+		if err != nil {
+			t.Fatalf("read gzip body: %v", err)
+		}
+		if err := reader.Close(); err != nil {
+			t.Fatalf("close gzip reader: %v", err)
+		}
+		switch request.URL.Path {
+		case "/traces":
+			traces.Add(1)
+			if _, err := proto.DecodeExportTraceServiceRequest(body); err != nil {
+				t.Fatalf("decode traces: %v", err)
+			}
+		case "/metrics":
+			metricRequests.Add(1)
+			if _, err := proto.DecodeExportMetricsServiceRequest(body); err != nil {
+				t.Fatalf("decode metrics: %v", err)
+			}
+		default:
+			t.Fatalf("unexpected path %s", request.URL.Path)
+		}
+		writer.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	cfg := telemetryConfig(server.URL, t.TempDir())
+	turns, _, _, err := codebuddyparse.Read(codebuddyparse.HookInput{
+		Event:          "Stop",
+		SessionID:      "gzip",
+		GenerationID:   "generation-1",
+		TranscriptPath: hookFixture(t, "normal"),
+	}, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := exportTurn(cfg, turns[0], nil); err != nil {
+		t.Fatal(err)
+	}
+	if traces.Load() != 1 || metricRequests.Load() != 1 {
+		t.Fatalf("traces=%d metrics=%d", traces.Load(), metricRequests.Load())
 	}
 }
 

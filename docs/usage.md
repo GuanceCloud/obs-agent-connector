@@ -152,6 +152,8 @@ obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codebuddy
+obs-agent-connector config codex list
+obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
 obs-agent-connector install opencode
 obs-agent-connector update codex
 obs-agent-connector enable codex
@@ -201,6 +203,43 @@ The output includes:
 - runtime `enabled` state when the Agent uses a supported JSON config
 
 For `hermes`, `enabled` is shown as `unsupported` because its runtime config is YAML.
+
+## `config`
+
+List the current managed runtime config:
+
+```bash
+obs-agent-connector config codex list
+```
+
+Edit one or more runtime parameters:
+
+```bash
+obs-agent-connector config codex edit \
+  --enabled=false \
+  --endpoint=https://llm-openway.truewatch.com
+```
+
+Parameters:
+
+| Parameter | Description |
+| --- | --- |
+| `--enabled=<true|false>` | Set the runtime enabled state |
+| `--endpoint` | Set the OBS / GTrace endpoint |
+| `--trace-path` | Set the trace upload path |
+| `--metrics-path` | Set the metrics upload path |
+| `--x-token` | Set the `X-Token` header |
+| `--header` | Add one HTTP header. Supports one or more `--header` parameters |
+| `--tag` | Add one resource attribute. Supports one or more `--tag` parameters |
+| `--capture-content` | Set content capture to `none`, `preview`, or `full` |
+| `--max-chars` | Set the maximum captured characters |
+
+Notes:
+
+- `list` prints the current managed `gtrace.json` values
+- `edit` merges the supplied values into the existing config and rewrites the file
+- supported Agents: `claude`, `codebuddy`, `codex`, `opencode`, `qoder`, and `workbuddy`
+- `hermes` and `openclaw` are not supported by this command
 
 ## `discover`
 
@@ -308,8 +347,8 @@ Parameters:
 | `--agent-name` | Override the generated `agent_name` |
 | `--trace-path` | Override the Trace upload path for the built-in CodeBuddy adapter |
 | `--metrics-path` | Override the Metrics upload path for the built-in CodeBuddy adapter |
-| `--header` | Add a CodeBuddy HTTP header; may be repeated |
-| `--tag` | Add a resource attribute; may be repeated |
+| `--header` | Add one CodeBuddy HTTP header. Supports one or more `--header` parameters |
+| `--tag` | Add one resource attribute. Supports one or more `--tag` parameters |
 | `--capture-content` | Set CodeBuddy content capture to `none`, `preview`, or `full` |
 | `--max-chars` | Set the CodeBuddy content length limit |
 | `--enable` / `--disable` | Set the runtime enabled state |
