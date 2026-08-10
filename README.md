@@ -45,6 +45,8 @@ obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codebuddy
+obs-agent-connector config codex list
+obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
 obs-agent-connector install opencode
 obs-agent-connector install qoder
 obs-agent-connector install workbuddy
@@ -90,10 +92,12 @@ The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
 `list` and `discover` also show the detected plugin version when it can be resolved from the local install layout.
 `status <agent>` prints a single-Agent view including install state, version, config path, plugin path, and runtime `enabled` status when the plugin uses a supported JSON config.
+`config <agent> list` shows the current managed `gtrace.json` parameters for supported Agents. `config <agent> edit` merges one or more parameters into the existing file and rewrites it.
 Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
+`config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
 `remove codebuddy` removes only the managed CodeBuddy Hook and preserves `gtrace.json` and upload state unless `--purge-config` is supplied. `uninstall` removes the connector binary and its managed CodeBuddy Hook while preserving Agent config and state.
 
 ## Build

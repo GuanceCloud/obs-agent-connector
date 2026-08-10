@@ -29,6 +29,8 @@ func Run(args []string) error {
 		return discover(args[1:])
 	case "install":
 		return install(args[1:])
+	case "config":
+		return configCommand(args[1:])
 	case "enable":
 		return enable(args[1:])
 	case "disable":
@@ -65,6 +67,7 @@ Commands:
   status <agent>        Show one Agent plugin status
   discover              Detect local Agents; install missing plugins, or sync all with -u
   install <agent>       Install an Agent plugin
+  config <agent>        List or edit one Agent runtime config
   enable <agent>        Enable one installed Agent plugin
   disable <agent>       Disable one installed Agent plugin
   update <agent>        Update one installed Agent plugin
@@ -78,6 +81,8 @@ Examples:
   obs-agent-connector status codex
   obs-agent-connector install codex
   obs-agent-connector install codebuddy
+  obs-agent-connector config codex list
+  obs-agent-connector config codex edit --enabled=false
   obs-agent-connector install opencode
   obs-agent-connector install qoder
   obs-agent-connector enable codex

@@ -54,7 +54,7 @@ At plugin install time, the CLI uses:
 | `Agent ID` | auto-generated `agid_<uuidv4-without-dashes>` or `--agent-id` override | `--tag agent_id=<value>` |
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
-The built-in CodeBuddy adapter accepts `--trace-path`, `--metrics-path`, repeated `--header`, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
+The built-in CodeBuddy adapter accepts `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
 
 The CLI always uses `--type gtrace`.
 

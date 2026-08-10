@@ -2,6 +2,7 @@ package transport
 
 import (
 	"bytes"
+	"compress/gzip"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -38,7 +39,12 @@ func (c Client) Upload(signal string, body []byte) (Result, error) {
 	if strings.TrimSpace(url) == "" {
 		return Result{}, fmt.Errorf("%s endpoint is empty", signal)
 	}
-	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(body))
+	contentEncoding := requestContentEncoding(c.Config.Headers)
+	payload, err := encodeRequestBody(body, contentEncoding)
+	if err != nil {
+		return Result{}, err
+	}
+	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return Result{}, err
 	}
@@ -46,6 +52,9 @@ func (c Client) Upload(signal string, body []byte) (Result, error) {
 		if strings.TrimSpace(key) != "" && strings.TrimSpace(value) != "" {
 			request.Header.Set(key, value)
 		}
+	}
+	if request.Header.Get("Content-Encoding") == "" && contentEncoding == "gzip" {
+		request.Header.Set("Content-Encoding", "gzip")
 	}
 	request.Header.Set("Content-Type", "application/x-protobuf")
 	if request.Header.Get("Authorization") == "" && (c.Config.PublicKey != "" || c.Config.SecretKey != "") {
@@ -71,6 +80,45 @@ func (c Client) Upload(signal string, body []byte) (Result, error) {
 		return result, fmt.Errorf("OTLP %s upload failed: HTTP %d", signal, response.StatusCode)
 	}
 	return result, nil
+}
+
+func requestContentEncoding(headers map[string]string) string {
+	value := strings.ToLower(strings.TrimSpace(headerValue(headers, "Content-Encoding")))
+	if value == "" {
+		return "gzip"
+	}
+	return value
+}
+
+func encodeRequestBody(body []byte, contentEncoding string) ([]byte, error) {
+	switch strings.ToLower(strings.TrimSpace(contentEncoding)) {
+	case "identity":
+		return body, nil
+	case "gzip":
+		var compressed bytes.Buffer
+		writer := gzip.NewWriter(&compressed)
+		if _, err := writer.Write(body); err != nil {
+			_ = writer.Close()
+			return nil, err
+		}
+		if err := writer.Close(); err != nil {
+			return nil, err
+		}
+		return compressed.Bytes(), nil
+	case "":
+		return body, nil
+	default:
+		return body, nil
+	}
+}
+
+func headerValue(headers map[string]string, name string) string {
+	for key, value := range headers {
+		if strings.EqualFold(strings.TrimSpace(key), name) {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func (c Client) signalURL(signal string) string {

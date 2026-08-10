@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"compress/gzip"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -39,7 +40,10 @@ func TestHookUploadsDecodableTraceAndMetricsOnce(t *testing.T) {
 	var traces atomic.Int32
 	var metricRequests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
-		body, err := io.ReadAll(request.Body)
+		if request.Header.Get("Content-Encoding") != "gzip" {
+			t.Errorf("unexpected content-encoding %q", request.Header.Get("Content-Encoding"))
+		}
+		body, err := readMaybeGzipBody(request)
 		if err != nil {
 			t.Error(err)
 		}
@@ -88,6 +92,18 @@ func TestHookUploadsDecodableTraceAndMetricsOnce(t *testing.T) {
 	if traces.Load() != 1 || metricRequests.Load() != 1 {
 		t.Fatalf("requests: traces=%d metrics=%d", traces.Load(), metricRequests.Load())
 	}
+}
+
+func readMaybeGzipBody(request *http.Request) ([]byte, error) {
+	if request.Header.Get("Content-Encoding") != "gzip" {
+		return io.ReadAll(request.Body)
+	}
+	reader, err := gzip.NewReader(request.Body)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	return io.ReadAll(reader)
 }
 
 func TestHookRetriesOnlyFailedSignal(t *testing.T) {
