@@ -33,7 +33,7 @@ func TestRegisteredPluginNames(t *testing.T) {
 }
 
 func TestSupportedNamesForWindows(t *testing.T) {
-	expected := []string{"codebuddy", "codex", "openclaw", "opencode", "qoder", "workbuddy"}
+	expected := []string{"claude", "codebuddy", "codex", "openclaw", "opencode", "qoder", "workbuddy"}
 	got := SupportedNames("windows")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Windows supported names %v, got %v", expected, got)
@@ -50,7 +50,7 @@ func TestSupportedNamesForLinux(t *testing.T) {
 
 func TestWindowsSupportFlags(t *testing.T) {
 	cases := map[string]bool{
-		"claude":    false,
+		"claude":    true,
 		"codebuddy": true,
 		"codex":     true,
 		"hermes":    false,
@@ -69,18 +69,8 @@ func TestWindowsSupportFlags(t *testing.T) {
 	}
 }
 
-func TestClaudeRemainsExternalPlugin(t *testing.T) {
-	selected, err := Select("claude")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if selected[0].IsBuiltin() || selected[0].PluginName != "claude-otel-plugin" {
-		t.Fatalf("claude must use its external plugin: %#v", selected[0])
-	}
-}
-
-func TestCodeBuddyAndCodexUseBuiltinRuntime(t *testing.T) {
-	for _, name := range []string{"codebuddy", "codex"} {
+func TestClaudeAndCodexUseBuiltinRuntime(t *testing.T) {
+	for _, name := range []string{"claude", "codebuddy", "codex"} {
 		selected, err := Select(name)
 		if err != nil {
 			t.Fatal(err)
@@ -88,6 +78,16 @@ func TestCodeBuddyAndCodexUseBuiltinRuntime(t *testing.T) {
 		if len(selected) != 1 || !selected[0].IsBuiltin() {
 			t.Fatalf("unexpected builtin definition for %s: %#v", name, selected)
 		}
+	}
+}
+
+func TestClaudeBuiltinKeepsLegacyPluginName(t *testing.T) {
+	selected, err := Select("claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(selected) != 1 || !selected[0].IsBuiltin() || selected[0].PluginName != "claude-otel-plugin" {
+		t.Fatalf("unexpected Claude definition: %#v", selected)
 	}
 }
 
@@ -101,7 +101,7 @@ func TestCodeBuddyUsesBuiltinConnectorPluginName(t *testing.T) {
 	}
 }
 
-func TestDiscoverUsesExternalClaudeAndBuiltinCodexDefinitions(t *testing.T) {
+func TestDiscoverUsesBuiltinClaudeAndCodexDefinitions(t *testing.T) {
 	home := t.TempDir()
 	binDir := t.TempDir()
 	t.Setenv("HOME", home)
@@ -118,8 +118,8 @@ func TestDiscoverUsesExternalClaudeAndBuiltinCodexDefinitions(t *testing.T) {
 		found[candidate.Plugin.Name] = candidate
 	}
 	claude, ok := found["claude"]
-	if !ok || !claude.Supported || claude.Plugin.IsBuiltin() || claude.Plugin.PluginName != "claude-otel-plugin" {
-		t.Fatalf("expected external claude candidate, got %#v", claude)
+	if !ok || !claude.Supported || !claude.Plugin.IsBuiltin() || claude.Plugin.PluginName != "claude-otel-plugin" {
+		t.Fatalf("expected builtin claude candidate, got %#v", claude)
 	}
 	codex, ok := found["codex"]
 	if !ok || !codex.Supported || !codex.Plugin.IsBuiltin() || codex.Plugin.PluginName != "codex-otel-plugin" {

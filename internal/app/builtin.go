@@ -17,6 +17,22 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 	}
 	printSingleDetail("Runtime", executable)
 	switch p.Name {
+	case "claude":
+		_, err = telemetryinstall.InstallClaude(telemetryinstall.ClaudeOptions{
+			SourceExecutable:      executable,
+			DestinationExecutable: executable,
+			Endpoint:              input.Endpoint,
+			TracePath:             input.TracePath,
+			MetricsPath:           input.MetricsPath,
+			InstallType:           fixedType,
+			XToken:                input.XToken,
+			Headers:               append([]string{}, input.Headers...),
+			ResourceAttributes:    builtinResourceAttributes(input),
+			CaptureContent:        input.CaptureContent,
+			MaxChars:              input.MaxChars,
+			Enabled:               input.Enabled,
+			NoConfig:              noConfig,
+		})
 	case "codebuddy":
 		_, err = telemetryinstall.InstallCodeBuddy(telemetryinstall.CodeBuddyOptions{
 			SourceExecutable: executable, DestinationExecutable: executable,
@@ -70,13 +86,13 @@ func removeBuiltinAdapter(p agent.Definition, purgeConfig, purgeState bool) erro
 	if purgeState {
 		printSingleDetail("State", removedOrKept(result.StatePurged))
 	}
-	if p.Name == "codex" {
-		removeBuiltinCodexLegacy(p)
+	if p.Name == "claude" || p.Name == "codex" {
+		removeBuiltinLegacyResidue(p)
 	}
 	return nil
 }
 
-func removeBuiltinCodexLegacy(p agent.Definition) {
+func removeBuiltinLegacyResidue(p agent.Definition) {
 	for _, command := range p.RemoveCmds {
 		if len(command) == 0 {
 			continue
@@ -91,7 +107,7 @@ func removeBuiltinCodexLegacy(p agent.Definition) {
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
 		if err := cmd.Run(); err != nil {
-			printSingleDetail("Warning", fmt.Sprintf("legacy Codex removal command failed; continuing: %v", err))
+			printSingleDetail("Warning", fmt.Sprintf("legacy %s removal command failed; continuing: %v", p.Name, err))
 		}
 	}
 
@@ -100,7 +116,7 @@ func removeBuiltinCodexLegacy(p agent.Definition) {
 			printSingleDetail("Cleanup", item)
 		}
 		if err := p.RemoveCleanup(p); err != nil {
-			printSingleDetail("Warning", fmt.Sprintf("legacy Codex cleanup failed; continuing: %v", err))
+			printSingleDetail("Warning", fmt.Sprintf("legacy %s cleanup failed; continuing: %v", p.Name, err))
 		}
 	}
 

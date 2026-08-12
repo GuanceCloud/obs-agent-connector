@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -89,6 +90,76 @@ func TestCodeBuddyBuiltinInstallDryRunDoesNotPrintToken(t *testing.T) {
 	}
 }
 
+func TestClaudeBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+	executable := filepath.Join(home, ".local", "bin", "obs-agent-connector")
+	originalExecutable := currentExecutable
+	currentExecutable = func() (string, error) { return executable, nil }
+	t.Cleanup(func() { currentExecutable = originalExecutable })
+
+	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	configPath := filepath.Join(home, ".claude", "gtrace.json")
+	for _, path := range []string{settingsPath, configPath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	settings := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo keep"}]},{"hooks":[{"type":"command","command":"/tmp/claude-otel-plugin/bin/claude_otel_hook"}]}],"SessionEnd":[{"hooks":[{"type":"command","command":"/tmp/claude-otel-plugin/bin/claude_otel_hook"}]}]}}`
+	config := []byte("{\"enabled\":false,\"endpoint\":\"https://existing.example.com\",\"unknown\":{\"keep\":true}}\n")
+	if err := os.WriteFile(settingsPath, []byte(settings), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	plugin := agent.Get("claude")
+	if err := installBuiltinAdapter(plugin, installInput{}, true); err != nil {
+		t.Fatal(err)
+	}
+
+	updatedSettings, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(updatedSettings)
+	if !strings.Contains(text, executable) || !strings.Contains(text, "echo keep") || strings.Contains(text, "claude-otel-plugin") {
+		t.Fatalf("legacy Claude Hook was not safely reconciled: %s", text)
+	}
+	var value map[string]any
+	if err := json.Unmarshal(updatedSettings, &value); err != nil {
+		t.Fatal(err)
+	}
+	hooksValue := value["hooks"].(map[string]any)
+	for _, event := range []string{"Stop", "SessionEnd"} {
+		groups := hooksValue[event].([]any)
+		foundManaged := false
+		for _, group := range groups {
+			groupMap := group.(map[string]any)
+			handlers := groupMap["hooks"].([]any)
+			for _, handler := range handlers {
+				handlerMap := handler.(map[string]any)
+				args, _ := handlerMap["args"].([]any)
+				if fmt.Sprint(handlerMap["command"]) == executable && len(args) >= 2 && fmt.Sprint(args[0]) == "hook" && fmt.Sprint(args[1]) == "claude" {
+					foundManaged = true
+				}
+			}
+		}
+		if !foundManaged {
+			t.Fatalf("expected managed Claude hook in %s: %s", event, text)
+		}
+	}
+	updatedConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(updatedConfig) != string(config) {
+		t.Fatalf("--no-config changed runtime config:\nwant %s\n got %s", config, updatedConfig)
+	}
+}
+
 func TestCodexBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
@@ -133,6 +204,28 @@ func TestCodexBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *testi
 	}
 	if string(updatedConfig) != string(config) {
 		t.Fatalf("--no-config changed runtime config:\nwant %s\n got %s", config, updatedConfig)
+	}
+}
+
+func TestClaudeInstallUsesBuiltin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", configPath)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"endpoint":"https://example.com","x_token":"secret","plugin_base_url":"https://static.example.com"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	output := captureStdout(t, func() {
+		if err := install([]string{"claude", "--dry-run", "--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(output, "claude (built into obs-agent-connector)") || strings.Contains(output, "claude-otel-plugin") {
+		t.Fatalf("Claude install must use the built-in adapter: %s", output)
 	}
 }
 
@@ -317,6 +410,72 @@ func TestCodexBuiltinRemoveAlsoCleansLegacyPluginResidue(t *testing.T) {
 	}
 	if _, err := os.Stat(legacySourcePath); !os.IsNotExist(err) {
 		t.Fatalf("expected legacy source path removed, got %v", err)
+	}
+	if _, err := os.Stat(legacyCachePath); !os.IsNotExist(err) {
+		t.Fatalf("expected legacy cache path removed, got %v", err)
+	}
+	if _, err := os.Stat(gtracePath); err != nil {
+		t.Fatalf("expected runtime config to be preserved without purge: %v", err)
+	}
+}
+
+func TestClaudeBuiltinRemoveAlsoCleansLegacyPluginResidue(t *testing.T) {
+	home := t.TempDir()
+	setTestHome(t, home)
+	t.Setenv("PATH", t.TempDir())
+
+	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	gtracePath := filepath.Join(home, ".claude", "gtrace.json")
+	legacyMarketplacePath := filepath.Join(home, ".claude", "marketplaces", "claude-otel-plugin-release")
+	legacyCachePath := filepath.Join(home, ".claude", "plugins", "cache", "claude-otel-plugin")
+	for _, path := range []string{settingsPath, gtracePath, legacyMarketplacePath, legacyCachePath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(legacyMarketplacePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(legacyCachePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	settingsBody, err := json.Marshal(map[string]any{
+		"hooks": map[string]any{
+			"Stop": []any{
+				map[string]any{"hooks": []any{map[string]any{"type": "command", "command": filepath.Join(home, ".local", "bin", "obs-agent-connector"), "args": []any{"hook", "claude"}}}},
+				map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "/tmp/claude-otel-plugin/bin/claude_otel_hook"}}},
+				map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "echo keep"}}},
+			},
+			"SessionEnd": []any{
+				map[string]any{"hooks": []any{map[string]any{"type": "command", "command": filepath.Join(home, ".local", "bin", "obs-agent-connector"), "args": []any{"hook", "claude"}}}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	settingsBody = append(settingsBody, '\n')
+	if err := os.WriteFile(settingsPath, settingsBody, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(gtracePath, []byte(`{"enabled":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := remove([]string{"claude", "--yes"}); err != nil {
+		t.Fatal(err)
+	}
+
+	updatedSettings, err := os.ReadFile(settingsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	settingsText := string(updatedSettings)
+	if strings.Contains(settingsText, "hook\", \"claude") || strings.Contains(settingsText, "claude_otel_hook") || !strings.Contains(settingsText, "echo keep") {
+		t.Fatalf("expected managed and legacy Claude hooks removed while preserving unrelated entries: %s", settingsText)
+	}
+	if _, err := os.Stat(legacyMarketplacePath); !os.IsNotExist(err) {
+		t.Fatalf("expected legacy marketplace path removed, got %v", err)
 	}
 	if _, err := os.Stat(legacyCachePath); !os.IsNotExist(err) {
 		t.Fatalf("expected legacy cache path removed, got %v", err)

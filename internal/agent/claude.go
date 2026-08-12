@@ -2,13 +2,13 @@ package agent
 
 func claudePlugin() Definition {
 	return Definition{
-		Name:           "claude",
-		PluginName:     "claude-otel-plugin",
-		AgentCommand:   "claude",
-		PackageScript:  "scripts/install.sh",
-		PackageArgs:    []string{"--refresh"},
-		PackageRootArg: true,
+		Name:            "claude",
+		Backend:         BackendBuiltin,
+		BuiltinHookFile: "~/.claude/settings.json",
+		PluginName:      "claude-otel-plugin",
+		AgentCommand:    "claude",
 		Markers: []string{
+			"~/.claude/settings.json",
 			"~/.claude/marketplaces/claude-otel-plugin-release",
 			"~/.claude/plugins/cache/claude-otel-plugin",
 		},

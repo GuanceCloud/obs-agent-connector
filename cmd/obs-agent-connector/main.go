@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	claudehook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/hook"
 	codebuddyhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codebuddy/hook"
 	codexhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/hook"
 	"github.com/GuanceCloud/obs-agent-connector/internal/app"
@@ -12,6 +13,8 @@ import (
 func main() {
 	if len(os.Args) >= 3 && os.Args[1] == "hook" {
 		switch os.Args[2] {
+		case "claude":
+			os.Exit(claudehook.RunCLI())
 		case "codebuddy":
 			os.Exit(codebuddyhook.RunCLI(os.Args[3:]))
 		case "codex":
