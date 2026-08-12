@@ -144,10 +144,12 @@ Install one plugin with stored connector defaults:
 obs-agent-connector install codex
 ```
 
-Install the default built-in CodeBuddy adapter:
+Install the default built-in adapters:
 
 ```bash
+obs-agent-connector install claude
 obs-agent-connector install codebuddy
+obs-agent-connector install codex
 ```
 
 Override stored defaults or identity values:
@@ -165,7 +167,7 @@ By default, `install` reuses the CLI download source recorded in `~/.obs-agent-c
 If that source is unavailable, `install` derives the installer base from `--endpoint`.
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
 Use `--static-base` when you need to override the installer base.
-On Windows, CodeBuddy registers the current connector executable directly. External plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
+On Windows, Claude, CodeBuddy, and Codex register the current connector executable directly. External plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
 CodeBuddy, Codex, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows. Claude is not currently supported on Windows.
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
@@ -243,7 +245,7 @@ Preview removal:
 obs-agent-connector remove codex --dry-run
 ```
 
-`remove codebuddy` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.codebuddy/settings.json` and preserves unrelated Hooks. Add `--purge-config` to also delete `~/.codebuddy/gtrace.json` and `~/.codebuddy/gtrace` upload state.
+`remove claude` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.claude/settings.json` and preserves unrelated Hooks. `remove codebuddy` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.codebuddy/settings.json` and preserves unrelated Hooks. Add `--purge-config` to also delete the managed `gtrace.json`; for CodeBuddy it also removes `~/.codebuddy/gtrace` upload state.
 
 ## Version
 

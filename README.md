@@ -2,12 +2,12 @@
 
 `obs-agent-connector` is the single command-line runtime for installing, managing, and collecting OBS/GTrace telemetry across multiple AI coding agents.
 
-The tool provides one binary and one version for connector lifecycle operations and the built-in CodeBuddy telemetry adapter. Claude, Codex, and other Agents continue to use their external plugins.
+The tool provides one binary and one version for connector lifecycle operations and built-in telemetry adapters for Claude, CodeBuddy, and Codex. Other Agents continue to use their external plugins.
 
 ## Features
 
 - Bootstrap the CLI and OBS defaults with one installer command.
-- Collect CodeBuddy terminal turns through the built-in `Stop` and `SessionEnd` adapter without a separate repository.
+- Collect Claude, CodeBuddy, and Codex terminal turns through built-in adapters without separate repositories.
 - Install transitional external Agent plugins through their official remote installer scripts.
 - Auto-discover local Agents, install missing plugins, and sync all plugins with `discover -u`.
 - Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
@@ -27,9 +27,9 @@ The tool provides one binary and one version for connector lifecycle operations 
 
 | Agent | Plugin | macOS | Linux | Windows | Notes |
 | --- | --- | --- | --- | --- | --- |
-| `claude` | `claude-otel-plugin` | `✅` | `✅` | `❌` | External plugin |
+| `claude` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook adapter |
 | `codebuddy` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook plus native `index.json` replay; Linux x64 is product-validated |
-| `codex` | `codex-otel-plugin` | `✅` | `✅` | `✅` | External plugin |
+| `codex` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop Hook adapter plus built-in Codex trust/config handling |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
@@ -71,8 +71,8 @@ Use `--static-base` to override this behavior.
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
-- CodeBuddy registers the connector directly; external plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
+- On Windows, `claude`, `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
+- Claude, CodeBuddy, and Codex register the connector directly; external plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
 
 Bootstrap the CLI with shared defaults:
 
@@ -86,7 +86,7 @@ For example, `https://llm-openway.guance.com` maps to `https://static.guance.com
 The downloaded package is verified against `SHA256SUMS` before installation.
 
 After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
-Claude and Codex use their external plugins. CodeBuddy is managed as a built-in adapter with ordinary commands such as `install codebuddy`, `status codebuddy`, and `remove codebuddy`.
+Claude, CodeBuddy, and Codex are managed as built-in adapters with ordinary commands such as `install <agent>`, `status <agent>`, and `remove <agent>`.
 `install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
 The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
@@ -98,7 +98,7 @@ OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.conf
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
 `config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
-`remove codebuddy` removes only the managed CodeBuddy Hook and preserves `gtrace.json` and upload state unless `--purge-config` is supplied. `uninstall` removes the connector binary and its managed CodeBuddy Hook while preserving Agent config and state.
+`remove codebuddy`, `remove claude`, and `remove codex` remove only connector-managed Hooks by default and preserve runtime config unless `--purge-config` is supplied. `uninstall` removes the connector binary and its managed built-in Hooks while preserving Agent config and state.
 
 ## Build
 

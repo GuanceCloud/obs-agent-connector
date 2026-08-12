@@ -18,7 +18,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`; Claude is not currently supported
+- Windows currently supports `claude`, `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
 
 ## Install obs-agent-connector
 
@@ -182,7 +182,7 @@ The output includes:
 
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
 
-CodeBuddy uses the built-in runtime. Claude, Codex, and other Agents use their external plugins.
+Claude, CodeBuddy, and Codex use built-in runtimes. Other Agents use their external plugins.
 
 ## `status`
 
@@ -331,10 +331,12 @@ Install a single Agent plugin:
 obs-agent-connector install codex
 ```
 
-Install the built-in CodeBuddy adapter with the ordinary command:
+Install a built-in adapter with the ordinary command:
 
 ```bash
+obs-agent-connector install claude
 obs-agent-connector install codebuddy
+obs-agent-connector install codex
 ```
 
 Parameters:
@@ -372,7 +374,9 @@ Notes:
 - if `--agent-id` is omitted, the CLI generates `agid_<uuidv4-without-dashes>`
 - if `--agent-name` is omitted, the CLI generates `<hostname>_<agent>_<YYYYMMDD>`
 - `install` accepts a single Agent target only
+- Claude installation replaces legacy `claude-otel-plugin` Hook entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - CodeBuddy installation replaces legacy `codebuddy-hook` entries and preserves unrelated `Stop` and `SessionEnd` Hooks
+- Codex installation replaces legacy `codex-otel-plugin` Hook entries, updates managed Stop Hooks, and preserves unrelated Hook entries
 - existing runtime configuration and upload state are preserved unless explicitly changed or purged
 
 ## `update`
@@ -395,7 +399,7 @@ Notes:
 
 - `update` accepts a single Agent target only
 - the command preserves the existing runtime config
-- the built-in CodeBuddy adapter reconciles its Hook without modifying `gtrace.json`
+- the built-in Claude, CodeBuddy, and Codex adapters reconcile their Hooks without modifying `gtrace.json`
 - external plugin installers receive `--no-config`
 
 ## `enable` / `disable`
@@ -455,7 +459,9 @@ Notes:
 
 - by default the plugin is removed and the config is kept
 - `remove` accepts a single Agent target only
+- `remove claude` removes only connector-owned Claude Hooks and preserves `~/.claude/gtrace.json` unless `--purge-config` is supplied
 - `remove codebuddy` removes only connector-owned CodeBuddy Hooks; `--purge-config` additionally removes `~/.codebuddy/gtrace.json` and upload state
+- `remove codex` removes only connector-owned Codex Hooks by default and also attempts to clean legacy `codex-otel-plugin` residue without blocking removal on legacy cleanup failures
 
 ## `version`
 
@@ -495,6 +501,7 @@ Notes:
 
 Supported Agents on Windows:
 
+- `claude`
 - `codebuddy`
 - `codex`
 - `openclaw`
