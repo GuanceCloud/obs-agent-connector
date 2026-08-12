@@ -2,6 +2,8 @@ package app
 
 import (
 	"fmt"
+	"os"
+	"os/exec"
 	"strings"
 
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
@@ -14,18 +16,40 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 		return fmt.Errorf("resolve connector executable: %w", err)
 	}
 	printSingleDetail("Runtime", executable)
-	if p.Name != "codebuddy" {
+	switch p.Name {
+	case "codebuddy":
+		_, err = telemetryinstall.InstallCodeBuddy(telemetryinstall.CodeBuddyOptions{
+			SourceExecutable: executable, DestinationExecutable: executable,
+			Endpoint: input.Endpoint, TracePath: input.TracePath, MetricsPath: input.MetricsPath,
+			InstallType: fixedType, XToken: input.XToken, Headers: append([]string{}, input.Headers...),
+			ResourceAttributes: builtinResourceAttributes(input), CaptureContent: input.CaptureContent,
+			MaxChars: input.MaxChars, Enabled: input.Enabled, NoConfig: noConfig,
+		})
+		if err == nil {
+			printSingleDetail("Note", "Restart CodeBuddy if the reconciled Hook is not picked up automatically.")
+		}
+	case "codex":
+		result, installErr := telemetryinstall.InstallCodex(telemetryinstall.CodexOptions{
+			SourceExecutable:      executable,
+			DestinationExecutable: executable,
+			Endpoint:              input.Endpoint,
+			TracePath:             input.TracePath,
+			MetricsPath:           input.MetricsPath,
+			InstallType:           fixedType,
+			XToken:                input.XToken,
+			Headers:               append([]string{}, input.Headers...),
+			ResourceAttributes:    builtinResourceAttributes(input),
+			CaptureContent:        input.CaptureContent,
+			MaxChars:              input.MaxChars,
+			Enabled:               input.Enabled,
+			NoConfig:              noConfig,
+		})
+		err = installErr
+		if err == nil && result.TrustSkipped {
+			printSingleDetail("Trust", "skipped")
+		}
+	default:
 		return fmt.Errorf("%s does not have a built-in telemetry adapter", p.Name)
-	}
-	_, err = telemetryinstall.InstallCodeBuddy(telemetryinstall.CodeBuddyOptions{
-		SourceExecutable: executable, DestinationExecutable: executable,
-		Endpoint: input.Endpoint, TracePath: input.TracePath, MetricsPath: input.MetricsPath,
-		InstallType: fixedType, XToken: input.XToken, Headers: append([]string{}, input.Headers...),
-		ResourceAttributes: builtinResourceAttributes(input), CaptureContent: input.CaptureContent,
-		MaxChars: input.MaxChars, Enabled: input.Enabled, NoConfig: noConfig,
-	})
-	if err == nil {
-		printSingleDetail("Note", "Restart CodeBuddy if the reconciled Hook is not picked up automatically.")
 	}
 	if err != nil {
 		return fmt.Errorf("install built-in %s adapter: %w", p.Name, err)
@@ -46,7 +70,50 @@ func removeBuiltinAdapter(p agent.Definition, purgeConfig, purgeState bool) erro
 	if purgeState {
 		printSingleDetail("State", removedOrKept(result.StatePurged))
 	}
+	if p.Name == "codex" {
+		removeBuiltinCodexLegacy(p)
+	}
 	return nil
+}
+
+func removeBuiltinCodexLegacy(p agent.Definition) {
+	for _, command := range p.RemoveCmds {
+		if len(command) == 0 {
+			continue
+		}
+		if _, err := exec.LookPath(command[0]); err != nil {
+			printSingleDetail("Skip", fmt.Sprintf("%s was not found: %s", command[0], strings.Join(command, " ")))
+			continue
+		}
+		printSingleDetail("Command", strings.Join(command, " "))
+		cmd := exec.Command(command[0], command[1:]...)
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		cmd.Stdin = os.Stdin
+		if err := cmd.Run(); err != nil {
+			printSingleDetail("Warning", fmt.Sprintf("legacy Codex removal command failed; continuing: %v", err))
+		}
+	}
+
+	if p.RemoveCleanup != nil {
+		for _, item := range p.RemoveCleanupDetails {
+			printSingleDetail("Cleanup", item)
+		}
+		if err := p.RemoveCleanup(p); err != nil {
+			printSingleDetail("Warning", fmt.Sprintf("legacy Codex cleanup failed; continuing: %v", err))
+		}
+	}
+
+	for _, path := range p.RemovePaths {
+		expanded := agent.ExpandHome(path)
+		if !agent.PathExists(expanded) {
+			continue
+		}
+		printSingleDetail("Cleanup", agent.DisplayPath(expanded))
+		if err := os.RemoveAll(expanded); err != nil {
+			printSingleDetail("Warning", fmt.Sprintf("failed to remove %s; continuing: %v", agent.DisplayPath(expanded), err))
+		}
+	}
 }
 
 func removedOrKept(removed bool) string {

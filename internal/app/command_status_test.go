@@ -42,7 +42,7 @@ func TestStatusCodexShowsInstalledEnabledAndVersion(t *testing.T) {
 		"Enabled",
 		"Agent    : codex",
 		"Installed: yes",
-		"Version  : 0.1.15",
+		"Version  : dev",
 		"Config   : ~/.codex/gtrace.json",
 		"Enabled  : true",
 	} {

@@ -2,13 +2,13 @@ package agent
 
 func codexPlugin() Definition {
 	return Definition{
-		Name:             "codex",
-		PluginName:       "codex-otel-plugin",
-		AgentCommand:     "codex",
-		WindowsInstaller: "install-release.ps1",
-		PackageScript:    "scripts/install.sh",
-		PackageArgs:      []string{"--refresh"},
+		Name:            "codex",
+		Backend:         BackendBuiltin,
+		BuiltinHookFile: "~/.codex/hooks.json",
+		PluginName:      "codex-otel-plugin",
+		AgentCommand:    "codex",
 		Markers: []string{
+			"~/.codex/hooks.json",
 			"~/.codex/plugin-sources/codex-otel-plugin/plugins/tracing",
 			"~/.codex/plugins/cache/codex-otel-plugin",
 		},

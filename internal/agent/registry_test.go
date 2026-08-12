@@ -69,19 +69,29 @@ func TestWindowsSupportFlags(t *testing.T) {
 	}
 }
 
-func TestClaudeAndCodexRemainExternalPlugins(t *testing.T) {
-	for _, name := range []string{"claude", "codex"} {
+func TestClaudeRemainsExternalPlugin(t *testing.T) {
+	selected, err := Select("claude")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if selected[0].IsBuiltin() || selected[0].PluginName != "claude-otel-plugin" {
+		t.Fatalf("claude must use its external plugin: %#v", selected[0])
+	}
+}
+
+func TestCodeBuddyAndCodexUseBuiltinRuntime(t *testing.T) {
+	for _, name := range []string{"codebuddy", "codex"} {
 		selected, err := Select(name)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if selected[0].IsBuiltin() || selected[0].PluginName != name+"-otel-plugin" {
-			t.Fatalf("%s must use its external plugin: %#v", name, selected[0])
+		if len(selected) != 1 || !selected[0].IsBuiltin() {
+			t.Fatalf("unexpected builtin definition for %s: %#v", name, selected)
 		}
 	}
 }
 
-func TestCodeBuddyUsesBuiltinRuntime(t *testing.T) {
+func TestCodeBuddyUsesBuiltinConnectorPluginName(t *testing.T) {
 	selected, err := Select("codebuddy")
 	if err != nil {
 		t.Fatal(err)
@@ -91,7 +101,7 @@ func TestCodeBuddyUsesBuiltinRuntime(t *testing.T) {
 	}
 }
 
-func TestDiscoverUsesExternalClaudeAndCodexDefinitions(t *testing.T) {
+func TestDiscoverUsesExternalClaudeAndBuiltinCodexDefinitions(t *testing.T) {
 	home := t.TempDir()
 	binDir := t.TempDir()
 	t.Setenv("HOME", home)
@@ -107,11 +117,13 @@ func TestDiscoverUsesExternalClaudeAndCodexDefinitions(t *testing.T) {
 	for _, candidate := range candidates {
 		found[candidate.Plugin.Name] = candidate
 	}
-	for _, name := range []string{"claude", "codex"} {
-		candidate, ok := found[name]
-		if !ok || !candidate.Supported || candidate.Plugin.IsBuiltin() || candidate.Plugin.PluginName != name+"-otel-plugin" {
-			t.Fatalf("expected external %s candidate, got %#v", name, candidate)
-		}
+	claude, ok := found["claude"]
+	if !ok || !claude.Supported || claude.Plugin.IsBuiltin() || claude.Plugin.PluginName != "claude-otel-plugin" {
+		t.Fatalf("expected external claude candidate, got %#v", claude)
+	}
+	codex, ok := found["codex"]
+	if !ok || !codex.Supported || !codex.Plugin.IsBuiltin() || codex.Plugin.PluginName != "codex-otel-plugin" {
+		t.Fatalf("expected builtin codex candidate, got %#v", codex)
 	}
 }
 

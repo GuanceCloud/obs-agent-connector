@@ -1,6 +1,7 @@
 package app
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -88,7 +89,54 @@ func TestCodeBuddyBuiltinInstallDryRunDoesNotPrintToken(t *testing.T) {
 	}
 }
 
-func TestCodexInstallUsesExternalPlugin(t *testing.T) {
+func TestCodexBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", t.TempDir())
+	executable := filepath.Join(home, ".local", "bin", "obs-agent-connector")
+	originalExecutable := currentExecutable
+	currentExecutable = func() (string, error) { return executable, nil }
+	t.Cleanup(func() { currentExecutable = originalExecutable })
+
+	hooksPath := filepath.Join(home, ".codex", "hooks.json")
+	configPath := filepath.Join(home, ".codex", "gtrace.json")
+	for _, path := range []string{hooksPath, configPath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hooks := `{"hooks":{"Stop":[{"hooks":[{"type":"command","command":"echo keep"}]},{"hooks":[{"type":"command","command":"/tmp/codex-otel-plugin/bin/codex-hook"}]}]}}`
+	config := []byte("{\"enabled\":false,\"endpoint\":\"https://existing.example.com\",\"unknown\":{\"keep\":true}}\n")
+	if err := os.WriteFile(hooksPath, []byte(hooks), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, config, 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	plugin := agent.Get("codex")
+	if err := installBuiltinAdapter(plugin, installInput{}, true); err != nil {
+		t.Fatal(err)
+	}
+
+	updatedHooks, err := os.ReadFile(hooksPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(updatedHooks)
+	if !strings.Contains(text, executable) || !strings.Contains(text, "hook codex") || !strings.Contains(text, "echo keep") || strings.Contains(text, "codex-otel-plugin") {
+		t.Fatalf("legacy Codex Hook was not safely reconciled: %s", text)
+	}
+	updatedConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(updatedConfig) != string(config) {
+		t.Fatalf("--no-config changed runtime config:\nwant %s\n got %s", config, updatedConfig)
+	}
+}
+
+func TestCodexInstallUsesBuiltin(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
 	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
@@ -105,8 +153,8 @@ func TestCodexInstallUsesExternalPlugin(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	if !strings.Contains(output, "codex-otel-plugin") || strings.Contains(output, "built into obs-agent-connector") {
-		t.Fatalf("Codex install must use the external plugin: %s", output)
+	if !strings.Contains(output, "codex (built into obs-agent-connector)") || strings.Contains(output, "codex-otel-plugin") {
+		t.Fatalf("Codex install must use the built-in adapter: %s", output)
 	}
 }
 
@@ -174,5 +222,106 @@ func TestInstallRejectsInvalidHeaderBeforeRegisteringHook(t *testing.T) {
 	err := install([]string{"codex", "--header", "invalid"})
 	if err == nil || !strings.Contains(err.Error(), "--header must use non-empty KEY=VALUE syntax") {
 		t.Fatalf("expected assignment validation error, got %v", err)
+	}
+}
+
+func TestCodexBuiltinRemoveAlsoCleansLegacyPluginResidue(t *testing.T) {
+	home := t.TempDir()
+	setTestHome(t, home)
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv("CODEX_BINARY", "")
+	t.Setenv("CODEX_CLI_PATH", "")
+
+	hooksPath := filepath.Join(home, ".codex", "hooks.json")
+	configPath := filepath.Join(home, ".codex", "config.toml")
+	gtracePath := filepath.Join(home, ".codex", "gtrace.json")
+	legacySourcePath := filepath.Join(home, ".codex", "plugin-sources", "codex-otel-plugin", "plugins", "tracing")
+	legacyCachePath := filepath.Join(home, ".codex", "plugins", "cache", "codex-otel-plugin")
+	for _, path := range []string{hooksPath, configPath, gtracePath, legacySourcePath, legacyCachePath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.MkdirAll(legacySourcePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(legacyCachePath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	hooksBody, err := json.Marshal(map[string]any{
+		"hooks": map[string]any{
+			"Stop": []any{
+				map[string]any{"hooks": []any{map[string]any{"type": "command", "command": filepath.Join(home, ".local", "bin", "obs-agent-connector") + " hook codex"}}},
+				map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "/tmp/codex-otel-plugin/bin/codex-hook"}}},
+				map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "echo keep"}}},
+			},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hooksBody = append(hooksBody, '\n')
+	if err := os.WriteFile(hooksPath, hooksBody, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	hookKeyManaged := hooksPath + ":stop:0:0"
+	hookKeyLegacy := hooksPath + ":stop:1:0"
+	toml := strings.Join([]string{
+		`[marketplaces.codex-otel-plugin]`,
+		`source = "keep-removing"`,
+		"",
+		`[plugins."tracing@codex-otel-plugin"]`,
+		`enabled = true`,
+		"",
+		`[hooks.state."` + hookKeyManaged + `"]`,
+		`trusted_hash = "managed-hash"`,
+		"",
+		`[hooks.state."` + hookKeyLegacy + `"]`,
+		`trusted_hash = "legacy-hash"`,
+		"",
+		`[unrelated]`,
+		`enabled = true`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(configPath, []byte(toml), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(gtracePath, []byte(`{"enabled":true}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := remove([]string{"codex", "--yes"}); err != nil {
+		t.Fatal(err)
+	}
+
+	updatedHooks, err := os.ReadFile(hooksPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	hookText := string(updatedHooks)
+	if strings.Contains(hookText, "hook codex") || strings.Contains(hookText, "codex-otel-plugin") || !strings.Contains(hookText, "echo keep") {
+		t.Fatalf("expected managed and legacy Codex hooks removed while preserving unrelated entries: %s", hookText)
+	}
+	updatedConfig, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configText := string(updatedConfig)
+	for _, removed := range []string{"marketplaces.codex-otel-plugin", `plugins."tracing@codex-otel-plugin"`, "managed-hash", "legacy-hash"} {
+		if strings.Contains(configText, removed) {
+			t.Fatalf("expected legacy Codex registration %q to be removed: %s", removed, configText)
+		}
+	}
+	if !strings.Contains(configText, "[unrelated]") {
+		t.Fatalf("expected unrelated config to be preserved: %s", configText)
+	}
+	if _, err := os.Stat(legacySourcePath); !os.IsNotExist(err) {
+		t.Fatalf("expected legacy source path removed, got %v", err)
+	}
+	if _, err := os.Stat(legacyCachePath); !os.IsNotExist(err) {
+		t.Fatalf("expected legacy cache path removed, got %v", err)
+	}
+	if _, err := os.Stat(gtracePath); err != nil {
+		t.Fatalf("expected runtime config to be preserved without purge: %v", err)
 	}
 }

@@ -322,9 +322,7 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 		{"Agent", p.Name},
 	})
 	if p.IsBuiltin() {
-		if err := removeBuiltinAdapter(p, purgeConfig, purgeConfig); err != nil {
-			return err
-		}
+		return removeBuiltinAdapter(p, purgeConfig, purgeConfig)
 	}
 
 	for _, command := range p.RemoveCmds {
