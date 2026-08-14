@@ -38,15 +38,17 @@ type LLMCall struct {
 }
 
 type SkillUse struct {
-	Name        string
-	CallID      string
-	Path        string
-	SourceType  string
-	Description string
-	Version     string
-	Status      string
-	ErrorType   string
-	Reason      string
+	Name          string
+	CallID        string
+	Path          string
+	SourceType    string
+	Description   string
+	Version       string
+	InputPreview  string
+	OutputPreview string
+	Status        string
+	ErrorType     string
+	Reason        string
 }
 
 type ToolCall struct {

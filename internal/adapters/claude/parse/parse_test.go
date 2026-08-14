@@ -51,6 +51,9 @@ func TestNormalizeGroupsToolsDurationsUsageAndSkill(t *testing.T) {
 	if tool.Skill == nil || tool.Skill.Name != "weather" || tool.Skill.SourceType != "product_tool" {
 		t.Fatalf("unexpected skill: %#v", tool.Skill)
 	}
+	if tool.Skill.InputPreview != `{"skill":"weather"}` || tool.Skill.OutputPreview != "rain" {
+		t.Fatalf("unexpected skill previews: %#v", tool.Skill)
+	}
 	if turn.OutputPreview != "It will rain." {
 		t.Fatalf("output preview = %q", turn.OutputPreview)
 	}
