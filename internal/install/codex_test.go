@@ -154,6 +154,37 @@ func TestInstallCodexNoConfigAndInvalidHooksSafety(t *testing.T) {
 	}
 }
 
+func TestInstallCodexRequiresCLIForAutomaticTrust(t *testing.T) {
+	root := t.TempDir()
+	source := filepath.Join(root, "source", "agent-telemetry")
+	if err := os.MkdirAll(filepath.Dir(source), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(source, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", t.TempDir())
+
+	_, err := InstallCodex(CodexOptions{
+		Home:                  filepath.Join(root, "home"),
+		SourceExecutable:      source,
+		DestinationExecutable: filepath.Join(root, "installed", "agent-telemetry"),
+		HooksFile:             filepath.Join(root, "home", ".codex", "hooks.json"),
+		ConfigFile:            filepath.Join(root, "home", ".codex", "gtrace.json"),
+	})
+	if err == nil || !strings.Contains(err.Error(), "resolve Codex CLI for automatic hook trust") {
+		t.Fatalf("expected automatic trust resolution error, got %v", err)
+	}
+	for _, path := range []string{
+		filepath.Join(root, "installed", "agent-telemetry"),
+		filepath.Join(root, "home", ".codex", "hooks.json"),
+	} {
+		if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+			t.Fatalf("automatic trust preflight failure modified %s: %v", path, statErr)
+		}
+	}
+}
+
 func TestParseCodexInstallArgs(t *testing.T) {
 	options, err := ParseCodexInstallArgs([]string{
 		"--type", "otlp",

@@ -102,6 +102,14 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 	if configFile == "" {
 		configFile = filepath.Join(home, ".codex", "gtrace.json")
 	}
+	codexCommand := strings.TrimSpace(options.CodexCommand)
+	if !options.SkipTrust && codexCommand == "" {
+		var resolveErr error
+		codexCommand, resolveErr = exec.LookPath("codex")
+		if resolveErr != nil {
+			return CodexResult{}, fmt.Errorf("resolve Codex CLI for automatic hook trust: %w", resolveErr)
+		}
+	}
 
 	hooks, err := readJSONObject(hooksFile)
 	if err != nil {
@@ -135,14 +143,8 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 		ConfigFile: configFile,
 	}
 	if !options.SkipTrust {
-		codexCommand := options.CodexCommand
-		if codexCommand == "" {
-			codexCommand, _ = exec.LookPath("codex")
-		}
-		if codexCommand == "" {
-			result.TrustSkipped = true
-		} else if err := TrustCodexHook(codexCommand, home, options.TrustTimeout); err != nil {
-			return result, err
+		if err := TrustCodexHook(codexCommand, home, options.TrustTimeout); err != nil {
+			return result, fmt.Errorf("automatically trust Codex hook: %w", err)
 		}
 	} else {
 		result.TrustSkipped = true
