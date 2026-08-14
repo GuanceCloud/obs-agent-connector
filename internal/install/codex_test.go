@@ -3,6 +3,7 @@ package install
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -222,6 +223,91 @@ func TestTrustCodexHookProcessCompletesHandshake(t *testing.T) {
 	}
 }
 
+func TestTrustCodexHookProcessReportsLegacyPriorityTier(t *testing.T) {
+	err := trustCodexHookProcess(codexTrustHelperCommand(t, "legacy-priority"), t.TempDir(), 2*time.Second)
+	var compatibilityErr *legacyCodexPriorityTierError
+	if !errors.As(err, &compatibilityErr) {
+		t.Fatalf("expected legacy service tier compatibility error, got %v", err)
+	}
+}
+
+func TestTrustCodexHookRetriesLegacyPriorityTierWithFastOverride(t *testing.T) {
+	var calls [][]string
+	run := func(cmd *exec.Cmd, _ string, _ time.Duration) error {
+		calls = append(calls, append([]string(nil), cmd.Args...))
+		if len(calls) == 1 {
+			return &legacyCodexPriorityTierError{messages: []string{
+				"unknown variant `priority`, expected `fast` or `flex`",
+			}}
+		}
+		return nil
+	}
+
+	if err := trustCodexHookWithRunner("codex", t.TempDir(), 2*time.Second, run); err != nil {
+		t.Fatal(err)
+	}
+	if len(calls) != 2 {
+		t.Fatalf("expected two Codex app-server attempts, got %#v", calls)
+	}
+	if got := strings.Join(calls[0][1:], " "); got != "app-server" {
+		t.Fatalf("unexpected initial Codex arguments: %q", got)
+	}
+	if got := strings.Join(calls[1][1:], " "); got != `app-server -c service_tier="fast"` {
+		t.Fatalf("unexpected compatibility arguments: %q", got)
+	}
+}
+
+func TestTrustCodexHookWritesStateWhenLegacyCLICannotValidatePriorityTier(t *testing.T) {
+	home := t.TempDir()
+	configFile := filepath.Join(home, ".codex", "config.toml")
+	if err := os.MkdirAll(filepath.Dir(configFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	key := filepath.Join(home, ".codex", "hooks.json") + ":stop:0:0"
+	escapedKey, err := json.Marshal(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	original := "service_tier = \"priority\"\n\n" +
+		"[hooks.state." + string(escapedKey) + "]\n" +
+		"trusted_hash = \"old-hash\"\n\n" +
+		"[unrelated]\nvalue = \"keep\"\n"
+	if err := os.WriteFile(configFile, []byte(original), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var calls int
+	run := func(_ *exec.Cmd, _ string, _ time.Duration) error {
+		calls++
+		if calls == 1 {
+			return &legacyCodexPriorityTierError{messages: []string{
+				"unknown variant `priority`, expected `fast` or `flex`",
+			}}
+		}
+		return &legacyCodexConfigWriteError{
+			entries: map[string]hookTrustState{key: {TrustedHash: "new-hash"}},
+			cause:   "unknown variant `priority`, expected `fast` or `flex`",
+		}
+	}
+
+	if err := trustCodexHookWithRunner("codex", home, 2*time.Second, run); err != nil {
+		t.Fatal(err)
+	}
+	body, err := os.ReadFile(configFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	text := string(body)
+	if !strings.Contains(text, `service_tier = "priority"`) || !strings.Contains(text, `[unrelated]`) ||
+		!strings.Contains(text, `value = "keep"`) {
+		t.Fatalf("unrelated Codex config was not preserved: %s", text)
+	}
+	if strings.Count(text, "[hooks.state.") != 1 || !strings.Contains(text, `trusted_hash = "new-hash"`) ||
+		strings.Contains(text, `trusted_hash = "old-hash"`) {
+		t.Fatalf("managed Codex trust state was not replaced: %s", text)
+	}
+}
+
 func TestTrustCodexHookProcessHonorsTimeoutAndExit(t *testing.T) {
 	err := trustCodexHookProcess(codexTrustHelperCommand(t, "exit"), t.TempDir(), 2*time.Second)
 	if err == nil || !strings.Contains(err.Error(), "app-server exited") {
@@ -262,6 +348,24 @@ func TestCodexTrustHelperProcess(t *testing.T) {
 		case 1:
 			_ = encoder.Encode(map[string]any{"id": 1, "result": map[string]any{}})
 		case 2:
+			if os.Getenv("CODEX_TRUST_SCENARIO") == "legacy-priority" {
+				_ = encoder.Encode(map[string]any{
+					"id": 2,
+					"result": map[string]any{
+						"data": []any{
+							map[string]any{
+								"hooks": []any{},
+								"errors": []any{
+									map[string]any{
+										"message": "config.toml:3:16: unknown variant `priority`, expected `fast` or `flex`",
+									},
+								},
+							},
+						},
+					},
+				})
+				continue
+			}
 			_ = encoder.Encode(map[string]any{
 				"id": 2,
 				"result": map[string]any{

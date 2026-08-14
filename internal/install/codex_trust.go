@@ -7,7 +7,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -18,11 +22,57 @@ type hookTrustState struct {
 	TrustedHash string `json:"trusted_hash"`
 }
 
+type legacyCodexPriorityTierError struct {
+	messages []string
+}
+
+func (e *legacyCodexPriorityTierError) Error() string {
+	return "Codex failed to load hooks with the legacy service tier schema: " + strings.Join(e.messages, "; ")
+}
+
+type legacyCodexConfigWriteError struct {
+	entries map[string]hookTrustState
+	cause   string
+}
+
+func (e *legacyCodexConfigWriteError) Error() string {
+	return "legacy Codex CLI rejected the hook trust config write: " + e.cause
+}
+
 func TrustCodexHook(codexCommand, cwd string, timeout time.Duration) error {
 	if strings.TrimSpace(codexCommand) == "" {
 		return errors.New("codex command is required")
 	}
-	return trustCodexHookProcess(exec.Command(codexCommand, "app-server"), cwd, timeout)
+	return trustCodexHookWithRunner(codexCommand, cwd, timeout, trustCodexHookProcess)
+}
+
+func trustCodexHookWithRunner(
+	codexCommand string,
+	cwd string,
+	timeout time.Duration,
+	run func(*exec.Cmd, string, time.Duration) error,
+) error {
+	err := run(exec.Command(codexCommand, "app-server"), cwd, timeout)
+	var compatibilityErr *legacyCodexPriorityTierError
+	if !errors.As(err, &compatibilityErr) {
+		return err
+	}
+
+	retryErr := run(exec.Command(codexCommand, "app-server", "-c", `service_tier="fast"`), cwd, timeout)
+	if retryErr == nil {
+		return nil
+	}
+	var configWriteErr *legacyCodexConfigWriteError
+	if !errors.As(retryErr, &configWriteErr) {
+		return fmt.Errorf("trust Codex hook with legacy service tier compatibility: %w", retryErr)
+	}
+	if cwd == "" {
+		cwd = "."
+	}
+	if writeErr := writeCodexTrustState(filepath.Join(cwd, ".codex", "config.toml"), configWriteErr.entries); writeErr != nil {
+		return fmt.Errorf("write Codex hook trust state with legacy service tier compatibility: %w", writeErr)
+	}
+	return nil
 }
 
 func trustCodexHookProcess(cmd *exec.Cmd, cwd string, timeout time.Duration) error {
@@ -83,6 +133,7 @@ func trustCodexHookProcess(cmd *exec.Cmd, cwd string, timeout time.Duration) err
 	}
 
 	messages := make(chan map[string]any, 16)
+	var pendingEntries map[string]hookTrustState
 	readDone := make(chan error, 1)
 	go func() {
 		scanner := bufio.NewScanner(stdout)
@@ -136,8 +187,16 @@ func trustCodexHookProcess(cmd *exec.Cmd, cwd string, timeout time.Duration) err
 				result, _ := message["result"].(map[string]any)
 				entries := codexTrustEntries(result)
 				if len(entries) == 0 {
+					hookErrors := codexHookListErrors(result)
+					if legacyPriorityTierError(hookErrors) {
+						return &legacyCodexPriorityTierError{messages: hookErrors}
+					}
+					if len(hookErrors) > 0 {
+						return fmt.Errorf("Codex failed to load hooks: %s", strings.Join(hookErrors, "; "))
+					}
 					return errors.New("Codex did not discover the obs-agent-connector user hook")
 				}
+				pendingEntries = entries
 				serialized := map[string]any{}
 				for key, state := range entries {
 					serialized[key] = map[string]any{"trusted_hash": state.TrustedHash}
@@ -162,12 +221,106 @@ func trustCodexHookProcess(cmd *exec.Cmd, cwd string, timeout time.Duration) err
 				}
 			case 3:
 				if value, ok := message["error"]; ok && value != nil {
+					cause := fmt.Sprint(value)
+					if len(pendingEntries) > 0 && legacyPriorityTierError([]string{cause}) {
+						return &legacyCodexConfigWriteError{entries: pendingEntries, cause: cause}
+					}
 					return fmt.Errorf("trust Codex hook failed: %v", value)
 				}
 				return nil
 			}
 		}
 	}
+}
+
+func writeCodexTrustState(path string, entries map[string]hookTrustState) error {
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	managedKeys := make(map[string]struct{}, len(entries))
+	for key := range entries {
+		managedKeys[key] = struct{}{}
+	}
+	lines := strings.SplitAfter(string(body), "\n")
+	next := make([]string, 0, len(lines))
+	removing := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[") {
+			removing = false
+			if key, ok := codexTrustSectionKey(trimmed); ok {
+				_, removing = managedKeys[key]
+			}
+		}
+		if !removing {
+			next = append(next, line)
+		}
+	}
+
+	newline := "\n"
+	if strings.Contains(string(body), "\r\n") {
+		newline = "\r\n"
+	}
+	current := strings.TrimRight(strings.Join(next, ""), "\r\n")
+	keys := make([]string, 0, len(entries))
+	for key := range entries {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	var out strings.Builder
+	if current != "" {
+		out.WriteString(current)
+		out.WriteString(newline)
+		out.WriteString(newline)
+	}
+	for index, key := range keys {
+		if index > 0 {
+			out.WriteString(newline)
+		}
+		out.WriteString("[hooks.state.")
+		out.WriteString(strconv.Quote(key))
+		out.WriteString("]")
+		out.WriteString(newline)
+		out.WriteString("trusted_hash = ")
+		out.WriteString(strconv.Quote(entries[key].TrustedHash))
+		out.WriteString(newline)
+	}
+	return writeTextAtomic(path, []byte(out.String()), info.Mode().Perm())
+}
+
+func codexHookListErrors(response map[string]any) []string {
+	messages := []string{}
+	data, _ := response["data"].([]any)
+	for _, entry := range data {
+		entryMap, _ := entry.(map[string]any)
+		items, _ := entryMap["errors"].([]any)
+		for _, item := range items {
+			itemMap, _ := item.(map[string]any)
+			message := strings.TrimSpace(fmt.Sprint(itemMap["message"]))
+			if message != "" && message != "<nil>" {
+				messages = append(messages, message)
+			}
+		}
+	}
+	return messages
+}
+
+func legacyPriorityTierError(messages []string) bool {
+	for _, message := range messages {
+		normalized := strings.ToLower(message)
+		if strings.Contains(normalized, "unknown variant `priority`") &&
+			strings.Contains(normalized, "`fast`") &&
+			strings.Contains(normalized, "`flex`") {
+			return true
+		}
+	}
+	return false
 }
 
 func codexTrustEntries(response map[string]any) map[string]hookTrustState {
