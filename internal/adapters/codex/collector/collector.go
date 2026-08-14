@@ -18,6 +18,7 @@ import (
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/model"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/parse"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/sidecar"
+	previewcore "github.com/GuanceCloud/obs-agent-connector/internal/core/preview"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/util"
 )
 
@@ -530,11 +531,11 @@ func isTerminalTurn(turn *model.Turn) bool {
 }
 
 func isObservableTurn(turn *model.Turn, maxChars int) bool {
-	if preview(turn.UserInput, 1) != nil || preview(turn.FinalOutput, 1) != nil {
+	if previewcore.Present(turn.UserInput, 1) || previewcore.Present(turn.FinalOutput, 1) {
 		return true
 	}
 	for _, step := range turn.Steps {
-		if preview(step.Text, 1) != nil || preview(step.Reasoning, 1) != nil || len(step.ToolCalls) > 0 || usageDetailsFromMap(step.Usage).hasAny() {
+		if previewcore.Present(step.Text, 1) || previewcore.Present(step.Reasoning, 1) || len(step.ToolCalls) > 0 || usageDetailsFromMap(step.Usage).hasAny() {
 			return true
 		}
 	}
@@ -542,26 +543,7 @@ func isObservableTurn(turn *model.Turn, maxChars int) bool {
 }
 
 func preview(value any, maxChars int) any {
-	if value == nil || maxChars < 0 {
-		return nil
-	}
-	text := ""
-	switch current := value.(type) {
-	case string:
-		text = current
-	default:
-		encoded, err := json.Marshal(current)
-		if err == nil {
-			text = string(encoded)
-		} else {
-			text = util.ToText(current)
-		}
-	}
-	normalized := strings.TrimSpace(strings.Join(strings.Fields(text), " "))
-	if normalized == "" {
-		return nil
-	}
-	return util.ClipValue(normalized, maxChars)
+	return previewcore.Attr(value, maxChars)
 }
 
 func strLen(value string) any {
@@ -572,11 +554,7 @@ func strLen(value string) any {
 }
 
 func previewLen(value any, maxChars int) any {
-	previewValue := preview(value, maxChars)
-	if previewValue == nil {
-		return nil
-	}
-	return utf8.RuneCountInString(util.ToText(previewValue))
+	return previewcore.Length(value, maxChars)
 }
 
 func setAttr(attributes map[string]any, key string, value any) {

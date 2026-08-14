@@ -264,6 +264,8 @@ func addSkillAttrs(attrs map[string]any, skill model.SkillUse) {
 	setAttr(attrs, "gen_ai.skill.description", skill.Description)
 	setAttr(attrs, "skill.description", skill.Description)
 	setAttr(attrs, "gen_ai.skill.version", skill.Version)
+	setAttr(attrs, "input_preview", skill.InputPreview)
+	setAttr(attrs, "output_preview", skill.OutputPreview)
 	setAttr(attrs, "skill_call_id", skill.CallID)
 }
 

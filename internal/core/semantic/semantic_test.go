@@ -34,7 +34,7 @@ func TestBuildProducesCanonicalTreeAndNoAssistantTokens(t *testing.T) {
 			StartUnixNano:     start + int64(time.Second),
 			EndUnixNano:       start + int64(2*time.Second),
 			ResultStatus:      "completed",
-			Skill:             &model.SkillUse{Name: "demo", Status: "completed"},
+			Skill:             &model.SkillUse{Name: "demo", Status: "completed", InputPreview: "skill/demo", OutputPreview: "done"},
 		}},
 		AssistantOutputs: []model.AssistantOutput{{
 			StartUnixNano: start + int64(3*time.Second),
@@ -62,6 +62,10 @@ func TestBuildProducesCanonicalTreeAndNoAssistantTokens(t *testing.T) {
 	}
 	if findSpan(t, spans, "skill:demo").ParentID != ids["tool:exec"] {
 		t.Fatal("skill must be a tool child")
+	}
+	skill := findSpan(t, spans, "skill:demo")
+	if skill.Attributes["input_preview"] != "skill/demo" || skill.Attributes["output_preview"] != "done" {
+		t.Fatalf("unexpected skill previews: %#v", skill.Attributes)
 	}
 	tool := findSpan(t, spans, "tool:exec")
 	if tool.Attributes["triggered_by.llm_span_id"] != ids["llm"] {
