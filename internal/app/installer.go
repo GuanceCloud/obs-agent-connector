@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	"io"
@@ -18,6 +19,8 @@ import (
 )
 
 var currentGOOS = runtime.GOOS
+var confirmInput io.Reader = os.Stdin
+var confirmOutput io.Writer = os.Stdout
 
 func resolveInstallInput(defaults installInput, cfg connectorConfig, agent string) (installInput, error) {
 	input := mergeExistingRuntimeDefaults(defaults, agent)
@@ -185,10 +188,10 @@ func confirm(label string, defaultYes bool) (bool, error) {
 	if defaultYes {
 		suffix = "Y/n"
 	}
-	fmt.Printf("%s [%s]: ", label, suffix)
-	reader := bufio.NewReader(os.Stdin)
+	fmt.Fprintf(confirmOutput, "%s [%s]: ", label, suffix)
+	reader := bufio.NewReader(confirmInput)
 	value, err := reader.ReadString('\n')
-	if err != nil {
+	if err != nil && !errors.Is(err, io.EOF) {
 		return false, err
 	}
 	value = strings.TrimSpace(strings.ToLower(value))

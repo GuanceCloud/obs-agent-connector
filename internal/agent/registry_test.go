@@ -130,6 +130,33 @@ func TestDiscoverUsesBuiltinClaudeAndCodexDefinitions(t *testing.T) {
 	}
 }
 
+func TestDiscoverCandidatesIncludesCodexOnWindowsWithResolvedBinary(t *testing.T) {
+	dir := t.TempDir()
+	command := filepath.Join(dir, "codex.exe")
+	if err := os.MkdirAll(filepath.Dir(command), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(command, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("CODEX_BINARY", command)
+	t.Setenv("CODEX_CLI_PATH", "")
+	t.Setenv("PATH", t.TempDir())
+
+	candidates := DiscoverCandidatesForOS("windows")
+	for _, candidate := range candidates {
+		if candidate.Plugin.Name != "codex" {
+			continue
+		}
+		if candidate.DetectedCmd != command {
+			t.Fatalf("expected resolved windows codex command %q, got %q", command, candidate.DetectedCmd)
+		}
+		return
+	}
+	t.Fatal("expected codex to be discoverable on windows from resolved binary path")
+}
+
 func TestLinuxSupportFlags(t *testing.T) {
 	cases := map[string]bool{
 		"claude":    true,
