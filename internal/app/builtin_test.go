@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
+	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
 func TestCodeBuddyBuiltinUpdateReconcilesLegacyHookAndPreservesConfigState(t *testing.T) {
@@ -163,11 +164,18 @@ func TestClaudeBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *test
 func TestCodexBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
 	t.Setenv("PATH", t.TempDir())
 	executable := filepath.Join(home, ".local", "bin", "obs-agent-connector")
 	originalExecutable := currentExecutable
 	currentExecutable = func() (string, error) { return executable, nil }
 	t.Cleanup(func() { currentExecutable = originalExecutable })
+	originalInstallCodexAdapter := installCodexAdapter
+	installCodexAdapter = func(options telemetryinstall.CodexOptions) (telemetryinstall.CodexResult, error) {
+		options.SkipTrust = true
+		return telemetryinstall.InstallCodex(options)
+	}
+	t.Cleanup(func() { installCodexAdapter = originalInstallCodexAdapter })
 
 	hooksPath := filepath.Join(home, ".codex", "hooks.json")
 	configPath := filepath.Join(home, ".codex", "gtrace.json")
@@ -195,7 +203,8 @@ func TestCodexBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *testi
 		t.Fatal(err)
 	}
 	text := string(updatedHooks)
-	if !strings.Contains(text, executable) || !strings.Contains(text, "hook codex") || !strings.Contains(text, "echo keep") || strings.Contains(text, "codex-otel-plugin") {
+	normalizedText := strings.ReplaceAll(text, `\\`, `\`)
+	if !strings.Contains(normalizedText, executable) || !strings.Contains(text, "hook codex") || !strings.Contains(text, "echo keep") || strings.Contains(text, "codex-otel-plugin") {
 		t.Fatalf("legacy Codex Hook was not safely reconciled: %s", text)
 	}
 	updatedConfig, err := os.ReadFile(configPath)
@@ -204,6 +213,40 @@ func TestCodexBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *testi
 	}
 	if string(updatedConfig) != string(config) {
 		t.Fatalf("--no-config changed runtime config:\nwant %s\n got %s", config, updatedConfig)
+	}
+}
+
+func TestCodexBuiltinInstallUsesResolvedCLIForAutomaticTrust(t *testing.T) {
+	executable := filepath.Join(t.TempDir(), "obs-agent-connector")
+	originalExecutable := currentExecutable
+	currentExecutable = func() (string, error) { return executable, nil }
+	t.Cleanup(func() { currentExecutable = originalExecutable })
+
+	command := filepath.Join(t.TempDir(), "codex")
+	plugin := agent.Get("codex")
+	plugin.AgentCommand = command
+
+	originalInstallCodexAdapter := installCodexAdapter
+	var captured telemetryinstall.CodexOptions
+	installCodexAdapter = func(options telemetryinstall.CodexOptions) (telemetryinstall.CodexResult, error) {
+		captured = options
+		return telemetryinstall.CodexResult{}, nil
+	}
+	t.Cleanup(func() { installCodexAdapter = originalInstallCodexAdapter })
+
+	output := captureStdout(t, func() {
+		if err := installBuiltinAdapter(plugin, installInput{}, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if captured.CodexCommand != command {
+		t.Fatalf("expected Codex command %q, got %q", command, captured.CodexCommand)
+	}
+	if captured.SkipTrust {
+		t.Fatal("built-in Codex install must attempt automatic hook trust by default")
+	}
+	if !strings.Contains(output, "Trust: granted") {
+		t.Fatalf("expected successful automatic trust output, got %q", output)
 	}
 }
 

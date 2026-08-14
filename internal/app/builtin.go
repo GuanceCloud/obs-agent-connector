@@ -10,6 +10,8 @@ import (
 	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
+var installCodexAdapter = telemetryinstall.InstallCodex
+
 func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool) error {
 	executable, err := currentExecutable()
 	if err != nil {
@@ -45,9 +47,10 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 			printSingleDetail("Note", "Restart CodeBuddy if the reconciled Hook is not picked up automatically.")
 		}
 	case "codex":
-		result, installErr := telemetryinstall.InstallCodex(telemetryinstall.CodexOptions{
+		result, installErr := installCodexAdapter(telemetryinstall.CodexOptions{
 			SourceExecutable:      executable,
 			DestinationExecutable: executable,
+			CodexCommand:          p.AgentCommand,
 			Endpoint:              input.Endpoint,
 			TracePath:             input.TracePath,
 			MetricsPath:           input.MetricsPath,
@@ -61,8 +64,12 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 			NoConfig:              noConfig,
 		})
 		err = installErr
-		if err == nil && result.TrustSkipped {
-			printSingleDetail("Trust", "skipped")
+		if err == nil {
+			if result.TrustSkipped {
+				printSingleDetail("Trust", "skipped")
+			} else {
+				printSingleDetail("Trust", "granted")
+			}
 		}
 	default:
 		return fmt.Errorf("%s does not have a built-in telemetry adapter", p.Name)

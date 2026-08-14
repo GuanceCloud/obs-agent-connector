@@ -79,6 +79,9 @@ func TestClaudeAndCodexUseBuiltinRuntime(t *testing.T) {
 			t.Fatalf("unexpected builtin definition for %s: %#v", name, selected)
 		}
 	}
+	if definitions["codex"].ResolveInstall == nil {
+		t.Fatal("expected Codex install resolver for automatic hook trust")
+	}
 }
 
 func TestClaudeBuiltinKeepsLegacyPluginName(t *testing.T) {

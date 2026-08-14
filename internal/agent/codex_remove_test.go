@@ -31,6 +31,23 @@ func TestResolveCodexRemoveUsesExplicitBinary(t *testing.T) {
 	}
 }
 
+func TestResolveCodexInstallUsesExplicitBinary(t *testing.T) {
+	dir := t.TempDir()
+	command := filepath.Join(dir, "codex")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Setenv("CODEX_BINARY", command)
+	definition, err := resolveCodexInstall(Get("codex"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if definition.AgentCommand != command {
+		t.Fatalf("expected resolved command %q, got %q", command, definition.AgentCommand)
+	}
+}
+
 func TestResolveCodexCommandPathForWindowsUsesStandaloneBinary(t *testing.T) {
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")
@@ -44,12 +61,20 @@ func TestResolveCodexCommandPathForWindowsUsesStandaloneBinary(t *testing.T) {
 
 	previousHome := os.Getenv("HOME")
 	previousUserProfile := os.Getenv("USERPROFILE")
+	previousLocalAppData := os.Getenv("LOCALAPPDATA")
+	previousAppData := os.Getenv("APPDATA")
 	previousBinary := os.Getenv("CODEX_BINARY")
 	previousCLIPath := os.Getenv("CODEX_CLI_PATH")
 	if err := os.Setenv("HOME", home); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Setenv("USERPROFILE", home); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("LOCALAPPDATA", filepath.Join(dir, "LocalAppData")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Setenv("APPDATA", filepath.Join(dir, "AppData")); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Setenv("CODEX_BINARY", ""); err != nil {
@@ -61,6 +86,8 @@ func TestResolveCodexCommandPathForWindowsUsesStandaloneBinary(t *testing.T) {
 	t.Cleanup(func() {
 		_ = os.Setenv("HOME", previousHome)
 		_ = os.Setenv("USERPROFILE", previousUserProfile)
+		_ = os.Setenv("LOCALAPPDATA", previousLocalAppData)
+		_ = os.Setenv("APPDATA", previousAppData)
 		_ = os.Setenv("CODEX_BINARY", previousBinary)
 		_ = os.Setenv("CODEX_CLI_PATH", previousCLIPath)
 	})
