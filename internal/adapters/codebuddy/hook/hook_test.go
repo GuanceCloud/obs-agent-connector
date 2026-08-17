@@ -136,6 +136,16 @@ func TestRunWorkerUploadsAndRemovesQueue(t *testing.T) {
 	if bytes.Contains(logBody, []byte("Inspect the synthetic project")) {
 		t.Fatalf("log leaked content: %s", logBody)
 	}
+	for _, expected := range [][]byte{
+		[]byte(`"message":"parsed transcript"`),
+		[]byte(`"message":"uploaded spans"`),
+		[]byte(`"message":"uploaded metrics"`),
+		[]byte(`"status":200`),
+	} {
+		if !bytes.Contains(logBody, expected) {
+			t.Fatalf("missing %s in upload log: %s", expected, logBody)
+		}
+	}
 }
 
 func TestExportTurnUsesGzipUploadByDefault(t *testing.T) {

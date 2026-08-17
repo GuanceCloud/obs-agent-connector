@@ -119,8 +119,16 @@ func TestRunWithOptionsUploadsTraceAndMetricsAndMarksSidecar(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !contains(string(logBody), `"message":"uploaded spans"`) || !contains(string(logBody), `"message":"uploaded metrics"`) {
-		t.Fatalf("expected upload log lines, got %s", string(logBody))
+	for _, expected := range []string{
+		`"message":"hook invoked"`,
+		`"message":"parsed transcript"`,
+		`"message":"uploaded spans"`,
+		`"message":"uploaded metrics"`,
+		`"status":200`,
+	} {
+		if !contains(string(logBody), expected) {
+			t.Fatalf("missing %s in upload log: %s", expected, string(logBody))
+		}
 	}
 }
 

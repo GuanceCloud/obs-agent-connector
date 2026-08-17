@@ -133,8 +133,16 @@ func TestHookUploadsStopPayloadWhenTranscriptLags(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(logBody), `"message":"turn uploaded"`) {
-		t.Fatalf("missing upload log: %s", logBody)
+	for _, expected := range []string{
+		`"message":"hook invoked"`,
+		`"message":"parsed transcript"`,
+		`"message":"uploaded spans"`,
+		`"message":"uploaded metrics"`,
+		`"status":200`,
+	} {
+		if !strings.Contains(string(logBody), expected) {
+			t.Fatalf("missing %s in upload log: %s", expected, logBody)
+		}
 	}
 }
 
