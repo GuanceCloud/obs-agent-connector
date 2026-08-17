@@ -203,7 +203,7 @@ func testHookConfig(t *testing.T, endpoint string) claudeconfig.Config {
 		CaptureContent:     "preview",
 		MaxChars:           20_000,
 		StateDir:           filepath.Join(root, "state"),
-		LogFile:            filepath.Join(root, "hook.log"),
+		HookLogFile:        filepath.Join(root, "gtrace-hook.log"),
 	}
 }
 

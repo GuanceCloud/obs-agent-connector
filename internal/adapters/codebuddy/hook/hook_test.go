@@ -113,7 +113,7 @@ func TestRunWorkerUploadsAndRemovesQueue(t *testing.T) {
 	defer server.Close()
 	stateDir := t.TempDir()
 	cfg := telemetryConfig(server.URL, stateDir)
-	cfg.LogFile = filepath.Join(stateDir, "hook.log")
+	cfg.HookLogFile = filepath.Join(stateDir, "gtrace-hook.log")
 	input := codebuddyparse.HookInput{Event: "Stop", SessionID: "worker", GenerationID: "generation-1", TranscriptPath: hookFixture(t, "normal")}
 	body, _ := json.Marshal(input)
 	queuePath := filepath.Join(stateDir, "event.json")
@@ -129,7 +129,7 @@ func TestRunWorkerUploadsAndRemovesQueue(t *testing.T) {
 	if _, err := os.Stat(queuePath); !os.IsNotExist(err) {
 		t.Fatalf("queue was not removed: %v", err)
 	}
-	logBody, err := os.ReadFile(cfg.LogFile)
+	logBody, err := os.ReadFile(cfg.HookLogFile)
 	if err != nil {
 		t.Fatal(err)
 	}

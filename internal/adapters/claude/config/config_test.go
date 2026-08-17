@@ -89,6 +89,19 @@ func TestResolveDisabledExplicitly(t *testing.T) {
 	}
 }
 
+func TestResolveDefaultHookLogFileName(t *testing.T) {
+	root := t.TempDir()
+	cfg := Resolve(ResolveOptions{
+		Env:  map[string]string{},
+		Home: root,
+		Cwd:  root,
+	})
+	expected := filepath.Join(root, ".claude", "gtrace-hook.log")
+	if cfg.HookLogFile != expected {
+		t.Fatalf("hook log file = %q, want %q", cfg.HookLogFile, expected)
+	}
+}
+
 func writeConfig(t *testing.T, path string, value any) {
 	t.Helper()
 	body, err := json.Marshal(value)

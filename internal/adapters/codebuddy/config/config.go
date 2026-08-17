@@ -25,7 +25,7 @@ type Config struct {
 	MaxChars           int
 	TerminalWait       time.Duration
 	Debug              bool
-	LogFile            string
+	HookLogFile        string
 	StateDir           string
 }
 
@@ -86,7 +86,7 @@ func Resolve(options ResolveOptions) Config {
 	}
 	logFile := expandPath(firstString(merged, "hookLogFile", "hook_log_file"), home)
 	if logFile == "" {
-		logFile = filepath.Join(stateDir, "hook.log")
+		logFile = filepath.Join(home, ".codebuddy", "gtrace-hook.log")
 	}
 	return Config{
 		Enabled: enabled,
@@ -101,7 +101,7 @@ func Resolve(options ResolveOptions) Config {
 		ResourceAttributes: primitiveMap(merged["resourceAttributes"]), CaptureContent: capture,
 		MaxChars:     bounded(integer(merged["maxChars"], DefaultMaxChars), 1, 100_000, DefaultMaxChars),
 		TerminalWait: time.Duration(bounded(integer(merged["terminalWaitMs"], DefaultTerminalWaitMs), 500, 60_000, DefaultTerminalWaitMs)) * time.Millisecond,
-		Debug:        boolValue(merged["debug"]), LogFile: logFile, StateDir: stateDir,
+		Debug:        boolValue(merged["debug"]), HookLogFile: logFile, StateDir: stateDir,
 	}
 }
 
