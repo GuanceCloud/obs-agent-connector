@@ -30,7 +30,7 @@ The tool provides one binary and one version for connector lifecycle operations 
 | `claude` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook adapter |
 | `codebuddy` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook plus native `index.json` replay; Linux x64 is product-validated |
 | `codex` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop Hook adapter plus built-in Codex trust/config handling |
-| `cursor` | `cursor-otel-plugin` | `✅` | `✅` | `✅` | Detects `~/.cursor` or the Cursor CLI family and manages a user-level Cursor Hook plugin |
+| `cursor` | `cursor-otel-plugin` | `✅` | `✅` | `✅` | Detects `~/.cursor`, prefers `cursor-agent`, and manages a user-level Cursor Hook plugin |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
@@ -97,7 +97,7 @@ The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claud
 `config <agent> list` shows the current managed `gtrace.json` parameters for supported Agents. `config <agent> edit` merges one or more parameters into the existing file and rewrites it.
 Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
-Cursor is discovered when the `cursor` or `cursor-agent` CLI is in `PATH`, or when `~/.cursor` already exists.
+Cursor is discovered when `~/.cursor` already exists, or when the Cursor CLI family is available in `PATH`. `cursor-agent` is preferred when multiple compatible Cursor binaries are present.
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
 `config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
