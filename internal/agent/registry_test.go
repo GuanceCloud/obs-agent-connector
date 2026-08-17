@@ -12,6 +12,7 @@ func TestRegisteredPluginNames(t *testing.T) {
 		"claude":    "claude-otel-plugin",
 		"codebuddy": "obs-agent-connector",
 		"codex":     "codex-otel-plugin",
+		"cursor":    "cursor-otel-plugin",
 		"hermes":    "hermes-otel-plugin",
 		"opencode":  "opencode-otel-plugin",
 		"openclaw":  "openclaw-otel-plugin",
@@ -33,7 +34,7 @@ func TestRegisteredPluginNames(t *testing.T) {
 }
 
 func TestSupportedNamesForWindows(t *testing.T) {
-	expected := []string{"claude", "codebuddy", "codex", "openclaw", "opencode", "qoder", "workbuddy"}
+	expected := []string{"claude", "codebuddy", "codex", "cursor", "openclaw", "opencode", "qoder", "workbuddy"}
 	got := SupportedNames("windows")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Windows supported names %v, got %v", expected, got)
@@ -41,7 +42,7 @@ func TestSupportedNamesForWindows(t *testing.T) {
 }
 
 func TestSupportedNamesForLinux(t *testing.T) {
-	expected := []string{"claude", "codebuddy", "codex", "hermes", "openclaw", "opencode", "qoder"}
+	expected := []string{"claude", "codebuddy", "codex", "cursor", "hermes", "openclaw", "opencode", "qoder"}
 	got := SupportedNames("linux")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Linux supported names %v, got %v", expected, got)
@@ -53,6 +54,7 @@ func TestWindowsSupportFlags(t *testing.T) {
 		"claude":    true,
 		"codebuddy": true,
 		"codex":     true,
+		"cursor":    true,
 		"hermes":    false,
 		"opencode":  true,
 		"openclaw":  true,
@@ -162,6 +164,7 @@ func TestLinuxSupportFlags(t *testing.T) {
 		"claude":    true,
 		"codebuddy": true,
 		"codex":     true,
+		"cursor":    true,
 		"hermes":    true,
 		"opencode":  true,
 		"openclaw":  true,

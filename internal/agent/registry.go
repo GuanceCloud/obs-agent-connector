@@ -11,6 +11,7 @@ var definitions = map[string]Definition{
 	"claude":    claudePlugin(),
 	"codebuddy": codeBuddyPlugin(),
 	"codex":     codexPlugin(),
+	"cursor":    cursorPlugin(),
 	"hermes":    hermesPlugin(),
 	"opencode":  opencodePlugin(),
 	"openclaw":  openClawPlugin(),
