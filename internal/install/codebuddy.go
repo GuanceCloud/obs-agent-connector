@@ -118,7 +118,7 @@ func writeCodeBuddyHooks(path string, settings map[string]any, executable string
 		hooks = map[string]any{}
 		settings["hooks"] = hooks
 	}
-	command := quoteCodeBuddyCommand(executable) + " hook codebuddy"
+	command := quoteHookCommand(executable) + " hook codebuddy"
 	for _, event := range []string{"Stop", "SessionEnd"} {
 		groups, _ := hooks[event].([]any)
 		next := make([]any, 0, len(groups)+1)
@@ -130,7 +130,7 @@ func writeCodeBuddyHooks(path string, settings map[string]any, executable string
 		next = append(next, map[string]any{"hooks": []any{map[string]any{"type": "command", "command": command, "timeout": 5}}})
 		hooks[event] = next
 	}
-	return writeJSONAtomic(path, settings)
+	return writeJSONWatched(path, settings)
 }
 
 func managedCodeBuddyHook(value any) bool {
@@ -155,7 +155,7 @@ func managedCodeBuddyHook(value any) bool {
 	return false
 }
 
-func quoteCodeBuddyCommand(value string) string {
+func quoteHookCommand(value string) string {
 	return `"` + strings.ReplaceAll(value, `"`, `\"`) + `"`
 }
 func firstInstallPath(value, fallback string) string {
