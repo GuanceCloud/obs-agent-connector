@@ -157,3 +157,7 @@ GitHub Actions:
 - [Command reference](docs/commands.md)
 - [Plugin matrix](docs/plugins.md)
 - [Distribution guide](docs/distribution.md)
+
+## License
+
+This project is licensed under the [Apache License 2.0](LICENSE).
