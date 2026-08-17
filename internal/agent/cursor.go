@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,12 +10,14 @@ import (
 func cursorPlugin() Definition {
 	return Definition{
 		Name:                     "cursor",
+		Backend:                  BackendBuiltin,
+		BuiltinHookFile:          "~/.cursor/hooks.json",
 		PluginName:               "cursor-otel-plugin",
 		AgentCommand:             "cursor-agent",
 		SupportedPlatforms:       []string{"darwin", "linux", "windows"},
-		WindowsInstaller:         "install-release.ps1",
 		DiscoveryCommandOptional: true,
 		Markers: []string{
+			"~/.cursor/hooks.json",
 			"~/.cursor/hooks/cursor-otel-plugin",
 			"~/.cursor/plugins/cursor-otel-plugin",
 		},
@@ -29,7 +30,6 @@ func cursorPlugin() Definition {
 		RemoveCleanupDetails: []string{
 			"~/.cursor/hooks.json (remove managed Cursor hook entries)",
 		},
-		RemoveCleanup:    removeCursorHookConfig,
 		ResolveInstall:   resolveCursorForInstall,
 		ResolveDiscovery: resolveCursorForDiscovery,
 	}
@@ -83,69 +83,4 @@ func resolveCursorCommandPath() (string, bool) {
 		}
 	}
 	return "", false
-}
-
-func removeCursorHookConfig(Definition) error {
-	path := ExpandHome("~/.cursor/hooks.json")
-	body, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	trimmed := strings.TrimSpace(string(body))
-	if trimmed == "" {
-		return nil
-	}
-
-	var current map[string]any
-	if err := json.Unmarshal([]byte(trimmed), &current); err != nil {
-		return err
-	}
-	hooks, _ := current["hooks"].(map[string]any)
-	if hooks == nil {
-		return nil
-	}
-
-	changed := false
-	for event, value := range hooks {
-		items, ok := value.([]any)
-		if !ok {
-			continue
-		}
-		next := make([]any, 0, len(items))
-		for _, item := range items {
-			if managedCursorHook(item) {
-				changed = true
-				continue
-			}
-			next = append(next, item)
-		}
-		hooks[event] = next
-	}
-	if !changed {
-		return nil
-	}
-
-	updated, err := json.MarshalIndent(current, "", "  ")
-	if err != nil {
-		return err
-	}
-	updated = append(updated, '\n')
-	return os.WriteFile(path, updated, 0o600)
-}
-
-func managedCursorHook(value any) bool {
-	item, ok := value.(map[string]any)
-	if !ok {
-		return false
-	}
-	command := strings.ToLower(strings.ReplaceAll(strings.TrimSpace(fmt.Sprint(item["command"])), `\`, "/"))
-	if command == "" {
-		return false
-	}
-	return strings.Contains(command, "cursor-otel-plugin") ||
-		(strings.Contains(command, "obs-agent-connector") && strings.Contains(command, "hook cursor")) ||
-		(strings.Contains(command, "agent-telemetry") && strings.Contains(command, "hook cursor"))
 }
