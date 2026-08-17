@@ -78,7 +78,7 @@ func TestUninstallDryRun(t *testing.T) {
 	for _, expected := range []string{
 		"Uninstall plan:",
 		"Binary       : " + executablePath,
-		"Built-in Hook: remove codebuddy; keep Agent config and state",
+		"Built-in Hook: remove claude, codebuddy, codex, and cursor; keep Agent config and state",
 		"Config       : remove " + configPath,
 		"Shell PATH   : remove managed entry from " + zshrcPath,
 	} {

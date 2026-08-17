@@ -13,6 +13,7 @@ import (
 
 	claudeconfig "github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/config"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/model"
+	previewcore "github.com/GuanceCloud/obs-agent-connector/internal/core/preview"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/privacy"
 )
 
@@ -199,7 +200,7 @@ func normalizeTurn(
 	inputPreview := ""
 	var inputMessages any
 	if capture {
-		inputPreview = privacy.Preview(userText, cfg.MaxChars)
+		inputPreview = previewcore.Text(userText, cfg.MaxChars)
 		inputMessages = []any{map[string]any{
 			"role": "user",
 			"parts": []any{map[string]any{
@@ -281,13 +282,13 @@ func normalizeTurn(
 		if capture {
 			if assistantIndex == 0 {
 				llmInput = inputMessages
-				llmInputPreview = privacy.Preview(userText, cfg.MaxChars)
+				llmInputPreview = previewcore.Text(userText, cfg.MaxChars)
 			} else if len(previousToolResults) > 0 {
 				llmInput = previousToolResults
-				llmInputPreview = privacy.Preview(previousToolResults, cfg.MaxChars)
+				llmInputPreview = previewcore.Text(previousToolResults, cfg.MaxChars)
 			}
 			llmOutput = outputMessages(assistantText, toolUses, cfg.MaxChars)
-			llmOutputPreview = privacy.Preview(map[string]any{
+			llmOutputPreview = previewcore.Text(map[string]any{
 				"text":       assistantText,
 				"tool_calls": toolUses,
 			}, cfg.MaxChars)
@@ -347,8 +348,8 @@ func normalizeTurn(
 			if capture {
 				arguments = privacy.Sanitize(toolUse["input"], cfg.MaxChars)
 				resultValue = privacy.Sanitize(result.Content, cfg.MaxChars)
-				toolInputPreview = privacy.Preview(toolUse["input"], cfg.MaxChars)
-				toolOutputPreview = privacy.Preview(result.Content, cfg.MaxChars)
+				toolInputPreview = previewcore.Text(toolUse["input"], cfg.MaxChars)
+				toolOutputPreview = previewcore.Text(result.Content, cfg.MaxChars)
 			}
 			tool := model.ToolCall{
 				CallID:            toolID,
@@ -370,7 +371,7 @@ func normalizeTurn(
 			if injected := raw.injectedByTool[toolID]; capture && injected != "" {
 				tool.ExtraAttributes["claude.injected_context.value"] = privacy.Text(injected, cfg.MaxChars)
 			}
-			tool.Skill = skillUse(toolUse, resultStatus, payload, turnNumber)
+			tool.Skill = skillUse(toolUse, result.Content, resultStatus, payload, turnNumber, cfg.MaxChars)
 			turn.ToolCalls = append(turn.ToolCalls, tool)
 			maxChildEnd = maxInt64(maxChildEnd, toolEnd)
 			cursor = maxInt64(cursor, toolEnd)
@@ -390,7 +391,7 @@ func normalizeTurn(
 			assistantOutputMessages := outputMessages(assistantText, nil, cfg.MaxChars)
 			preview := ""
 			if capture {
-				preview = privacy.Preview(assistantText, cfg.MaxChars)
+				preview = previewcore.Text(assistantText, cfg.MaxChars)
 			} else {
 				assistantOutputMessages = nil
 			}
@@ -440,7 +441,7 @@ func normalizeTurn(
 			}}
 		}
 		turn.OutputMessages = finalOutputMessages
-		turn.OutputPreview = privacy.Preview(finalText, cfg.MaxChars)
+		turn.OutputPreview = previewcore.Text(finalText, cfg.MaxChars)
 	}
 	turn.OutputLength = len([]rune(finalText))
 	return turn
@@ -499,7 +500,7 @@ func outputMessages(text string, tools []map[string]any, maxChars int) any {
 	return []any{map[string]any{"role": "assistant", "parts": parts}}
 }
 
-func skillUse(tool map[string]any, resultStatus string, payload HookPayload, turnNumber int) *model.SkillUse {
+func skillUse(tool map[string]any, resultContent any, resultStatus string, payload HookPayload, turnNumber int, maxChars int) *model.SkillUse {
 	if stringValue(tool["name"]) != "Skill" {
 		return nil
 	}
@@ -520,11 +521,17 @@ func skillUse(tool map[string]any, resultStatus string, payload HookPayload, tur
 	if status == "unset" {
 		status = "completed"
 	}
+	inputPreview := previewcore.Text(input, maxChars)
+	if inputPreview == "" {
+		inputPreview = previewcore.Text(name, maxChars)
+	}
 	return &model.SkillUse{
-		Name:       name,
-		CallID:     "skillu_" + hex.EncodeToString(sum[:8]),
-		SourceType: "product_tool",
-		Status:     status,
+		Name:          name,
+		CallID:        "skillu_" + hex.EncodeToString(sum[:8]),
+		SourceType:    "product_tool",
+		InputPreview:  inputPreview,
+		OutputPreview: previewcore.Text(resultContent, maxChars),
+		Status:        status,
 	}
 }
 
@@ -731,9 +738,9 @@ func command(value any, maxChars int) string {
 		for _, item := range list {
 			parts = append(parts, fmt.Sprint(item))
 		}
-		return privacy.Preview(strings.Join(parts, " "), maxChars)
+		return previewcore.Text(strings.Join(parts, " "), maxChars)
 	}
-	return privacy.Preview(current, maxChars)
+	return previewcore.Text(current, maxChars)
 }
 
 func apiError(message map[string]any) (int, string, string) {

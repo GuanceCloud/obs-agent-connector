@@ -294,6 +294,34 @@ func TestCodexInstallUsesBuiltin(t *testing.T) {
 	}
 }
 
+func TestCursorInstallUsesBuiltin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", configPath)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"endpoint":"https://example.com","x_token":"secret","plugin_source":"github","plugin_base_url":"https://github.com/GuanceCloud"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	output := captureStdout(t, func() {
+		if err := install([]string{"cursor", "--dry-run", "--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(output, "cursor (built into obs-agent-connector)") {
+		t.Fatalf("Cursor install must use the built-in adapter: %s", output)
+	}
+	if strings.Contains(output, "cursor-otel-plugin") || strings.Contains(output, "install-release.sh") {
+		t.Fatalf("Cursor install must not reference an external installer: %s", output)
+	}
+}
+
 func TestCodeBuddyInstallUsesBuiltin(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

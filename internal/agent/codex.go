@@ -22,9 +22,10 @@ func codexPlugin() Definition {
 			"~/.codex/config.toml (remove marketplace and plugin registration)",
 			"~/.codex/hooks.json (remove managed Stop hooks)",
 		},
-		RemoveCleanup:  removeCodexRegistration,
-		ResolveInstall: resolveCodexInstall,
-		ResolveRemove:  resolveCodexRemove,
+		RemoveCleanup:    removeCodexRegistration,
+		ResolveInstall:   resolveCodexInstall,
+		ResolveRemove:    resolveCodexRemove,
+		ResolveDiscovery: resolveCodexForDiscovery,
 	}
 }
 
@@ -33,4 +34,12 @@ func resolveCodexInstall(p Definition) (Definition, error) {
 		p.AgentCommand = command
 	}
 	return p, nil
+}
+
+func resolveCodexForDiscovery(p Definition) (Definition, bool) {
+	if command, ok := resolveCodexCommandPath(); ok {
+		p.AgentCommand = command
+		return p, true
+	}
+	return Definition{}, false
 }

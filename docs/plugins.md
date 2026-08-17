@@ -1,6 +1,6 @@
 # Plugin Matrix
 
-`obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, and Codex. Other Agents delegate installation and configuration generation to external plugin installers.
+`obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, Codex, and Cursor. Other Agents delegate installation and configuration generation to external plugin installers.
 
 ## Supported Agents
 
@@ -9,6 +9,7 @@
 | `claude` | Claude | Current connector | `~/.claude/gtrace.json` | Managed Hooks in `~/.claude/settings.json` |
 | `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector | `~/.codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
 | `codex` | Codex | Current connector | `~/.codex/gtrace.json` | Managed Hook and trust state in `~/.codex/hooks.json` / `~/.codex/config.toml` |
+| `cursor` | Cursor with automatic `~/.cursor` or Cursor CLI-family detection, preferring `cursor-agent` | Current connector | `~/.cursor/gtrace.json` | Managed Hooks in `~/.cursor/hooks.json` |
 | `hermes` | Hermes | `https://static.guance.com/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://github.com/GuanceCloud/opencode-otel-plugin/releases/latest/download/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
 | `openclaw` | OpenClaw | Unix: `https://static.guance.com/openclaw-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.ps1` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
@@ -30,16 +31,18 @@ This prevents the international and China editions from overwriting each other's
 
 ## Windows Support
 
-Windows plugin installation and update are currently supported only for:
+Windows installation and update are currently supported only for:
 
+- `claude`
 - `codex`
+- `cursor`
 - `codebuddy`
 - `opencode`
 - `openclaw`
 - `qoder`
 - `workbuddy`
 
-Claude, CodeBuddy, and Codex register the current connector executable directly. External plugins download their PowerShell installer from the plugin's GitHub release instead of using the OSS shell installer.
+Claude, CodeBuddy, Codex, and Cursor register the current connector executable directly. External plugins download their PowerShell installer from the plugin's GitHub release instead of using the OSS shell installer.
 If a user tries `install` or `update` with an unsupported Agent, the CLI returns a friendly error with the supported Windows Agent list.
 
 ## Install Parameters
@@ -54,7 +57,7 @@ At plugin install time, the CLI uses:
 | `Agent ID` | auto-generated `agid_<uuidv4-without-dashes>` or `--agent-id` override | `--tag agent_id=<value>` |
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
-The built-in Claude, CodeBuddy, and Codex adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
+The built-in Claude, CodeBuddy, Codex, and Cursor adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
 
 The CLI always uses `--type gtrace`.
 
@@ -67,6 +70,7 @@ The CLI always uses `--type gtrace`.
 | `claude` | `enabled` |
 | `codebuddy` | `enabled` |
 | `codex` | `enabled` |
+| `cursor` | `enabled` |
 | `opencode` | `enabled` |
 | `openclaw` | `plugins.entries.openclaw-otel-plugin.enabled` |
 | `qoder` | `enabled` |

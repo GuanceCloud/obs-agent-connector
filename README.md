@@ -2,12 +2,12 @@
 
 `obs-agent-connector` is the single command-line runtime for installing, managing, and collecting OBS/GTrace telemetry across multiple AI coding agents.
 
-The tool provides one binary and one version for connector lifecycle operations and built-in telemetry adapters for Claude, CodeBuddy, and Codex. Other Agents continue to use their external plugins.
+The tool provides one binary and one version for connector lifecycle operations and built-in telemetry adapters for Claude, CodeBuddy, Codex, and Cursor. Other Agents continue to use their external plugins.
 
 ## Features
 
 - Bootstrap the CLI and OBS defaults with one installer command.
-- Collect Claude, CodeBuddy, and Codex terminal turns through built-in adapters without separate repositories.
+- Collect Claude, CodeBuddy, Codex, and Cursor turns through built-in adapters without separate repositories.
 - Install transitional external Agent plugins through their official remote installer scripts.
 - Auto-discover local Agents, install missing plugins, and sync all plugins with `discover -u`.
 - Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
@@ -30,6 +30,7 @@ The tool provides one binary and one version for connector lifecycle operations 
 | `claude` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook adapter |
 | `codebuddy` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook plus native `index.json` replay; Linux x64 is product-validated |
 | `codex` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop Hook adapter plus built-in Codex trust/config handling |
+| `cursor` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Detects `~/.cursor`, prefers `cursor-agent`, and manages user-level Cursor Hooks |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
@@ -45,6 +46,7 @@ obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codebuddy
+obs-agent-connector install cursor
 obs-agent-connector config codex list
 obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
 obs-agent-connector install opencode
@@ -71,8 +73,8 @@ Use `--static-base` to override this behavior.
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, `claude`, `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
-- Claude, CodeBuddy, and Codex register the connector directly; external plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
+- On Windows, `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
+- Claude, CodeBuddy, Codex, and Cursor register the connector directly; external plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
 
 Bootstrap the CLI with shared defaults:
 
@@ -86,7 +88,7 @@ For example, `https://llm-openway.guance.com` maps to `https://static.guance.com
 The downloaded package is verified against `SHA256SUMS` before installation.
 
 After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
-Claude, CodeBuddy, and Codex are managed as built-in adapters with ordinary commands such as `install <agent>`, `status <agent>`, and `remove <agent>`.
+Claude, CodeBuddy, Codex, and Cursor are managed as built-in adapters with ordinary commands such as `install <agent>`, `status <agent>`, and `remove <agent>`.
 `install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
 The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
@@ -95,10 +97,11 @@ The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claud
 `config <agent> list` shows the current managed `gtrace.json` parameters for supported Agents. `config <agent> edit` merges one or more parameters into the existing file and rewrites it.
 Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
+Cursor is discovered when `~/.cursor` already exists, or when the Cursor CLI family is available in `PATH`. `cursor-agent` is preferred when multiple compatible Cursor binaries are present.
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
-`config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
-`remove codebuddy`, `remove claude`, and `remove codex` remove only connector-managed Hooks by default and preserve runtime config unless `--purge-config` is supplied. `uninstall` removes the connector binary and its managed built-in Hooks while preserving Agent config and state.
+`config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
+`remove claude`, `remove codebuddy`, `remove codex`, and `remove cursor` remove only connector-managed Hooks by default and preserve runtime config unless `--purge-config` is supplied. `uninstall` removes the connector binary and its managed built-in Hooks while preserving Agent config and state.
 
 ## Build
 

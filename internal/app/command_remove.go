@@ -13,7 +13,7 @@ func remove(args []string) error {
 	fs.SetOutput(os.Stderr)
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print what would be removed")
-	purgeConfig := fs.Bool("purge-config", false, "Also remove plugin configuration files and CodeBuddy upload state")
+	purgeConfig := fs.Bool("purge-config", false, "Also remove Agent configuration files and built-in upload state")
 
 	target := ""
 	flagArgs := args

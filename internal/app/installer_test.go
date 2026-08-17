@@ -29,6 +29,54 @@ func TestGenerateAgentIDUsesUUIDv4HexWithoutDashes(t *testing.T) {
 	}
 }
 
+func TestConfirmUsesDefaultYesOnEOF(t *testing.T) {
+	previousInput := confirmInput
+	previousOutput := confirmOutput
+	t.Cleanup(func() {
+		confirmInput = previousInput
+		confirmOutput = previousOutput
+	})
+
+	var output strings.Builder
+	confirmInput = strings.NewReader("")
+	confirmOutput = &output
+
+	ok, err := confirm("Continue installation?", true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("expected EOF to accept the default yes confirmation")
+	}
+	if got := output.String(); got != "Continue installation? [Y/n]: " {
+		t.Fatalf("unexpected prompt output %q", got)
+	}
+}
+
+func TestConfirmUsesDefaultNoOnEOF(t *testing.T) {
+	previousInput := confirmInput
+	previousOutput := confirmOutput
+	t.Cleanup(func() {
+		confirmInput = previousInput
+		confirmOutput = previousOutput
+	})
+
+	var output strings.Builder
+	confirmInput = strings.NewReader("")
+	confirmOutput = &output
+
+	ok, err := confirm("Continue removal?", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if ok {
+		t.Fatal("expected EOF to keep the default no confirmation")
+	}
+	if got := output.String(); got != "Continue removal? [y/N]: " {
+		t.Fatalf("unexpected prompt output %q", got)
+	}
+}
+
 func TestResolveInstallInputKeepsExplicitAgentName(t *testing.T) {
 	input, err := resolveInstallInput(installInput{AgentName: "custom_name"}, connectorConfig{
 		Endpoint: "https://llm-openway.guance.com",
@@ -207,7 +255,7 @@ func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	if !strings.Contains(message, "hermes is not supported on Windows") {
 		t.Fatalf("unexpected error message %q", message)
 	}
-	if !strings.Contains(message, "codex, openclaw, opencode, qoder, workbuddy") {
+	if !strings.Contains(message, "codex, cursor, openclaw, opencode, qoder, workbuddy") {
 		t.Fatalf("expected supported Windows agent list in %q", message)
 	}
 }

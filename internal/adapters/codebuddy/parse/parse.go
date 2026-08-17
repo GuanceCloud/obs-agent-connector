@@ -15,6 +15,7 @@ import (
 
 	codebuddyconfig "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codebuddy/config"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/model"
+	previewcore "github.com/GuanceCloud/obs-agent-connector/internal/core/preview"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/privacy"
 )
 
@@ -282,8 +283,8 @@ func buildTurn(input HookInput, request requestIndex, messageSet map[string]stru
 		if capture {
 			tool.Arguments = privacy.Sanitize(raw.Arguments, cfg.MaxChars)
 			tool.Result = privacy.Sanitize(raw.Result, cfg.MaxChars)
-			tool.InputPreview = privacy.Preview(raw.Arguments, cfg.MaxChars)
-			tool.OutputPreview = privacy.Preview(raw.Result, cfg.MaxChars)
+			tool.InputPreview = previewcore.Text(raw.Arguments, cfg.MaxChars)
+			tool.OutputPreview = previewcore.Text(raw.Result, cfg.MaxChars)
 			tool.Command = command(raw.Arguments, cfg.MaxChars)
 		}
 		if raw.IsError {
@@ -304,7 +305,8 @@ func buildTurn(input HookInput, request requestIndex, messageSet map[string]stru
 func content(userText, assistantText string, cfg codebuddyconfig.Config, status string) (any, any, string, string) {
 	input := []any{map[string]any{"role": "user", "parts": []any{map[string]any{"type": "text", "content": privacy.Text(userText, cfg.MaxChars)}}}}
 	output := []any{map[string]any{"role": "assistant", "finish_reason": map[string]string{"completed": "stop", "cancelled": "cancelled"}[status], "parts": []any{map[string]any{"type": "text", "content": privacy.Text(assistantText, cfg.MaxChars)}}}}
-	return input, output, privacy.Preview(userText, cfg.MaxChars), privacy.Preview(assistantText, cfg.MaxChars)
+	inputPreview, outputPreview := previewcore.Pair(userText, assistantText, cfg.MaxChars)
+	return input, output, inputPreview, outputPreview
 }
 
 func readMessage(path string) (storedMessage, error) {

@@ -9,6 +9,7 @@ Supported Agents:
 - `claude`
 - `codebuddy`
 - `codex`
+- `cursor`
 - `hermes`
 - `opencode`
 - `openclaw`
@@ -18,7 +19,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `claude`, `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
+- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
 
 ## Install obs-agent-connector
 
@@ -152,6 +153,7 @@ obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codebuddy
+obs-agent-connector install cursor
 obs-agent-connector config codex list
 obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
 obs-agent-connector install opencode
@@ -182,7 +184,7 @@ The output includes:
 
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
 
-Claude, CodeBuddy, and Codex use built-in runtimes. Other Agents use their external plugins.
+Claude, CodeBuddy, Codex, and Cursor use built-in runtimes. Other Agents use their external plugins.
 
 ## `status`
 
@@ -238,7 +240,7 @@ Notes:
 
 - `list` prints the current managed `gtrace.json` values
 - `edit` merges the supplied values into the existing config and rewrites the file
-- supported Agents: `claude`, `codebuddy`, `codex`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are not supported by this command
 
 ## `discover`
@@ -287,6 +289,8 @@ obs-agent-connector discover --update
   - `agent_name` as `<hostname>_<agent>_<YYYYMMDD>`
 - shows detected plugin versions in the output
 - only includes `qoder` when `~/.qoder` or `~/.qoder-cn` already exists
+- includes `cursor` when `~/.cursor` already exists, even if the Cursor CLI is not in `PATH`
+- prefers `cursor-agent` when multiple compatible Cursor CLI binaries are present
 - also includes `opencode` when `~/.config/opencode` already exists, even if `opencode` is not in `PATH`
 - only includes `workbuddy` when the WorkBuddy profile directory already exists, for example `~/.workbuddy`
 
@@ -347,12 +351,12 @@ Parameters:
 | `--x-token` | Set the authentication token |
 | `--agent-id` | Override the generated `agent_id` |
 | `--agent-name` | Override the generated `agent_name` |
-| `--trace-path` | Override the Trace upload path for the built-in CodeBuddy adapter |
-| `--metrics-path` | Override the Metrics upload path for the built-in CodeBuddy adapter |
-| `--header` | Add one CodeBuddy HTTP header. Supports one or more `--header` parameters |
+| `--trace-path` | Override the Trace upload path for a built-in adapter |
+| `--metrics-path` | Override the Metrics upload path for a built-in adapter |
+| `--header` | Add one built-in adapter HTTP header. Supports one or more `--header` parameters |
 | `--tag` | Add one resource attribute. Supports one or more `--tag` parameters |
-| `--capture-content` | Set CodeBuddy content capture to `none`, `preview`, or `full` |
-| `--max-chars` | Set the CodeBuddy content length limit |
+| `--capture-content` | Set built-in adapter content capture to `none`, `preview`, or `full` |
+| `--max-chars` | Set the built-in adapter content length limit |
 | `--enable` / `--disable` | Set the runtime enabled state |
 | `--static-base` | Override the external plugin download base URL |
 | `--yes` | Skip confirmation |
@@ -399,7 +403,7 @@ Notes:
 
 - `update` accepts a single Agent target only
 - the command preserves the existing runtime config
-- the built-in Claude, CodeBuddy, and Codex adapters reconcile their Hooks without modifying `gtrace.json`
+- the built-in Claude, CodeBuddy, Codex, and Cursor adapters reconcile their Hooks without modifying `gtrace.json`
 - external plugin installers receive `--no-config`
 
 ## `enable` / `disable`
@@ -504,14 +508,16 @@ Supported Agents on Windows:
 - `claude`
 - `codebuddy`
 - `codex`
+- `cursor`
+- `opencode`
 - `openclaw`
 - `qoder`
 - `workbuddy`
 
 Notes:
 
-- Windows does not use the OSS shell installer path for plugin installation
-- it uses each plugin's PowerShell installer
+- built-in adapters register the current connector executable directly
+- external plugins use their GitHub release PowerShell installer
 - unsupported Agents return a friendly error
 
 ## Qoder Notes
