@@ -151,13 +151,23 @@ func editAgentConfig(target string, args []string) error {
 		return fmt.Errorf("config edit requires one or more parameters to update")
 	}
 
-	p, configPath, err := resolveEditableRuntimeConfig(target)
+	p, effectiveConfigPath, err := resolveEditableRuntimeConfig(target)
 	if err != nil {
 		return err
+	}
+	configPath := effectiveConfigPath
+	if p.IsBuiltin() && len(p.ConfigFiles) > 0 {
+		configPath = agent.ExpandHome(p.ConfigFiles[0])
 	}
 	current, exists, err := installpkg.ReadRuntimeConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("read %s runtime config: %w", p.Name, err)
+	}
+	if !exists && effectiveConfigPath != configPath {
+		current, exists, err = installpkg.ReadRuntimeConfig(effectiveConfigPath)
+		if err != nil {
+			return fmt.Errorf("read legacy %s runtime config: %w", p.Name, err)
+		}
 	}
 	next, err := installpkg.MergeRuntimeConfig(current, options, exists)
 	if err != nil {

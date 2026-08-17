@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
 )
 
@@ -61,6 +62,7 @@ func Resolve(options ResolveOptions) Config {
 	for _, source := range []map[string]any{
 		readJSON(filepath.Join(home, ".codebuddy", "gtrace.json")),
 		readJSON(filepath.Join(cwd, ".codebuddy", "gtrace.json")),
+		readJSON(agentfiles.ConfigPath(home, "codebuddy")),
 		environmentConfig(env),
 	} {
 		merge(merged, source)
@@ -84,10 +86,6 @@ func Resolve(options ResolveOptions) Config {
 	if stateDir == "" {
 		stateDir = filepath.Join(home, ".codebuddy", "gtrace")
 	}
-	logFile := expandPath(firstString(merged, "hookLogFile", "hook_log_file"), home)
-	if logFile == "" {
-		logFile = filepath.Join(home, ".codebuddy", "gtrace-hook.log")
-	}
 	return Config{
 		Enabled: enabled,
 		Transport: transport.Config{
@@ -101,7 +99,7 @@ func Resolve(options ResolveOptions) Config {
 		ResourceAttributes: primitiveMap(merged["resourceAttributes"]), CaptureContent: capture,
 		MaxChars:     bounded(integer(merged["maxChars"], DefaultMaxChars), 1, 100_000, DefaultMaxChars),
 		TerminalWait: time.Duration(bounded(integer(merged["terminalWaitMs"], DefaultTerminalWaitMs), 500, 60_000, DefaultTerminalWaitMs)) * time.Millisecond,
-		Debug:        boolValue(merged["debug"]), HookLogFile: logFile, StateDir: stateDir,
+		Debug:        boolValue(merged["debug"]), HookLogFile: agentfiles.HookLogPath(home, "codebuddy"), StateDir: stateDir,
 	}
 }
 

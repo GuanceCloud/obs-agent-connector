@@ -12,7 +12,7 @@ func claudePlugin() Definition {
 			"~/.claude/marketplaces/claude-otel-plugin-release",
 			"~/.claude/plugins/cache/claude-otel-plugin",
 		},
-		ConfigFiles:     []string{"~/.claude/gtrace.json"},
+		ConfigFiles:     []string{"~/.obs-agent-connector/claude/gtrace.json", "~/.claude/gtrace.json"},
 		EnabledJSONPath: []string{"enabled"},
 		RemoveCmds: [][]string{
 			{"claude", "plugin", "uninstall", "claude-otel-plugin@claude-otel-plugin"},

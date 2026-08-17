@@ -95,6 +95,26 @@ The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claud
 `list` and `discover` also show the detected plugin version when it can be resolved from the local install layout.
 `status <agent>` prints a single-Agent view including install state, version, config path, plugin path, and runtime `enabled` status when the plugin uses a supported JSON config.
 `config <agent> list` shows the current managed `gtrace.json` parameters for supported Agents. `config <agent> edit` merges one or more parameters into the existing file and rewrites it.
+Built-in adapters keep runtime config and Hook logs under the connector directory:
+
+```text
+~/.obs-agent-connector/
+├── claude/
+│   ├── gtrace.json
+│   └── gtrace-hooks.json
+├── codebuddy/
+│   ├── gtrace.json
+│   └── gtrace-hooks.json
+├── codex/
+│   ├── gtrace.json
+│   └── gtrace-hooks.json
+├── cursor/
+│   ├── gtrace.json
+│   └── gtrace-hooks.json
+└── config.json
+```
+
+Existing Agent-local `gtrace.json` files remain readable for upgrade compatibility. New installs and config edits write the connector-managed path.
 Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
 Cursor is discovered when `~/.cursor` already exists, or when the Cursor CLI family is available in `PATH`. `cursor-agent` is preferred when multiple compatible Cursor binaries are present.

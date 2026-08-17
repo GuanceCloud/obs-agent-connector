@@ -46,8 +46,9 @@ The connector uses one shared, dependency-free Go runtime. State is keyed by `(s
 ## Installation, Configuration, and Privacy
 
 - Hook settings: `~/.codebuddy/settings.json`.
-- Runtime config: `~/.codebuddy/gtrace.json`.
-- Queue, upload state, and diagnostic log: `~/.codebuddy/gtrace/`.
+- Runtime config: `~/.obs-agent-connector/codebuddy/gtrace.json`.
+- Hook log: `~/.obs-agent-connector/codebuddy/gtrace-hooks.json`.
+- Queue and upload state: `~/.codebuddy/gtrace/`.
 - Installation incrementally merges `Stop` and `SessionEnd`, replaces connector-owned and legacy CodeBuddy OTEL Hooks, and preserves unrelated settings.
 - Upgrade reconciles Hooks without rewriting runtime configuration.
 - Removal keeps configuration and upload state by default; `--purge-config` removes both.

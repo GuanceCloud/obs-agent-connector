@@ -96,9 +96,30 @@ func TestResolveDefaultHookLogFileName(t *testing.T) {
 		Home: root,
 		Cwd:  root,
 	})
-	expected := filepath.Join(root, ".claude", "gtrace-hook.log")
+	expected := filepath.Join(root, ".obs-agent-connector", "claude", "gtrace-hooks.json")
 	if cfg.HookLogFile != expected {
 		t.Fatalf("hook log file = %q, want %q", cfg.HookLogFile, expected)
+	}
+}
+
+func TestResolveManagedConfigOverridesLegacyProjectConfig(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	writeConfig(t, filepath.Join(cwd, ".claude", "gtrace.json"), map[string]any{
+		"enabled":  false,
+		"endpoint": "https://legacy.example",
+	})
+	writeConfig(t, filepath.Join(home, ".obs-agent-connector", "claude", "gtrace.json"), map[string]any{
+		"enabled":       true,
+		"endpoint":      "https://managed.example",
+		"hook_log_file": "/tmp/legacy.log",
+	})
+	cfg := Resolve(ResolveOptions{Env: map[string]string{}, Home: home, Cwd: cwd})
+	if !cfg.Enabled || cfg.Transport.Endpoint != "https://managed.example" {
+		t.Fatalf("managed config did not win: %#v", cfg)
+	}
+	if want := filepath.Join(home, ".obs-agent-connector", "claude", "gtrace-hooks.json"); cfg.HookLogFile != want {
+		t.Fatalf("HookLogFile = %q, want %q", cfg.HookLogFile, want)
 	}
 }
 
@@ -106,6 +127,9 @@ func writeConfig(t *testing.T, path string, value any) {
 	t.Helper()
 	body, err := json.Marshal(value)
 	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(path, body, 0o600); err != nil {

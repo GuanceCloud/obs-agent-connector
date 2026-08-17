@@ -12,7 +12,7 @@ func codexPlugin() Definition {
 			"~/.codex/plugin-sources/codex-otel-plugin/plugins/tracing",
 			"~/.codex/plugins/cache/codex-otel-plugin",
 		},
-		ConfigFiles:     []string{"~/.codex/gtrace.json"},
+		ConfigFiles:     []string{"~/.obs-agent-connector/codex/gtrace.json", "~/.codex/gtrace.json"},
 		EnabledJSONPath: []string{"enabled"},
 		RemovePaths: []string{
 			"~/.codex/plugin-sources/codex-otel-plugin",

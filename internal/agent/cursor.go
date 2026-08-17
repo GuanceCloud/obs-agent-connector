@@ -21,7 +21,7 @@ func cursorPlugin() Definition {
 			"~/.cursor/hooks/cursor-otel-plugin",
 			"~/.cursor/plugins/cursor-otel-plugin",
 		},
-		ConfigFiles:     []string{"~/.cursor/gtrace.json"},
+		ConfigFiles:     []string{"~/.obs-agent-connector/cursor/gtrace.json", "~/.cursor/gtrace.json"},
 		EnabledJSONPath: []string{"enabled"},
 		RemovePaths: []string{
 			"~/.cursor/hooks/cursor-otel-plugin",

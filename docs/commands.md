@@ -248,7 +248,7 @@ Preview removal:
 obs-agent-connector remove codex --dry-run
 ```
 
-`remove claude` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.claude/settings.json` and preserves unrelated Hooks. `remove codebuddy` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.codebuddy/settings.json` and preserves unrelated Hooks. Add `--purge-config` to also delete the managed `gtrace.json`; for CodeBuddy it also removes `~/.codebuddy/gtrace` upload state.
+`remove claude` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.claude/settings.json` and preserves unrelated Hooks. `remove codebuddy` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.codebuddy/settings.json` and preserves unrelated Hooks. Add `--purge-config` to also delete `~/.obs-agent-connector/<agent>/gtrace.json` and any legacy Agent-local config; built-in upload state and `gtrace-hooks.json` are also purged.
 
 ## Version
 

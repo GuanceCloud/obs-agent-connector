@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 )
 
 type Config struct {
@@ -49,11 +51,15 @@ func Resolve(options ResolveOptions) (Config, error) {
 		cwd, _ = os.Getwd()
 	}
 
-	globalConfig, err := readJSONIfExists(filepath.Join(home, ".codex", "gtrace.json"))
+	legacyGlobalConfig, err := readJSONIfExists(filepath.Join(home, ".codex", "gtrace.json"))
 	if err != nil {
 		return Config{}, err
 	}
-	localConfig, err := readJSONIfExists(filepath.Join(cwd, ".codex", "gtrace.json"))
+	legacyLocalConfig, err := readJSONIfExists(filepath.Join(cwd, ".codex", "gtrace.json"))
+	if err != nil {
+		return Config{}, err
+	}
+	managedConfig, err := readJSONIfExists(agentfiles.ConfigPath(home, "codex"))
 	if err != nil {
 		return Config{}, err
 	}
@@ -67,10 +73,13 @@ func Resolve(options ResolveOptions) (Config, error) {
 		"debug":          false,
 		"fail_on_error":  false,
 	}
-	for key, value := range globalConfig {
+	for key, value := range legacyGlobalConfig {
 		merged[key] = value
 	}
-	for key, value := range localConfig {
+	for key, value := range legacyLocalConfig {
+		merged[key] = value
+	}
+	for key, value := range managedConfig {
 		merged[key] = value
 	}
 
@@ -113,7 +122,7 @@ func Resolve(options ResolveOptions) (Config, error) {
 		CaptureContent:     captureContent,
 		Debug:              parseBoolean(merged["debug"], false),
 		FailOnError:        parseBoolean(merged["fail_on_error"], false),
-		HookLogFile:        firstNonEmptyString(asString(merged["hook_log_file"]), filepath.Join(home, ".codex", "gtrace-hook.log")),
+		HookLogFile:        agentfiles.HookLogPath(home, "codex"),
 		StateDir:           firstNonEmptyString(asString(merged["state_dir"]), filepath.Join(home, ".codex", "state", "gtrace-agent")),
 		LockStaleMs:        parseInteger(merged["lock_stale_ms"], 120_000),
 	}, nil

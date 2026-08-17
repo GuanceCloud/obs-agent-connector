@@ -6,10 +6,10 @@
 
 | Agent | Edition | Installer | Default Config | Default Install Marker |
 | --- | --- | --- | --- | --- |
-| `claude` | Claude | Current connector | `~/.claude/gtrace.json` | Managed Hooks in `~/.claude/settings.json` |
-| `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector | `~/.codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
-| `codex` | Codex | Current connector | `~/.codex/gtrace.json` | Managed Hook and trust state in `~/.codex/hooks.json` / `~/.codex/config.toml` |
-| `cursor` | Cursor with automatic `~/.cursor` or Cursor CLI-family detection, preferring `cursor-agent` | Current connector | `~/.cursor/gtrace.json` | Managed Hooks in `~/.cursor/hooks.json` |
+| `claude` | Claude | Current connector | `~/.obs-agent-connector/claude/gtrace.json` | Managed Hooks in `~/.claude/settings.json` |
+| `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector | `~/.obs-agent-connector/codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
+| `codex` | Codex | Current connector | `~/.obs-agent-connector/codex/gtrace.json` | Managed Hook and trust state in `~/.codex/hooks.json` / `~/.codex/config.toml` |
+| `cursor` | Cursor with automatic `~/.cursor` or Cursor CLI-family detection, preferring `cursor-agent` | Current connector | `~/.obs-agent-connector/cursor/gtrace.json` | Managed Hooks in `~/.cursor/hooks.json` |
 | `hermes` | Hermes | `https://static.guance.com/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://github.com/GuanceCloud/opencode-otel-plugin/releases/latest/download/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
 | `openclaw` | OpenClaw | Unix: `https://static.guance.com/openclaw-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.ps1` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
@@ -58,6 +58,8 @@ At plugin install time, the CLI uses:
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
 The built-in Claude, CodeBuddy, Codex, and Cursor adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
+
+Each built-in adapter writes structured Hook logs to `~/.obs-agent-connector/<agent>/gtrace-hooks.json`. Existing Agent-local configs are read as a compatibility fallback and are migrated into the managed directory when an install or config edit writes new values.
 
 The CLI always uses `--type gtrace`.
 

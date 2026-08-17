@@ -12,7 +12,7 @@ func codeBuddyPlugin() Definition {
 		SupportedPlatforms:       []string{"darwin", "linux", "windows"},
 		DiscoveryCommandOptional: true,
 		Markers:                  []string{"~/.codebuddy/settings.json"},
-		ConfigFiles:              []string{"~/.codebuddy/gtrace.json"},
+		ConfigFiles:              []string{"~/.obs-agent-connector/codebuddy/gtrace.json", "~/.codebuddy/gtrace.json"},
 		EnabledJSONPath:          []string{"enabled"},
 		ResolveDiscovery: func(definition Definition) (Definition, bool) {
 			if PathExists(ExpandHome("~/.codebuddy")) {

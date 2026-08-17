@@ -12,6 +12,8 @@ import (
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 )
 
 type CodexOptions struct {
@@ -100,7 +102,7 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 	}
 	configFile := options.ConfigFile
 	if configFile == "" {
-		configFile = filepath.Join(home, ".codex", "gtrace.json")
+		configFile = agentfiles.ConfigPath(home, "codex")
 	}
 	codexCommand := strings.TrimSpace(options.CodexCommand)
 	if !options.SkipTrust && codexCommand == "" {
@@ -118,6 +120,12 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 	configValue, configExists, err := readJSONObjectIfExists(configFile)
 	if err != nil {
 		return CodexResult{}, fmt.Errorf("parse Codex GTrace config: %w", err)
+	}
+	if !configExists && options.ConfigFile == "" {
+		configValue, configExists, err = readJSONObjectIfExists(filepath.Join(home, ".codex", "gtrace.json"))
+		if err != nil {
+			return CodexResult{}, fmt.Errorf("parse legacy Codex GTrace config: %w", err)
+		}
 	}
 
 	absoluteSource, err := filepath.Abs(source)

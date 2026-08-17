@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
 )
 
@@ -67,6 +68,7 @@ func Resolve(options ResolveOptions) Config {
 		pluginEnvironment(env),
 		readJSON(filepath.Join(home, ".claude", "gtrace.json")),
 		readJSON(filepath.Join(cwd, ".claude", "gtrace.json")),
+		readJSON(agentfiles.ConfigPath(home, "claude")),
 		ordinaryEnvironment(env),
 	}
 	for _, source := range sources {
@@ -111,7 +113,7 @@ func Resolve(options ResolveOptions) Config {
 		MaxChars:           maxChars,
 		Debug:              boolValue(merged["debug"]),
 		UserID:             firstString(merged, "user_id", "userId"),
-		HookLogFile:        firstNonEmpty(firstString(merged, "hookLogFile", "hook_log_file"), filepath.Join(home, ".claude", "gtrace-hook.log")),
+		HookLogFile:        agentfiles.HookLogPath(home, "claude"),
 		StateDir:           firstNonEmpty(firstString(merged, "state_dir"), filepath.Join(home, ".claude", "state", "gtrace-agent")),
 	}
 }

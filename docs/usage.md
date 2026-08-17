@@ -240,6 +240,7 @@ Notes:
 
 - `list` prints the current managed `gtrace.json` values
 - `edit` merges the supplied values into the existing config and rewrites the file
+- built-in adapters write `~/.obs-agent-connector/<agent>/gtrace.json`; an existing Agent-local config is used as the migration source when necessary
 - supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are not supported by this command
 
@@ -403,7 +404,7 @@ Notes:
 
 - `update` accepts a single Agent target only
 - the command preserves the existing runtime config
-- the built-in Claude, CodeBuddy, Codex, and Cursor adapters reconcile their Hooks without modifying `gtrace.json`
+- the built-in Claude, CodeBuddy, Codex, and Cursor adapters reconcile their Hooks without modifying `~/.obs-agent-connector/<agent>/gtrace.json`
 - external plugin installers receive `--no-config`
 
 ## `enable` / `disable`
@@ -463,8 +464,8 @@ Notes:
 
 - by default the plugin is removed and the config is kept
 - `remove` accepts a single Agent target only
-- `remove claude` removes only connector-owned Claude Hooks and preserves `~/.claude/gtrace.json` unless `--purge-config` is supplied
-- `remove codebuddy` removes only connector-owned CodeBuddy Hooks; `--purge-config` additionally removes `~/.codebuddy/gtrace.json` and upload state
+- `remove claude` removes only connector-owned Claude Hooks and preserves `~/.obs-agent-connector/claude/gtrace.json` unless `--purge-config` is supplied
+- `remove codebuddy` removes only connector-owned CodeBuddy Hooks; `--purge-config` additionally removes `~/.obs-agent-connector/codebuddy/gtrace.json`, its Hook log, and upload state
 - `remove codex` removes only connector-owned Codex Hooks by default and also attempts to clean legacy `codex-otel-plugin` residue without blocking removal on legacy cleanup failures
 
 ## `version`

@@ -12,7 +12,7 @@ func TestConfigListCodexShowsCurrentValuesAndRedactsToken(t *testing.T) {
 	setTestHome(t, home)
 
 	markerPath := filepath.Join(home, ".codex", "plugin-sources", "codex-otel-plugin", "plugins", "tracing")
-	configPath := filepath.Join(home, ".codex", "gtrace.json")
+	configPath := filepath.Join(home, ".obs-agent-connector", "codex", "gtrace.json")
 	if err := os.MkdirAll(markerPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -72,11 +72,12 @@ func TestConfigEditCodexUpdatesSelectedFieldsAndPreservesUnknown(t *testing.T) {
 	setTestHome(t, home)
 
 	markerPath := filepath.Join(home, ".codex", "plugin-sources", "codex-otel-plugin", "plugins", "tracing")
-	configPath := filepath.Join(home, ".codex", "gtrace.json")
+	legacyConfigPath := filepath.Join(home, ".codex", "gtrace.json")
+	configPath := filepath.Join(home, ".obs-agent-connector", "codex", "gtrace.json")
 	if err := os.MkdirAll(markerPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(legacyConfigPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
 	config := `{
@@ -94,7 +95,7 @@ func TestConfigEditCodexUpdatesSelectedFieldsAndPreservesUnknown(t *testing.T) {
   }
 }
 `
-	if err := os.WriteFile(configPath, []byte(config), 0o644); err != nil {
+	if err := os.WriteFile(legacyConfigPath, []byte(config), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -137,7 +138,7 @@ func TestConfigEditCodexCreatesMissingConfigForInstalledPlugin(t *testing.T) {
 	setTestHome(t, home)
 
 	markerPath := filepath.Join(home, ".codex", "plugin-sources", "codex-otel-plugin", "plugins", "tracing")
-	configPath := filepath.Join(home, ".codex", "gtrace.json")
+	configPath := filepath.Join(home, ".obs-agent-connector", "codex", "gtrace.json")
 	if err := os.MkdirAll(markerPath, 0o755); err != nil {
 		t.Fatal(err)
 	}

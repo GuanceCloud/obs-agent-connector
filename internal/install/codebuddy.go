@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 )
 
 type CodeBuddyOptions struct {
@@ -60,7 +62,7 @@ func InstallCodeBuddy(options CodeBuddyOptions) (CodeBuddyResult, error) {
 		destination = filepath.Join(home, ".local", "bin", name)
 	}
 	settingsFile := firstInstallPath(options.SettingsFile, filepath.Join(home, ".codebuddy", "settings.json"))
-	configFile := firstInstallPath(options.ConfigFile, filepath.Join(home, ".codebuddy", "gtrace.json"))
+	configFile := firstInstallPath(options.ConfigFile, agentfiles.ConfigPath(home, "codebuddy"))
 	settings, err := readJSONObject(settingsFile)
 	if err != nil {
 		return CodeBuddyResult{}, fmt.Errorf("parse CodeBuddy settings: %w", err)
@@ -68,6 +70,12 @@ func InstallCodeBuddy(options CodeBuddyOptions) (CodeBuddyResult, error) {
 	configValue, configExists, err := readJSONObjectIfExists(configFile)
 	if err != nil {
 		return CodeBuddyResult{}, fmt.Errorf("parse CodeBuddy GTrace config: %w", err)
+	}
+	if !configExists && options.ConfigFile == "" {
+		configValue, configExists, err = readJSONObjectIfExists(filepath.Join(home, ".codebuddy", "gtrace.json"))
+		if err != nil {
+			return CodeBuddyResult{}, fmt.Errorf("parse legacy CodeBuddy GTrace config: %w", err)
+		}
 	}
 	absoluteSource, err := filepath.Abs(source)
 	if err != nil {
