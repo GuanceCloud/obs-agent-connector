@@ -11,12 +11,12 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codebuddy/buildinfo"
 	codebuddyconfig "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codebuddy/config"
 	codebuddyparse "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codebuddy/parse"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/metrics"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/model"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
@@ -49,6 +49,12 @@ func RunCLI(args []string) int {
 	if !cfg.Enabled {
 		return 0
 	}
+	appendLog(cfg, hooklog.HookInvoked, map[string]any{
+		"pid":             os.Getpid(),
+		"cwd":             input.Cwd,
+		"event":           input.Event,
+		"transcript_path": input.TranscriptPath,
+	})
 	executable, err := os.Executable()
 	if err != nil {
 		appendLog(cfg, "hook failed", map[string]any{"phase": "resolve executable", "error": err.Error()})
@@ -110,6 +116,21 @@ func RunWorker(queuePath string, options RunOptions) error {
 		return err
 	}
 	appendLog(cfg, "transcript replayed", map[string]any{"event": input.Event, "turns": len(turns), "diagnostics": diagnostics})
+	spanCount := 0
+	metricCount := 0
+	builder := semantic.Builder{ScopeName: "gtrace-codebuddy-collector", ScopeVersion: buildinfo.Version}
+	for _, turn := range turns {
+		spans := builder.Build(turn)
+		spanCount += len(spans)
+		metricCount += len(metrics.Build(spans))
+	}
+	appendLog(cfg, hooklog.ParsedTranscript, map[string]any{
+		"transcript_path": input.TranscriptPath,
+		"turns":           len(turns),
+		"spans":           spanCount,
+		"metrics":         metricCount,
+		"session_id":      input.SessionID,
+	})
 	for _, turn := range turns {
 		if err := exportTurn(cfg, turn, options.HTTPClient); err != nil {
 			appendLog(cfg, "turn export failed", map[string]any{"turn_id_hash": shortHash(turn.TurnID), "error": err.Error()})
@@ -226,6 +247,7 @@ func exportTurn(cfg codebuddyconfig.Config, turn model.Turn, httpClient *http.Cl
 		if err := claim.MarkSignalUploaded("traces", map[string]any{"status": result.StatusCode, "bytes": len(payload)}); err != nil {
 			return err
 		}
+		appendLog(cfg, hooklog.UploadedSpans, map[string]any{"status": result.StatusCode, "spans": len(spans)})
 	}
 	required := []string{"traces"}
 	hasMetricsEndpoint := cfg.Transport.MetricsURL != "" || cfg.Transport.Endpoint != ""
@@ -240,34 +262,18 @@ func exportTurn(cfg codebuddyconfig.Config, turn model.Turn, httpClient *http.Cl
 			if err := claim.MarkSignalUploaded("metrics", map[string]any{"status": result.StatusCode, "bytes": len(payload)}); err != nil {
 				return err
 			}
+			appendLog(cfg, hooklog.UploadedMetrics, map[string]any{"status": result.StatusCode, "metrics": len(builtMetrics)})
 		}
 	}
 	if err := claim.Complete(required...); err != nil {
 		return err
 	}
 	completed = true
-	appendLog(cfg, "turn uploaded", map[string]any{"turn_id_hash": shortHash(turn.TurnID), "spans": len(spans), "metrics": len(builtMetrics)})
 	return nil
 }
 
 func appendLog(cfg codebuddyconfig.Config, message string, extra map[string]any) {
-	if strings.TrimSpace(cfg.LogFile) == "" {
-		return
-	}
-	payload := map[string]any{"ts": time.Now().UTC().Format(time.RFC3339Nano), "message": message}
-	if extra != nil {
-		payload["extra"] = extra
-	}
-	body, err := json.Marshal(payload)
-	if err != nil || os.MkdirAll(filepath.Dir(cfg.LogFile), 0o700) != nil {
-		return
-	}
-	file, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	_, _ = file.Write(append(body, '\n'))
+	_ = hooklog.Append(cfg.HookLogFile, message, extra)
 }
 
 func logFields(input codebuddyparse.HookInput, debug bool) map[string]any {

@@ -24,7 +24,7 @@ type Config struct {
 	MaxChars           int
 	Debug              bool
 	UserID             string
-	LogFile            string
+	HookLogFile        string
 	StateDir           string
 }
 
@@ -111,7 +111,7 @@ func Resolve(options ResolveOptions) Config {
 		MaxChars:           maxChars,
 		Debug:              boolValue(merged["debug"]),
 		UserID:             firstString(merged, "user_id", "userId"),
-		LogFile:            firstNonEmpty(firstString(merged, "hook_log_file"), filepath.Join(home, ".claude", "state", "gtrace-agent.log")),
+		HookLogFile:        firstNonEmpty(firstString(merged, "hookLogFile", "hook_log_file"), filepath.Join(home, ".claude", "gtrace-hook.log")),
 		StateDir:           firstNonEmpty(firstString(merged, "state_dir"), filepath.Join(home, ".claude", "state", "gtrace-agent")),
 	}
 }

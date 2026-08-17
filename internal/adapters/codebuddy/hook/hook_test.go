@@ -113,7 +113,7 @@ func TestRunWorkerUploadsAndRemovesQueue(t *testing.T) {
 	defer server.Close()
 	stateDir := t.TempDir()
 	cfg := telemetryConfig(server.URL, stateDir)
-	cfg.LogFile = filepath.Join(stateDir, "hook.log")
+	cfg.HookLogFile = filepath.Join(stateDir, "gtrace-hook.log")
 	input := codebuddyparse.HookInput{Event: "Stop", SessionID: "worker", GenerationID: "generation-1", TranscriptPath: hookFixture(t, "normal")}
 	body, _ := json.Marshal(input)
 	queuePath := filepath.Join(stateDir, "event.json")
@@ -129,12 +129,22 @@ func TestRunWorkerUploadsAndRemovesQueue(t *testing.T) {
 	if _, err := os.Stat(queuePath); !os.IsNotExist(err) {
 		t.Fatalf("queue was not removed: %v", err)
 	}
-	logBody, err := os.ReadFile(cfg.LogFile)
+	logBody, err := os.ReadFile(cfg.HookLogFile)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if bytes.Contains(logBody, []byte("Inspect the synthetic project")) {
 		t.Fatalf("log leaked content: %s", logBody)
+	}
+	for _, expected := range [][]byte{
+		[]byte(`"message":"parsed transcript"`),
+		[]byte(`"message":"uploaded spans"`),
+		[]byte(`"message":"uploaded metrics"`),
+		[]byte(`"status":200`),
+	} {
+		if !bytes.Contains(logBody, expected) {
+			t.Fatalf("missing %s in upload log: %s", expected, logBody)
+		}
 	}
 }
 

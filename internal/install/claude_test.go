@@ -71,6 +71,13 @@ func TestInstallClaudeCopiesBinaryAndPreservesHooks(t *testing.T) {
 	if len(stop) != 2 || len(sessionEnd) != 1 {
 		t.Fatalf("installer is not idempotent: stop=%#v sessionEnd=%#v", stop, sessionEnd)
 	}
+	managed := sessionEnd[0].(map[string]any)["hooks"].([]any)[0].(map[string]any)
+	if got := managed["command"]; got != `"`+destination+`" hook claude` {
+		t.Fatalf("managed command = %q", got)
+	}
+	if _, exists := managed["args"]; exists {
+		t.Fatalf("managed Hook still uses unsupported args: %#v", managed)
+	}
 }
 
 func TestInstallClaudeRejectsInvalidSettingsWithoutOverwrite(t *testing.T) {

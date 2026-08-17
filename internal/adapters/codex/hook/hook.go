@@ -1,7 +1,6 @@
 package hook
 
 import (
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/collector"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/config"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/sidecar"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/metrics"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/proto"
@@ -82,7 +82,7 @@ func RunWithOptions(options RunOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := appendLog(cfg, "go hook invoked", map[string]any{
+	if err := appendLog(cfg, hooklog.HookInvoked, map[string]any{
 		"pid":             os.Getpid(),
 		"cwd":             mustGetwd(),
 		"transcript_path": input.TranscriptPath,
@@ -111,7 +111,7 @@ func RunWithOptions(options RunOptions) error {
 		return err
 	}
 	builtMetrics := metrics.Build(collected.Spans)
-	if err := appendLog(cfg, "go parsed rollout", map[string]any{
+	if err := appendLog(cfg, hooklog.ParsedTranscript, map[string]any{
 		"transcript_path": input.TranscriptPath,
 		"turns":           len(collected.Turns),
 		"spans":           len(collected.Spans),
@@ -190,7 +190,7 @@ func uploadTurn(
 		}); err != nil {
 			return err
 		}
-		if err := appendLog(cfg, "uploaded spans", map[string]any{
+		if err := appendLog(cfg, hooklog.UploadedSpans, map[string]any{
 			"status": result.StatusCode,
 			"spans":  len(batch.Spans),
 		}); err != nil {
@@ -213,7 +213,7 @@ func uploadTurn(
 			}); err != nil {
 				return err
 			}
-			if err := appendLog(cfg, "uploaded metrics", map[string]any{
+			if err := appendLog(cfg, hooklog.UploadedMetrics, map[string]any{
 				"status":  result.StatusCode,
 				"metrics": len(builtMetrics),
 			}); err != nil {
@@ -271,26 +271,8 @@ func fallbackConfig() config.Config {
 }
 
 func appendLog(cfg config.Config, message string, extra map[string]any) error {
-	payload := map[string]any{
-		"ts":      time.Now().UTC().Format(time.RFC3339Nano),
-		"message": message,
-	}
-	if extra != nil {
-		payload["extra"] = extra
-	}
-	line, err := json.Marshal(payload)
-	if err != nil {
-		return err
-	}
-	if err := os.MkdirAll(filepath.Dir(cfg.HookLogFile), 0o755); err != nil {
-		return nil
-	}
-	file, err := os.OpenFile(cfg.HookLogFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
-	if err != nil {
-		return nil
-	}
-	defer file.Close()
-	_, _ = file.WriteString(string(line) + "\n")
+	// Hook logging is diagnostic and must never block telemetry collection.
+	_ = hooklog.Append(cfg.HookLogFile, message, extra)
 	return nil
 }
 

@@ -40,6 +40,41 @@ func TestInstallCodeBuddyIsIdempotentAndPreservesSettings(t *testing.T) {
 	}
 }
 
+func TestInstallCodeBuddyPreservesSettingsFileIdentity(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	source := filepath.Join(root, "obs-agent-connector")
+	settings := filepath.Join(home, ".codebuddy", "settings.json")
+	if err := os.WriteFile(source, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Dir(settings), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeTestJSON(t, settings, map[string]any{"theme": "dark"})
+	before, err := os.Stat(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = InstallCodeBuddy(CodeBuddyOptions{
+		Home:                  home,
+		SourceExecutable:      source,
+		DestinationExecutable: source,
+		SettingsFile:          settings,
+		NoConfig:              true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.Stat(settings)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !os.SameFile(before, after) {
+		t.Fatal("settings file was replaced, which breaks active file watchers")
+	}
+}
+
 func TestInstallCodeBuddyNoConfigPreservesExistingConfig(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")

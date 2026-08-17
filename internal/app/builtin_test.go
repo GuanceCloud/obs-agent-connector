@@ -142,8 +142,7 @@ func TestClaudeBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *test
 			handlers := groupMap["hooks"].([]any)
 			for _, handler := range handlers {
 				handlerMap := handler.(map[string]any)
-				args, _ := handlerMap["args"].([]any)
-				if fmt.Sprint(handlerMap["command"]) == executable && len(args) >= 2 && fmt.Sprint(args[0]) == "hook" && fmt.Sprint(args[1]) == "claude" {
+				if fmt.Sprint(handlerMap["command"]) == `"`+executable+`" hook claude` {
 					foundManaged = true
 				}
 			}

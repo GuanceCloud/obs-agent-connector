@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -91,6 +92,57 @@ func TestHookUploadsDecodableTraceAndMetricsOnce(t *testing.T) {
 	}
 	if traces.Load() != 1 || metricRequests.Load() != 1 {
 		t.Fatalf("requests: traces=%d metrics=%d", traces.Load(), metricRequests.Load())
+	}
+}
+
+func TestHookUploadsStopPayloadWhenTranscriptLags(t *testing.T) {
+	var traces atomic.Int32
+	var metricRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
+		switch request.URL.Path {
+		case "/v1/traces":
+			traces.Add(1)
+		case "/v1/metrics":
+			metricRequests.Add(1)
+		default:
+			http.NotFound(writer, request)
+			return
+		}
+		writer.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	transcript := filepath.Join(t.TempDir(), "session.jsonl")
+	if err := os.WriteFile(transcript, []byte(`{"type":"user","uuid":"lagged-turn","timestamp":"2026-08-17T08:00:00Z","message":{"content":"summarize"}}`+"\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := testHookConfig(t, server.URL)
+	payload := map[string]any{
+		"session_id":             "lagged-session",
+		"transcript_path":        transcript,
+		"hook_event_name":        "Stop",
+		"last_assistant_message": "Summary from the Stop payload.",
+	}
+	if err := RunWithOptions(RunOptions{Config: &cfg, Payload: payload, SkipWait: true}); err != nil {
+		t.Fatal(err)
+	}
+	if traces.Load() != 1 || metricRequests.Load() != 1 {
+		t.Fatalf("requests: traces=%d metrics=%d", traces.Load(), metricRequests.Load())
+	}
+	logBody, err := os.ReadFile(cfg.HookLogFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, expected := range []string{
+		`"message":"hook invoked"`,
+		`"message":"parsed transcript"`,
+		`"message":"uploaded spans"`,
+		`"message":"uploaded metrics"`,
+		`"status":200`,
+	} {
+		if !strings.Contains(string(logBody), expected) {
+			t.Fatalf("missing %s in upload log: %s", expected, logBody)
+		}
 	}
 }
 
@@ -203,7 +255,7 @@ func testHookConfig(t *testing.T, endpoint string) claudeconfig.Config {
 		CaptureContent:     "preview",
 		MaxChars:           20_000,
 		StateDir:           filepath.Join(root, "state"),
-		LogFile:            filepath.Join(root, "hook.log"),
+		HookLogFile:        filepath.Join(root, "gtrace-hook.log"),
 	}
 }
 

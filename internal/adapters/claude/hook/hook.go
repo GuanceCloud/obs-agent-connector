@@ -16,6 +16,7 @@ import (
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/buildinfo"
 	claudeconfig "github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/config"
 	claudeparse "github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/parse"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/metrics"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/proto"
@@ -71,6 +72,12 @@ func RunWithOptions(options RunOptions) error {
 	if parsedPayload.SessionID == "" || parsedPayload.TranscriptPath == "" {
 		return errors.New("hook payload is missing session_id or transcript_path")
 	}
+	appendLog(cfg, hooklog.HookInvoked, map[string]any{
+		"pid":             os.Getpid(),
+		"cwd":             firstNonEmpty(parsedPayload.Cwd, mustGetwd()),
+		"event":           parsedPayload.EventName,
+		"transcript_path": parsedPayload.TranscriptPath,
+	})
 	absoluteTranscript, err := filepath.Abs(parsedPayload.TranscriptPath)
 	if err != nil {
 		return err
@@ -87,6 +94,11 @@ func RunWithOptions(options RunOptions) error {
 	}
 	turns := claudeparse.Normalize(parsedPayload, cfg, messages)
 	if len(turns) == 0 {
+		appendLog(cfg, "no terminal turns", map[string]any{
+			"event":                      parsedPayload.EventName,
+			"has_last_assistant_message": parsedPayload.LastAssistantMessage != "",
+			"transcript_file":            filepath.Base(parsedPayload.TranscriptPath),
+		})
 		return nil
 	}
 
@@ -94,6 +106,20 @@ func RunWithOptions(options RunOptions) error {
 		ScopeName:    "gtrace-claude-collector",
 		ScopeVersion: buildinfo.Version,
 	}
+	spanCount := 0
+	metricCount := 0
+	for _, turn := range turns {
+		spans := builder.Build(turn)
+		spanCount += len(spans)
+		metricCount += len(metrics.Build(spans))
+	}
+	appendLog(cfg, hooklog.ParsedTranscript, map[string]any{
+		"transcript_path": parsedPayload.TranscriptPath,
+		"turns":           len(turns),
+		"spans":           spanCount,
+		"metrics":         metricCount,
+		"session_id":      parsedPayload.SessionID,
+	})
 	manager := state.Manager{
 		Root:       filepath.Join(cfg.StateDir, "uploads"),
 		StaleAfter: 10 * time.Minute,
@@ -141,6 +167,10 @@ func RunWithOptions(options RunOptions) error {
 					appendLog(cfg, "trace state failed", map[string]any{"error": err.Error()})
 					return
 				}
+				appendLog(cfg, hooklog.UploadedSpans, map[string]any{
+					"status": result.StatusCode,
+					"spans":  len(spans),
+				})
 			}
 
 			required := []string{"traces"}
@@ -164,6 +194,10 @@ func RunWithOptions(options RunOptions) error {
 						appendLog(cfg, "metric state failed", map[string]any{"error": err.Error()})
 						return
 					}
+					appendLog(cfg, hooklog.UploadedMetrics, map[string]any{
+						"status":  result.StatusCode,
+						"metrics": len(builtMetrics),
+					})
 				}
 			}
 			if err := claim.Complete(required...); err != nil {
@@ -171,11 +205,6 @@ func RunWithOptions(options RunOptions) error {
 				return
 			}
 			completed = true
-			appendLog(cfg, "turn uploaded", map[string]any{
-				"turn_id_hash": shortHash(turn.TurnID),
-				"spans":        len(spans),
-				"metrics":      len(builtMetrics),
-			})
 		}()
 	}
 	return nil
@@ -216,11 +245,12 @@ func parsePayload(value map[string]any) claudeparse.HookPayload {
 		}
 	}
 	return claudeparse.HookPayload{
-		SessionID:      sessionID,
-		TranscriptPath: transcript,
-		Cwd:            firstString(value, "cwd"),
-		EventName:      firstString(value, "hook_event_name", "hookEventName", "event", "event_name"),
-		Version:        firstString(value, "version"),
+		SessionID:            sessionID,
+		TranscriptPath:       transcript,
+		Cwd:                  firstString(value, "cwd"),
+		EventName:            firstString(value, "hook_event_name", "hookEventName", "event", "event_name"),
+		Version:              firstString(value, "version"),
+		LastAssistantMessage: firstString(value, "last_assistant_message", "lastAssistantMessage"),
 	}
 }
 
@@ -251,26 +281,7 @@ func waitForStableTranscript(path string, settle time.Duration, stableChecks int
 }
 
 func appendLog(cfg claudeconfig.Config, message string, extra map[string]any) {
-	payload := map[string]any{
-		"ts":      time.Now().UTC().Format(time.RFC3339Nano),
-		"message": message,
-	}
-	if extra != nil {
-		payload["extra"] = extra
-	}
-	body, err := json.Marshal(payload)
-	if err != nil {
-		return
-	}
-	if os.MkdirAll(filepath.Dir(cfg.LogFile), 0o700) != nil {
-		return
-	}
-	file, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
-	if err != nil {
-		return
-	}
-	defer file.Close()
-	_, _ = file.Write(append(body, '\n'))
+	_ = hooklog.Append(cfg.HookLogFile, message, extra)
 }
 
 func turnFingerprint(value any) string {
@@ -291,4 +302,18 @@ func firstString(value map[string]any, keys ...string) string {
 		}
 	}
 	return ""
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func mustGetwd() string {
+	cwd, _ := os.Getwd()
+	return cwd
 }
