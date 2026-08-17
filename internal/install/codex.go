@@ -46,6 +46,8 @@ type CodexResult struct {
 	TrustSkipped bool
 }
 
+var trustCodexHook = TrustCodexHook
+
 func InstallUsage() string {
 	return `usage: obs-agent-connector install <claude|codex> [options]
 
@@ -150,28 +152,27 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 		HooksFile:  hooksFile,
 		ConfigFile: configFile,
 	}
+	if !options.NoConfig && shouldConfigureGTrace(configExists, options) {
+		nextConfig, mergeErr := mergeCodexGTraceConfig(configValue, options, configExists)
+		if mergeErr != nil {
+			return result, mergeErr
+		}
+		if err := writeJSONAtomic(configFile, nextConfig); err != nil {
+			return result, err
+		}
+		result.Configured = true
+	}
+
+	// Codex may invoke the newly registered Hook during the automatic trust
+	// handshake. Write the runtime config first so that initial invocation sees
+	// the intended enabled state and upload settings.
 	if !options.SkipTrust {
-		if err := TrustCodexHook(codexCommand, home, options.TrustTimeout); err != nil {
+		if err := trustCodexHook(codexCommand, home, options.TrustTimeout); err != nil {
 			return result, fmt.Errorf("automatically trust Codex hook: %w", err)
 		}
 	} else {
 		result.TrustSkipped = true
 	}
-
-	if options.NoConfig {
-		return result, nil
-	}
-	if !shouldConfigureGTrace(configExists, options) {
-		return result, nil
-	}
-	nextConfig, err := mergeCodexGTraceConfig(configValue, options, configExists)
-	if err != nil {
-		return result, err
-	}
-	if err := writeJSONAtomic(configFile, nextConfig); err != nil {
-		return result, err
-	}
-	result.Configured = true
 	return result, nil
 }
 

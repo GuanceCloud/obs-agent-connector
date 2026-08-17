@@ -1,9 +1,11 @@
 package install
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestBuiltInInstallersUseManagedConfigPaths(t *testing.T) {
@@ -90,5 +92,39 @@ func TestBuiltInPurgeRemovesManagedAndLegacyFiles(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestInstallCodexWritesManagedConfigBeforeTrust(t *testing.T) {
+	home := t.TempDir()
+	source := filepath.Join(home, "obs-agent-connector")
+	if err := os.WriteFile(source, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	originalTrust := trustCodexHook
+	defer func() { trustCodexHook = originalTrust }()
+	trustCalled := false
+	trustCodexHook = func(_ string, gotHome string, _ time.Duration) error {
+		trustCalled = true
+		path := filepath.Join(gotHome, ".obs-agent-connector", "codex", "gtrace.json")
+		current, exists, err := ReadRuntimeConfig(path)
+		if err != nil {
+			return err
+		}
+		if !exists || current["enabled"] != true || current["endpoint"] != "https://managed.example" {
+			return fmt.Errorf("managed config was not ready before trust: %#v", current)
+		}
+		return nil
+	}
+	enabled := true
+	result, err := InstallCodex(CodexOptions{
+		Home: home, SourceExecutable: source, DestinationExecutable: source,
+		CodexCommand: "codex", Endpoint: "https://managed.example", Enabled: &enabled,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !trustCalled || !result.Configured {
+		t.Fatalf("unexpected install result: trustCalled=%t result=%#v", trustCalled, result)
 	}
 }
