@@ -77,7 +77,7 @@ The output also shows the detected plugin version when it can be resolved from t
 Qoder is skipped until either `~/.qoder` or `~/.qoder-cn` has been created by the Agent.
 OpenCode is also detected when `~/.config/opencode` already exists, even if `opencode` is not currently in `PATH`.
 CodeBuddy is detected when the `codebuddy` command is in `PATH` or `~/.codebuddy` exists.
-Cursor is detected when the `cursor` or `cursor-agent` command is in `PATH`, or when `~/.cursor` already exists.
+Cursor is detected when `~/.cursor` already exists, or when the Cursor CLI family is available in `PATH`. `cursor-agent` is preferred when multiple compatible Cursor binaries are present.
 Missing or invalid connector defaults are reported as `discover failed` errors.
 
 ## Status

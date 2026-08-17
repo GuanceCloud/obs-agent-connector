@@ -290,6 +290,7 @@ obs-agent-connector discover --update
 - shows detected plugin versions in the output
 - only includes `qoder` when `~/.qoder` or `~/.qoder-cn` already exists
 - includes `cursor` when `~/.cursor` already exists, even if the Cursor CLI is not in `PATH`
+- prefers `cursor-agent` when multiple compatible Cursor CLI binaries are present
 - also includes `opencode` when `~/.config/opencode` already exists, even if `opencode` is not in `PATH`
 - only includes `workbuddy` when the WorkBuddy profile directory already exists, for example `~/.workbuddy`
 

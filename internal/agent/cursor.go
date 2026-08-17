@@ -12,7 +12,7 @@ func cursorPlugin() Definition {
 	return Definition{
 		Name:                     "cursor",
 		PluginName:               "cursor-otel-plugin",
-		AgentCommand:             "cursor",
+		AgentCommand:             "cursor-agent",
 		SupportedPlatforms:       []string{"darwin", "linux", "windows"},
 		WindowsInstaller:         "install-release.ps1",
 		DiscoveryCommandOptional: true,
@@ -61,14 +61,10 @@ func resolveCursorCommandPath() (string, bool) {
 	candidates := []string{
 		strings.TrimSpace(os.Getenv("CURSOR_BINARY")),
 		strings.TrimSpace(os.Getenv("CURSOR_AGENT_BINARY")),
+		strings.TrimSpace(os.Getenv("CURSOR_CLI_PATH")),
 	}
-	for _, name := range []string{"cursor", "cursor-agent"} {
+	for _, name := range []string{"cursor-agent", "cursor"} {
 		if pathCommand, err := exec.LookPath(name); err == nil && strings.TrimSpace(pathCommand) != "" {
-			candidates = append(candidates, pathCommand)
-		}
-	}
-	if PathExists(ExpandHome("~/.cursor")) {
-		if pathCommand, err := exec.LookPath("agent"); err == nil && strings.TrimSpace(pathCommand) != "" {
 			candidates = append(candidates, pathCommand)
 		}
 	}

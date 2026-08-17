@@ -60,12 +60,13 @@ func TestResolveCursorCommandPrefersExplicitCommand(t *testing.T) {
 	t.Setenv("HOME", home)
 	t.Setenv("CURSOR_BINARY", "")
 	t.Setenv("CURSOR_AGENT_BINARY", "")
+	t.Setenv("CURSOR_CLI_PATH", "")
 	t.Setenv("PATH", binDir)
 
 	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	command := filepath.Join(binDir, "cursor")
+	command := filepath.Join(binDir, "cursor-agent")
 	if err := os.WriteFile(command, []byte("#!/bin/sh\n"), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -76,5 +77,31 @@ func TestResolveCursorCommandPrefersExplicitCommand(t *testing.T) {
 	}
 	if resolved.AgentCommand != command {
 		t.Fatalf("expected resolved cursor command %q, got %q", command, resolved.AgentCommand)
+	}
+}
+
+func TestResolveCursorCommandDoesNotUseGenericAgentBinary(t *testing.T) {
+	home := t.TempDir()
+	binDir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("CURSOR_BINARY", "")
+	t.Setenv("CURSOR_AGENT_BINARY", "")
+	t.Setenv("CURSOR_CLI_PATH", "")
+	t.Setenv("PATH", binDir)
+
+	if err := os.MkdirAll(filepath.Join(home, ".cursor"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	command := filepath.Join(binDir, "agent")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	resolved, ok := resolveCursorForDiscovery(definitions["cursor"])
+	if !ok {
+		t.Fatal("expected cursor discovery to succeed from data dir")
+	}
+	if resolved.AgentCommand != definitions["cursor"].AgentCommand {
+		t.Fatalf("expected generic agent binary to be ignored, got %q", resolved.AgentCommand)
 	}
 }
