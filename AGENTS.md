@@ -73,7 +73,7 @@ Rules:
 - `install` resolves `Endpoint` and `X-Token` from flags or connector config, and generates `Agent ID` and `Agent Name` unless explicitly provided.
 - `install` always uses the GTrace upload profile for built-in and external installers.
 - `update` must preserve existing configuration by passing `--no-config`.
-- `remove` must keep configuration files by default; only delete config files when `--purge-config` is provided.
+- `remove` must delete connector-managed files under `~/.obs-agent-connector/<agent>/` for built-in Agents. Legacy Agent-local and external plugin configuration remains unless `--purge-config` is provided.
 
 ## Qoder Variants
 

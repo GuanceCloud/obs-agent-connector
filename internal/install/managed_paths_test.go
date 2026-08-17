@@ -95,6 +95,36 @@ func TestBuiltInPurgeRemovesManagedAndLegacyFiles(t *testing.T) {
 	}
 }
 
+func TestBuiltInManagedPurgePreservesLegacyAgentConfig(t *testing.T) {
+	home := t.TempDir()
+	managedDir := filepath.Join(home, ".obs-agent-connector", "codex")
+	managedConfig := filepath.Join(managedDir, "gtrace.json")
+	managedLog := filepath.Join(managedDir, "gtrace-hooks.json")
+	legacyConfig := filepath.Join(home, ".codex", "gtrace.json")
+	for _, path := range []string{managedConfig, managedLog, legacyConfig} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	result, err := RemoveAdapter("codex", home, RemoveOptions{PurgeManaged: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !result.ConfigRemoved || !result.ManagedFilesRemoved {
+		t.Fatalf("managed purge result = %#v", result)
+	}
+	if _, err := os.Stat(managedDir); !os.IsNotExist(err) {
+		t.Fatalf("managed directory remains: %v", err)
+	}
+	if _, err := os.Stat(legacyConfig); err != nil {
+		t.Fatalf("legacy Agent config must be preserved: %v", err)
+	}
+}
+
 func TestInstallCodexWritesManagedConfigBeforeTrust(t *testing.T) {
 	home := t.TempDir()
 	source := filepath.Join(home, "obs-agent-connector")

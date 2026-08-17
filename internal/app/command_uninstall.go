@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
@@ -47,7 +48,11 @@ func uninstallConnector(args []string) error {
 	fmt.Println("Uninstall plan:")
 	rows := make([][2]string, 0, 4+len(unixPathFiles))
 	rows = append(rows, [2]string{"Binary", executablePath})
-	rows = append(rows, [2]string{"Built-in Hook", "remove claude, codebuddy, codex, and cursor; keep Agent config and state"})
+	managedFilesMode := "remove managed config, logs, and state"
+	if *keepConfig {
+		managedFilesMode = "keep managed config; remove Hooks, logs, and state"
+	}
+	rows = append(rows, [2]string{"Built-in Agents", "remove claude, codebuddy, codex, and cursor; " + managedFilesMode})
 	if *keepConfig {
 		rows = append(rows, [2]string{"Config", "keep " + configPath})
 	} else {
@@ -81,8 +86,15 @@ func uninstallConnector(args []string) error {
 		}
 	}
 	for _, adapter := range []string{"claude", "codebuddy", "codex", "cursor"} {
-		if _, err := telemetryinstall.RemoveAdapter(adapter, "", telemetryinstall.RemoveOptions{ConnectorOnly: true}); err != nil {
-			return fmt.Errorf("remove %s built-in Hook: %w", adapter, err)
+		selected := agent.ResolveForRemove([]agent.Definition{agent.Get(adapter)})
+		if len(selected) == 0 {
+			continue
+		}
+		if err := removeBuiltinAdapter(selected[0], telemetryinstall.RemoveOptions{
+			PurgeState:   true,
+			PurgeManaged: !*keepConfig,
+		}); err != nil {
+			printSingleDetail("Warning", fmt.Sprintf("failed to remove built-in %s; continuing uninstall: %v", adapter, err))
 		}
 	}
 

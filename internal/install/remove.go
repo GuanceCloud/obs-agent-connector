@@ -13,18 +13,20 @@ import (
 )
 
 type RemoveResult struct {
-	Adapter       string
-	HookFile      string
-	ConfigFile    string
-	HookRemoved   bool
-	TrustRemoved  bool
-	ConfigRemoved bool
-	StatePurged   bool
+	Adapter             string
+	HookFile            string
+	ConfigFile          string
+	HookRemoved         bool
+	TrustRemoved        bool
+	ConfigRemoved       bool
+	StatePurged         bool
+	ManagedFilesRemoved bool
 }
 
 type RemoveOptions struct {
 	PurgeConfig   bool
 	PurgeState    bool
+	PurgeManaged  bool
 	ConnectorOnly bool
 }
 
@@ -36,18 +38,32 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 			return RemoveResult{}, err
 		}
 	}
+	var result RemoveResult
+	var err error
 	switch adapter {
 	case "claude":
-		return removeClaude(home, options)
+		result, err = removeClaude(home, options)
 	case "codebuddy":
-		return removeCodeBuddy(home, options)
+		result, err = removeCodeBuddy(home, options)
 	case "codex":
-		return removeCodex(home, options)
+		result, err = removeCodex(home, options)
 	case "cursor":
-		return removeCursor(home, options)
+		result, err = removeCursor(home, options)
 	default:
 		return RemoveResult{}, errors.New("unsupported adapter " + adapter)
 	}
+	if err != nil {
+		return result, err
+	}
+	if options.PurgeManaged {
+		managedDir := agentfiles.Directory(home, adapter)
+		if err := os.RemoveAll(managedDir); err != nil {
+			return result, fmt.Errorf("remove managed %s files: %w", adapter, err)
+		}
+		result.ConfigRemoved = true
+		result.ManagedFilesRemoved = true
+	}
+	return result, nil
 }
 
 func removeCursor(home string, options RemoveOptions) (RemoveResult, error) {

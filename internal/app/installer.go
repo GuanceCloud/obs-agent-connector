@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
 var currentGOOS = runtime.GOOS
@@ -325,7 +327,11 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 		{"Agent", p.Name},
 	})
 	if p.IsBuiltin() {
-		return removeBuiltinAdapter(p, purgeConfig, purgeConfig)
+		return removeBuiltinAdapter(p, telemetryinstall.RemoveOptions{
+			PurgeConfig:  purgeConfig,
+			PurgeState:   purgeConfig,
+			PurgeManaged: true,
+		})
 	}
 
 	for _, command := range p.RemoveCmds {

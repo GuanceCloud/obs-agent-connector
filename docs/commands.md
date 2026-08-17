@@ -18,8 +18,8 @@ obs-agent-connector <command> [arguments]
 | `enable <agent>` | Enable one installed Agent plugin by setting its runtime JSON `enabled` switch to `true`. |
 | `disable <agent>` | Disable one installed Agent plugin by setting its runtime JSON `enabled` switch to `false`. |
 | `update <agent>` | Update one installed Agent plugin without modifying its current configuration. |
-| `remove <agent>` | Remove one installed Agent plugin. Configuration files are kept unless `--purge-config` is used. |
-| `uninstall` | Uninstall `obs-agent-connector` itself. By default this removes the binary, connector config, and managed PATH entry when present. |
+| `remove <agent>` | Remove one installed Agent plugin. Built-in Agents also remove their connector-managed directory; legacy and external configuration is kept unless `--purge-config` is used. |
+| `uninstall` | Uninstall all managed built-in adapters and then remove `obs-agent-connector`, its config, and its managed PATH entry. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print or run a matching self-update action when a newer release is available. |
 
 Claude, CodeBuddy, Codex, and Cursor are built into the connector. Other Agents use their external plugins.
@@ -230,13 +230,13 @@ obs-agent-connector disable codex --dry-run
 
 ## Remove
 
-Remove a plugin and keep configuration files:
+Remove a built-in adapter, its managed Hooks, and its connector-managed files:
 
 ```bash
 obs-agent-connector remove codex
 ```
 
-Remove a plugin and its configuration files:
+Also remove legacy Agent-local configuration and upload state:
 
 ```bash
 obs-agent-connector remove codex --purge-config
@@ -248,7 +248,7 @@ Preview removal:
 obs-agent-connector remove codex --dry-run
 ```
 
-`remove claude` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.claude/settings.json` and preserves unrelated Hooks. `remove codebuddy` removes the connector-owned `Stop` and `SessionEnd` entries from `~/.codebuddy/settings.json` and preserves unrelated Hooks. Add `--purge-config` to also delete `~/.obs-agent-connector/<agent>/gtrace.json` and any legacy Agent-local config; built-in upload state and `gtrace-hooks.json` are also purged.
+For Claude, CodeBuddy, Codex, and Cursor, `remove` preserves unrelated Hooks but always deletes `~/.obs-agent-connector/<agent>/`, including `gtrace.json` and `gtrace-hooks.json`. Add `--purge-config` to also delete legacy Agent-local configuration and upload state. External plugin configuration remains unchanged unless `--purge-config` is supplied.
 
 ## Version
 
@@ -295,8 +295,9 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
-- removes the managed CodeBuddy Hook while preserving its config and upload state
+- removes the managed Claude, CodeBuddy, Codex, and Cursor adapters, including compatible legacy plugin residue
+- removes each built-in adapter's connector-managed config, Hook log, and upload state by default
 - removes `~/.obs-agent-connector/config.json` by default
-- keeps config when `--keep-config` is used
+- keeps connector-managed global and per-Agent configuration when `--keep-config` is used; Hooks, logs, and upload state are still removed
 - removes the installer-managed PATH export from `~/.zshrc`, `~/.bashrc`, or `~/.profile` when found
 - removes the connector install directory from the Windows user PATH when present

@@ -13,7 +13,7 @@ func remove(args []string) error {
 	fs.SetOutput(os.Stderr)
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print what would be removed")
-	purgeConfig := fs.Bool("purge-config", false, "Also remove Agent configuration files and built-in upload state")
+	purgeConfig := fs.Bool("purge-config", false, "Also remove legacy or external Agent configuration and upload state")
 
 	target := ""
 	flagArgs := args
@@ -57,15 +57,18 @@ func remove(args []string) error {
 		for _, path := range p.RemovePaths {
 			rows = append(rows, [2]string{"Path", path})
 		}
+		if p.IsBuiltin() {
+			rows = append(rows, [2]string{"Managed Files", "remove ~/.obs-agent-connector/" + p.Name})
+		}
 		if *purgeConfig {
 			for _, path := range p.ConfigFiles {
 				rows = append(rows, [2]string{"Config", path})
 			}
 		}
 	}
-	configMode := "kept"
+	configMode := "legacy and external config kept"
 	if *purgeConfig {
-		configMode = "removed"
+		configMode = "all config removed"
 	}
 	rows = append(rows, [2]string{"Config Mode", configMode})
 	printDetails(rows)

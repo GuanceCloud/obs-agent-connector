@@ -96,17 +96,17 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 	return nil
 }
 
-func removeBuiltinAdapter(p agent.Definition, purgeConfig, purgeState bool) error {
-	result, err := telemetryinstall.RemoveAdapter(p.Name, "", telemetryinstall.RemoveOptions{
-		PurgeConfig: purgeConfig,
-		PurgeState:  purgeState,
-	})
+func removeBuiltinAdapter(p agent.Definition, options telemetryinstall.RemoveOptions) error {
+	result, err := telemetryinstall.RemoveAdapter(p.Name, "", options)
 	if err != nil {
 		return err
 	}
 	printSingleDetail("Hook", removedOrKept(result.HookRemoved))
 	printSingleDetail("Config", removedOrKept(result.ConfigRemoved))
-	if purgeState {
+	if options.PurgeManaged {
+		printSingleDetail("Managed Files", removedOrKept(result.ManagedFilesRemoved))
+	}
+	if options.PurgeState {
 		printSingleDetail("State", removedOrKept(result.StatePurged))
 	}
 	if p.Name == "claude" || p.Name == "codex" || p.Name == "cursor" {

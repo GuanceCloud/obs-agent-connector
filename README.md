@@ -121,7 +121,7 @@ Cursor is discovered when `~/.cursor` already exists, or when the Cursor CLI fam
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
 `config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
-`remove claude`, `remove codebuddy`, `remove codex`, and `remove cursor` remove only connector-managed Hooks by default and preserve runtime config unless `--purge-config` is supplied. `uninstall` removes the connector binary and its managed built-in Hooks while preserving Agent config and state.
+`remove claude`, `remove codebuddy`, `remove codex`, and `remove cursor` remove connector-managed Hooks and the matching `~/.obs-agent-connector/<agent>/` directory. Legacy Agent-local configuration is preserved unless `--purge-config` is supplied. `uninstall` removes all managed built-in adapters before removing the connector binary, configuration, and PATH entry; use `--keep-config` to retain connector-managed configuration.
 
 ## Build
 

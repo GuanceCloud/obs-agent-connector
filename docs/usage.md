@@ -318,13 +318,15 @@ Parameters:
 | --- | --- |
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the uninstall plan only |
-| `--keep-config` | Keep `~/.obs-agent-connector/config.json` |
+| `--keep-config` | Keep global and per-Agent connector-managed configuration |
 
 Behavior:
 
 - removes the current connector binary
-- removes the managed CodeBuddy Hook while preserving its config and upload state
-- removes the connector config by default
+- removes the managed Claude, CodeBuddy, Codex, and Cursor adapters and compatible legacy plugin residue
+- removes connector-managed per-Agent config, Hook logs, and upload state by default
+- removes the global connector config by default
+- with `--keep-config`, preserves global and per-Agent config while still removing Hooks, logs, and upload state
 - removes the PATH entry previously added by the installer when it can be identified
 - on Windows, schedules self-delete after the process exits
 
@@ -446,7 +448,7 @@ Remove a plugin:
 obs-agent-connector remove codex
 ```
 
-Remove the plugin and its runtime config:
+Also remove legacy Agent-local or external plugin configuration:
 
 ```bash
 obs-agent-connector remove codex --purge-config
@@ -458,15 +460,15 @@ Parameters:
 | --- | --- |
 | `--yes` | Skip confirmation |
 | `--dry-run` | Print the removal plan only |
-| `--purge-config` | Also remove the plugin config file and CodeBuddy upload state |
+| `--purge-config` | Also remove legacy Agent-local or external plugin config and built-in upload state |
 
 Notes:
 
-- by default the plugin is removed and the config is kept
+- built-in removal always deletes `~/.obs-agent-connector/<agent>/`, including its managed `gtrace.json` and `gtrace-hooks.json`
+- legacy Agent-local and external plugin configuration is kept unless `--purge-config` is supplied
 - `remove` accepts a single Agent target only
-- `remove claude` removes only connector-owned Claude Hooks and preserves `~/.obs-agent-connector/claude/gtrace.json` unless `--purge-config` is supplied
-- `remove codebuddy` removes only connector-owned CodeBuddy Hooks; `--purge-config` additionally removes `~/.obs-agent-connector/codebuddy/gtrace.json`, its Hook log, and upload state
-- `remove codex` removes only connector-owned Codex Hooks by default and also attempts to clean legacy `codex-otel-plugin` residue without blocking removal on legacy cleanup failures
+- `remove claude` and `remove codebuddy` preserve unrelated entries in their settings files
+- `remove codex` removes connector-owned Codex Hooks and trust state and also attempts to clean legacy `codex-otel-plugin` residue without blocking removal on legacy cleanup failures
 
 ## `version`
 

@@ -398,9 +398,11 @@ func TestCodexBuiltinRemoveAlsoCleansLegacyPluginResidue(t *testing.T) {
 	hooksPath := filepath.Join(home, ".codex", "hooks.json")
 	configPath := filepath.Join(home, ".codex", "config.toml")
 	gtracePath := filepath.Join(home, ".codex", "gtrace.json")
+	managedConfigPath := filepath.Join(home, ".obs-agent-connector", "codex", "gtrace.json")
+	managedLogPath := filepath.Join(home, ".obs-agent-connector", "codex", "gtrace-hooks.json")
 	legacySourcePath := filepath.Join(home, ".codex", "plugin-sources", "codex-otel-plugin", "plugins", "tracing")
 	legacyCachePath := filepath.Join(home, ".codex", "plugins", "cache", "codex-otel-plugin")
-	for _, path := range []string{hooksPath, configPath, gtracePath, legacySourcePath, legacyCachePath} {
+	for _, path := range []string{hooksPath, configPath, gtracePath, managedConfigPath, managedLogPath, legacySourcePath, legacyCachePath} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -452,6 +454,12 @@ func TestCodexBuiltinRemoveAlsoCleansLegacyPluginResidue(t *testing.T) {
 	if err := os.WriteFile(gtracePath, []byte(`{"enabled":true}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(managedConfigPath, []byte(`{"enabled":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(managedLogPath, []byte("managed log\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := remove([]string{"codex", "--yes"}); err != nil {
 		t.Fatal(err)
@@ -485,7 +493,10 @@ func TestCodexBuiltinRemoveAlsoCleansLegacyPluginResidue(t *testing.T) {
 		t.Fatalf("expected legacy cache path removed, got %v", err)
 	}
 	if _, err := os.Stat(gtracePath); err != nil {
-		t.Fatalf("expected runtime config to be preserved without purge: %v", err)
+		t.Fatalf("expected legacy runtime config to be preserved without purge: %v", err)
+	}
+	if _, err := os.Stat(filepath.Dir(managedConfigPath)); !os.IsNotExist(err) {
+		t.Fatalf("expected connector-managed Codex files to be removed, got %v", err)
 	}
 }
 
@@ -496,9 +507,11 @@ func TestClaudeBuiltinRemoveAlsoCleansLegacyPluginResidue(t *testing.T) {
 
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
 	gtracePath := filepath.Join(home, ".claude", "gtrace.json")
+	managedConfigPath := filepath.Join(home, ".obs-agent-connector", "claude", "gtrace.json")
+	managedLogPath := filepath.Join(home, ".obs-agent-connector", "claude", "gtrace-hooks.json")
 	legacyMarketplacePath := filepath.Join(home, ".claude", "marketplaces", "claude-otel-plugin-release")
 	legacyCachePath := filepath.Join(home, ".claude", "plugins", "cache", "claude-otel-plugin")
-	for _, path := range []string{settingsPath, gtracePath, legacyMarketplacePath, legacyCachePath} {
+	for _, path := range []string{settingsPath, gtracePath, managedConfigPath, managedLogPath, legacyMarketplacePath, legacyCachePath} {
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			t.Fatal(err)
 		}
@@ -531,6 +544,12 @@ func TestClaudeBuiltinRemoveAlsoCleansLegacyPluginResidue(t *testing.T) {
 	if err := os.WriteFile(gtracePath, []byte(`{"enabled":true}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(managedConfigPath, []byte(`{"enabled":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(managedLogPath, []byte("managed log\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
 
 	if err := remove([]string{"claude", "--yes"}); err != nil {
 		t.Fatal(err)
@@ -551,6 +570,9 @@ func TestClaudeBuiltinRemoveAlsoCleansLegacyPluginResidue(t *testing.T) {
 		t.Fatalf("expected legacy cache path removed, got %v", err)
 	}
 	if _, err := os.Stat(gtracePath); err != nil {
-		t.Fatalf("expected runtime config to be preserved without purge: %v", err)
+		t.Fatalf("expected legacy runtime config to be preserved without purge: %v", err)
+	}
+	if _, err := os.Stat(filepath.Dir(managedConfigPath)); !os.IsNotExist(err) {
+		t.Fatalf("expected connector-managed Claude files to be removed, got %v", err)
 	}
 }
