@@ -22,7 +22,7 @@ obs-agent-connector <command> [arguments]
 | `uninstall` | Uninstall `obs-agent-connector` itself. By default this removes the binary, connector config, and managed PATH entry when present. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print or run a matching self-update action when a newer release is available. |
 
-CodeBuddy is built into the connector. Claude, Codex, and other Agents use their external plugins.
+Claude, CodeBuddy, and Codex are built into the connector. Cursor and other Agents use their external plugins.
 
 ## Bootstrap
 
@@ -77,6 +77,7 @@ The output also shows the detected plugin version when it can be resolved from t
 Qoder is skipped until either `~/.qoder` or `~/.qoder-cn` has been created by the Agent.
 OpenCode is also detected when `~/.config/opencode` already exists, even if `opencode` is not currently in `PATH`.
 CodeBuddy is detected when the `codebuddy` command is in `PATH` or `~/.codebuddy` exists.
+Cursor is detected when the `cursor` or `cursor-agent` command is in `PATH`, or when `~/.cursor` already exists.
 Missing or invalid connector defaults are reported as `discover failed` errors.
 
 ## Status
@@ -133,7 +134,7 @@ Supported edit parameters:
 Notes:
 
 - `edit` merges the supplied values into the existing config and rewrites the file atomically
-- supported Agents: `claude`, `codebuddy`, `codex`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are excluded because they do not use the managed `gtrace.json` layout
 
 ## Install
@@ -142,6 +143,7 @@ Install one plugin with stored connector defaults:
 
 ```bash
 obs-agent-connector install codex
+obs-agent-connector install cursor
 ```
 
 Install the default built-in adapters:
@@ -168,7 +170,7 @@ If that source is unavailable, `install` derives the installer base from `--endp
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
 Use `--static-base` when you need to override the installer base.
 On Windows, Claude, CodeBuddy, and Codex register the current connector executable directly. External plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
-CodeBuddy, Codex, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows. Claude is not currently supported on Windows.
+Claude, Cursor, CodeBuddy, Codex, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows.
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 

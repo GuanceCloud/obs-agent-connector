@@ -9,6 +9,7 @@
 | `claude` | Claude | Current connector | `~/.claude/gtrace.json` | Managed Hooks in `~/.claude/settings.json` |
 | `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector | `~/.codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
 | `codex` | Codex | Current connector | `~/.codex/gtrace.json` | Managed Hook and trust state in `~/.codex/hooks.json` / `~/.codex/config.toml` |
+| `cursor` | Cursor with automatic user-profile or CLI-family detection | Unix: `https://static.guance.com/cursor-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/cursor-otel-plugin/releases/latest/download/install-release.ps1` | `~/.cursor/gtrace.json` | `~/.cursor/hooks/cursor-otel-plugin` |
 | `hermes` | Hermes | `https://static.guance.com/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://github.com/GuanceCloud/opencode-otel-plugin/releases/latest/download/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
 | `openclaw` | OpenClaw | Unix: `https://static.guance.com/openclaw-otel-plugin/install.sh`  Windows: `https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.ps1` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
@@ -30,9 +31,11 @@ This prevents the international and China editions from overwriting each other's
 
 ## Windows Support
 
-Windows plugin installation and update are currently supported only for:
+Windows installation and update are currently supported only for:
 
+- `claude`
 - `codex`
+- `cursor`
 - `codebuddy`
 - `opencode`
 - `openclaw`
@@ -67,6 +70,7 @@ The CLI always uses `--type gtrace`.
 | `claude` | `enabled` |
 | `codebuddy` | `enabled` |
 | `codex` | `enabled` |
+| `cursor` | `enabled` |
 | `opencode` | `enabled` |
 | `openclaw` | `plugins.entries.openclaw-otel-plugin.enabled` |
 | `qoder` | `enabled` |

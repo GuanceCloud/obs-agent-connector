@@ -9,6 +9,7 @@ Supported Agents:
 - `claude`
 - `codebuddy`
 - `codex`
+- `cursor`
 - `hermes`
 - `opencode`
 - `openclaw`
@@ -18,7 +19,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `claude`, `codebuddy`, `codex`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
+- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
 
 ## Install obs-agent-connector
 
@@ -152,6 +153,7 @@ obs-agent-connector discover
 obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codebuddy
+obs-agent-connector install cursor
 obs-agent-connector config codex list
 obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
 obs-agent-connector install opencode
@@ -238,7 +240,7 @@ Notes:
 
 - `list` prints the current managed `gtrace.json` values
 - `edit` merges the supplied values into the existing config and rewrites the file
-- supported Agents: `claude`, `codebuddy`, `codex`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are not supported by this command
 
 ## `discover`
@@ -287,6 +289,7 @@ obs-agent-connector discover --update
   - `agent_name` as `<hostname>_<agent>_<YYYYMMDD>`
 - shows detected plugin versions in the output
 - only includes `qoder` when `~/.qoder` or `~/.qoder-cn` already exists
+- includes `cursor` when `~/.cursor` already exists, even if the Cursor CLI is not in `PATH`
 - also includes `opencode` when `~/.config/opencode` already exists, even if `opencode` is not in `PATH`
 - only includes `workbuddy` when the WorkBuddy profile directory already exists, for example `~/.workbuddy`
 
@@ -504,6 +507,8 @@ Supported Agents on Windows:
 - `claude`
 - `codebuddy`
 - `codex`
+- `cursor`
+- `opencode`
 - `openclaw`
 - `qoder`
 - `workbuddy`
