@@ -138,6 +138,7 @@ func writeClaudeHooks(path string, settings map[string]any, command string) erro
 		hooks = map[string]any{}
 		settings["hooks"] = hooks
 	}
+	hookCommand := quoteHookCommand(command) + " hook claude"
 	for _, event := range []string{"Stop", "SessionEnd"} {
 		groups, _ := hooks[event].([]any)
 		next := make([]any, 0, len(groups)+1)
@@ -150,8 +151,7 @@ func writeClaudeHooks(path string, settings map[string]any, command string) erro
 			"hooks": []any{
 				map[string]any{
 					"type":          "command",
-					"command":       command,
-					"args":          []any{"hook", "claude"},
+					"command":       hookCommand,
 					"timeout":       60,
 					"statusMessage": "Uploading Claude telemetry to GTrace",
 				},
@@ -159,7 +159,7 @@ func writeClaudeHooks(path string, settings map[string]any, command string) erro
 		})
 		hooks[event] = next
 	}
-	return writeJSONAtomic(path, settings)
+	return writeJSONWatched(path, settings)
 }
 
 func managedClaudeHook(value any) bool {
@@ -221,11 +221,10 @@ func copyExecutable(source, destination string) error {
 }
 
 func writeJSONAtomic(path string, value any) error {
-	body, err := json.MarshalIndent(value, "", "  ")
+	body, err := marshalJSON(value)
 	if err != nil {
 		return err
 	}
-	body = append(body, '\n')
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -234,4 +233,42 @@ func writeJSONAtomic(path string, value any) error {
 		return err
 	}
 	return os.Rename(temp, path)
+}
+
+// writeJSONWatched preserves an existing file's identity so applications that
+// watch the file itself (instead of its parent directory) receive the update.
+// New files still use the atomic writer.
+func writeJSONWatched(path string, value any) error {
+	body, err := marshalJSON(value)
+	if err != nil {
+		return err
+	}
+	file, err := os.OpenFile(path, os.O_WRONLY, 0)
+	if os.IsNotExist(err) {
+		return writeJSONAtomic(path, value)
+	}
+	if err != nil {
+		return err
+	}
+	if _, err := file.WriteAt(body, 0); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Truncate(int64(len(body))); err != nil {
+		_ = file.Close()
+		return err
+	}
+	if err := file.Sync(); err != nil {
+		_ = file.Close()
+		return err
+	}
+	return file.Close()
+}
+
+func marshalJSON(value any) ([]byte, error) {
+	body, err := json.MarshalIndent(value, "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	return append(body, '\n'), nil
 }
