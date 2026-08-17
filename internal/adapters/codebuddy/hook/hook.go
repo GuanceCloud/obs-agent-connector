@@ -251,7 +251,7 @@ func exportTurn(cfg codebuddyconfig.Config, turn model.Turn, httpClient *http.Cl
 }
 
 func appendLog(cfg codebuddyconfig.Config, message string, extra map[string]any) {
-	if strings.TrimSpace(cfg.LogFile) == "" {
+	if strings.TrimSpace(cfg.HookLogFile) == "" {
 		return
 	}
 	payload := map[string]any{"ts": time.Now().UTC().Format(time.RFC3339Nano), "message": message}
@@ -259,10 +259,10 @@ func appendLog(cfg codebuddyconfig.Config, message string, extra map[string]any)
 		payload["extra"] = extra
 	}
 	body, err := json.Marshal(payload)
-	if err != nil || os.MkdirAll(filepath.Dir(cfg.LogFile), 0o700) != nil {
+	if err != nil || os.MkdirAll(filepath.Dir(cfg.HookLogFile), 0o755) != nil {
 		return
 	}
-	file, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	file, err := os.OpenFile(cfg.HookLogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return
 	}

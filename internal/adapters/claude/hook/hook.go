@@ -262,10 +262,13 @@ func appendLog(cfg claudeconfig.Config, message string, extra map[string]any) {
 	if err != nil {
 		return
 	}
-	if os.MkdirAll(filepath.Dir(cfg.LogFile), 0o700) != nil {
+	if strings.TrimSpace(cfg.HookLogFile) == "" {
 		return
 	}
-	file, err := os.OpenFile(cfg.LogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+	if os.MkdirAll(filepath.Dir(cfg.HookLogFile), 0o755) != nil {
+		return
+	}
+	file, err := os.OpenFile(cfg.HookLogFile, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return
 	}
