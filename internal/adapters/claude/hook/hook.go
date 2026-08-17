@@ -87,6 +87,11 @@ func RunWithOptions(options RunOptions) error {
 	}
 	turns := claudeparse.Normalize(parsedPayload, cfg, messages)
 	if len(turns) == 0 {
+		appendLog(cfg, "no terminal turns", map[string]any{
+			"event":                      parsedPayload.EventName,
+			"has_last_assistant_message": parsedPayload.LastAssistantMessage != "",
+			"transcript_file":            filepath.Base(parsedPayload.TranscriptPath),
+		})
 		return nil
 	}
 
@@ -216,11 +221,12 @@ func parsePayload(value map[string]any) claudeparse.HookPayload {
 		}
 	}
 	return claudeparse.HookPayload{
-		SessionID:      sessionID,
-		TranscriptPath: transcript,
-		Cwd:            firstString(value, "cwd"),
-		EventName:      firstString(value, "hook_event_name", "hookEventName", "event", "event_name"),
-		Version:        firstString(value, "version"),
+		SessionID:            sessionID,
+		TranscriptPath:       transcript,
+		Cwd:                  firstString(value, "cwd"),
+		EventName:            firstString(value, "hook_event_name", "hookEventName", "event", "event_name"),
+		Version:              firstString(value, "version"),
+		LastAssistantMessage: firstString(value, "last_assistant_message", "lastAssistantMessage"),
 	}
 }
 

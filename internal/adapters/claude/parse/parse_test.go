@@ -85,6 +85,41 @@ func TestNormalizeSkipsPendingTurnWithUnresolvedTool(t *testing.T) {
 	}
 }
 
+func TestNormalizeUsesStopPayloadWhenTranscriptLags(t *testing.T) {
+	messages := decodeMessages(t, `
+{"type":"user","uuid":"turn-lagged","timestamp":"2026-08-17T08:00:00Z","message":{"content":"summarize"}}
+`)
+	turns := Normalize(HookPayload{
+		SessionID:            "session-lagged",
+		EventName:            "Stop",
+		LastAssistantMessage: "Summary from the Stop payload.",
+	}, testConfig(), messages)
+	if len(turns) != 1 {
+		t.Fatalf("turns = %d, want 1", len(turns))
+	}
+	if turns[0].TurnID != "turn-lagged" || turns[0].OutputPreview != "Summary from the Stop payload." {
+		t.Fatalf("unexpected fallback turn: %#v", turns[0])
+	}
+	if len(turns[0].LLMCalls) != 1 || turns[0].LLMCalls[0].FinishReasons[0] != "end_turn" {
+		t.Fatalf("unexpected fallback LLM call: %#v", turns[0].LLMCalls)
+	}
+}
+
+func TestNormalizePrefersCompletedTranscriptOverStopPayload(t *testing.T) {
+	messages := decodeMessages(t, `
+{"type":"user","uuid":"turn-complete","timestamp":"2026-08-17T08:00:00Z","message":{"content":"summarize"}}
+{"type":"assistant","timestamp":"2026-08-17T08:00:01Z","message":{"id":"msg-complete","model":"claude-test","stop_reason":"end_turn","content":[{"type":"text","text":"Transcript response."}]}}
+`)
+	turns := Normalize(HookPayload{
+		SessionID:            "session-complete",
+		EventName:            "Stop",
+		LastAssistantMessage: "Payload response.",
+	}, testConfig(), messages)
+	if len(turns) != 1 || turns[0].OutputPreview != "Transcript response." || len(turns[0].LLMCalls) != 1 {
+		t.Fatalf("completed transcript was not preferred: %#v", turns)
+	}
+}
+
 func TestNormalizeCaptureNoneOmitsContent(t *testing.T) {
 	messages := decodeMessages(t, `
 {"type":"user","uuid":"turn-1","timestamp":"2026-06-16T01:00:00Z","message":{"content":"secret"}}

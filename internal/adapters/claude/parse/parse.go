@@ -17,23 +17,25 @@ import (
 )
 
 type HookPayload struct {
-	SessionID      string
-	TranscriptPath string
-	Cwd            string
-	EventName      string
-	Version        string
+	SessionID            string
+	TranscriptPath       string
+	Cwd                  string
+	EventName            string
+	Version              string
+	LastAssistantMessage string
 }
 
 type rawTurn struct {
-	user           map[string]any
-	assistants     []map[string]any
-	assistantIndex map[string]int
-	toolResults    map[string]toolResult
-	injectedByTool map[string]string
-	durationMs     float64
-	durationTime   int64
-	hasDuration    bool
-	closedByNext   bool
+	user            map[string]any
+	assistants      []map[string]any
+	assistantIndex  map[string]int
+	toolResults     map[string]toolResult
+	injectedByTool  map[string]string
+	durationMs      float64
+	durationTime    int64
+	hasDuration     bool
+	closedByNext    bool
+	completedByHook bool
 }
 
 type toolResult struct {
@@ -69,7 +71,9 @@ func ReadTranscript(path string) ([]map[string]any, error) {
 }
 
 func Normalize(payload HookPayload, cfg claudeconfig.Config, messages []map[string]any) []model.Turn {
-	rawTurns := buildTurns(messages)
+	includePending := payload.EventName == "Stop" && strings.TrimSpace(payload.LastAssistantMessage) != ""
+	rawTurns := buildTurns(messages, includePending)
+	applyStopFallback(payload, rawTurns)
 	turns := make([]model.Turn, 0, len(rawTurns))
 	agentVersion := payload.Version
 	if agentVersion == "" {
@@ -82,7 +86,7 @@ func Normalize(payload HookPayload, cfg claudeconfig.Config, messages []map[stri
 	}
 	host, _ := os.Hostname()
 	for index, raw := range rawTurns {
-		terminal := raw.closedByNext || raw.hasDuration
+		terminal := raw.closedByNext || raw.hasDuration || raw.completedByHook
 		if !terminal && (payload.EventName == "Stop" || payload.EventName == "SessionEnd") {
 			terminal = pendingComplete(raw)
 		}
@@ -97,11 +101,51 @@ func Normalize(payload HookPayload, cfg claudeconfig.Config, messages []map[stri
 	return turns
 }
 
-func buildTurns(messages []map[string]any) []*rawTurn {
+// applyStopFallback uses the authoritative Stop payload when Claude has not
+// flushed the current turn's final assistant message to the transcript yet.
+// Claude documents transcript_path as asynchronously written at Stop time.
+func applyStopFallback(payload HookPayload, turns []*rawTurn) {
+	if payload.EventName != "Stop" || strings.TrimSpace(payload.LastAssistantMessage) == "" || len(turns) == 0 {
+		return
+	}
+	turn := turns[len(turns)-1]
+	if turn == nil || turn.user == nil || turn.hasDuration || pendingComplete(turn) {
+		return
+	}
+	lastTimestamp := timestamp(turn.user)
+	model := "claude"
+	if len(turn.assistants) > 0 {
+		last := turn.assistants[len(turn.assistants)-1]
+		lastTimestamp = maxInt64(lastTimestamp, timestamp(last))
+		model = modelName(last)
+	}
+	if lastTimestamp <= 0 {
+		lastTimestamp = time.Now().UnixNano()
+	} else {
+		lastTimestamp++
+	}
+	sum := sha256.Sum256([]byte(payload.SessionID + "\x00" + messageID(turn.user) + "\x00" + payload.LastAssistantMessage))
+	turn.assistants = append(turn.assistants, map[string]any{
+		"type":      "assistant",
+		"timestamp": time.Unix(0, lastTimestamp).UTC().Format(time.RFC3339Nano),
+		"message": map[string]any{
+			"id":          "hook-final-" + hex.EncodeToString(sum[:8]),
+			"role":        "assistant",
+			"model":       model,
+			"stop_reason": "end_turn",
+			"content": []any{
+				map[string]any{"type": "text", "text": payload.LastAssistantMessage},
+			},
+		},
+	})
+	turn.completedByHook = true
+}
+
+func buildTurns(messages []map[string]any, includePending bool) []*rawTurn {
 	turns := make([]*rawTurn, 0)
 	var current *rawTurn
-	flush := func(closedByNext bool) {
-		if current == nil || current.user == nil || len(current.assistants) == 0 {
+	flush := func(closedByNext, allowPending bool) {
+		if current == nil || current.user == nil || (len(current.assistants) == 0 && !allowPending) {
 			return
 		}
 		current.closedByNext = closedByNext
@@ -147,7 +191,7 @@ func buildTurns(messages []map[string]any) []*rawTurn {
 		}
 		switch role(message) {
 		case "user":
-			flush(true)
+			flush(true, false)
 			current = &rawTurn{
 				user:           message,
 				assistantIndex: map[string]int{},
@@ -170,7 +214,7 @@ func buildTurns(messages []map[string]any) []*rawTurn {
 			}
 		}
 	}
-	flush(false)
+	flush(false, includePending)
 	return turns
 }
 
