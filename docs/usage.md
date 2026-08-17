@@ -184,7 +184,7 @@ The output includes:
 
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
 
-Claude, CodeBuddy, and Codex use built-in runtimes. Other Agents use their external plugins.
+Claude, CodeBuddy, Codex, and Cursor use built-in runtimes. Other Agents use their external plugins.
 
 ## `status`
 
@@ -351,12 +351,12 @@ Parameters:
 | `--x-token` | Set the authentication token |
 | `--agent-id` | Override the generated `agent_id` |
 | `--agent-name` | Override the generated `agent_name` |
-| `--trace-path` | Override the Trace upload path for the built-in CodeBuddy adapter |
-| `--metrics-path` | Override the Metrics upload path for the built-in CodeBuddy adapter |
-| `--header` | Add one CodeBuddy HTTP header. Supports one or more `--header` parameters |
+| `--trace-path` | Override the Trace upload path for a built-in adapter |
+| `--metrics-path` | Override the Metrics upload path for a built-in adapter |
+| `--header` | Add one built-in adapter HTTP header. Supports one or more `--header` parameters |
 | `--tag` | Add one resource attribute. Supports one or more `--tag` parameters |
-| `--capture-content` | Set CodeBuddy content capture to `none`, `preview`, or `full` |
-| `--max-chars` | Set the CodeBuddy content length limit |
+| `--capture-content` | Set built-in adapter content capture to `none`, `preview`, or `full` |
+| `--max-chars` | Set the built-in adapter content length limit |
 | `--enable` / `--disable` | Set the runtime enabled state |
 | `--static-base` | Override the external plugin download base URL |
 | `--yes` | Skip confirmation |
@@ -403,7 +403,7 @@ Notes:
 
 - `update` accepts a single Agent target only
 - the command preserves the existing runtime config
-- the built-in Claude, CodeBuddy, and Codex adapters reconcile their Hooks without modifying `gtrace.json`
+- the built-in Claude, CodeBuddy, Codex, and Cursor adapters reconcile their Hooks without modifying `gtrace.json`
 - external plugin installers receive `--no-config`
 
 ## `enable` / `disable`
@@ -516,8 +516,8 @@ Supported Agents on Windows:
 
 Notes:
 
-- Windows does not use the OSS shell installer path for plugin installation
-- it uses each plugin's PowerShell installer
+- built-in adapters register the current connector executable directly
+- external plugins use their GitHub release PowerShell installer
 - unsupported Agents return a friendly error
 
 ## Qoder Notes

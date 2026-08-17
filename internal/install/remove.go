@@ -41,9 +41,60 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 		return removeCodeBuddy(home, options)
 	case "codex":
 		return removeCodex(home, options)
+	case "cursor":
+		return removeCursor(home, options)
 	default:
 		return RemoveResult{}, errors.New("unsupported adapter " + adapter)
 	}
+}
+
+func removeCursor(home string, options RemoveOptions) (RemoveResult, error) {
+	result := RemoveResult{Adapter: "cursor", HookFile: filepath.Join(home, ".cursor", "hooks.json"), ConfigFile: filepath.Join(home, ".cursor", "gtrace.json")}
+	settings, exists, err := readJSONObjectIfExists(result.HookFile)
+	if err != nil {
+		return result, err
+	}
+	if exists {
+		hooks, _ := settings["hooks"].(map[string]any)
+		managed := managedCursorHook
+		if options.ConnectorOnly {
+			managed = connectorManagedCursorHook
+		}
+		for _, event := range cursorHookEvents {
+			entries, _ := hooks[event].([]any)
+			next := make([]any, 0, len(entries))
+			changed := false
+			for _, entry := range entries {
+				if managed(entry) {
+					changed = true
+					continue
+				}
+				next = append(next, entry)
+			}
+			if changed {
+				hooks[event] = next
+				result.HookRemoved = true
+			}
+		}
+		if result.HookRemoved {
+			if err := writeJSONAtomic(result.HookFile, settings); err != nil {
+				return result, err
+			}
+		}
+	}
+	if options.PurgeConfig {
+		if err := removeFileIfExists(result.ConfigFile); err != nil {
+			return result, err
+		}
+		result.ConfigRemoved = true
+	}
+	if options.PurgeState {
+		if err := os.RemoveAll(filepath.Join(home, ".cursor", "gtrace")); err != nil {
+			return result, err
+		}
+		result.StatePurged = true
+	}
+	return result, nil
 }
 
 func removeCodeBuddy(home string, options RemoveOptions) (RemoveResult, error) {

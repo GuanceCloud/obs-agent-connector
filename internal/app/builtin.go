@@ -71,6 +71,22 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 				printSingleDetail("Trust", "granted")
 			}
 		}
+	case "cursor":
+		_, err = telemetryinstall.InstallCursor(telemetryinstall.CursorOptions{
+			SourceExecutable:      executable,
+			DestinationExecutable: executable,
+			Endpoint:              input.Endpoint,
+			TracePath:             input.TracePath,
+			MetricsPath:           input.MetricsPath,
+			InstallType:           fixedType,
+			XToken:                input.XToken,
+			Headers:               append([]string{}, input.Headers...),
+			ResourceAttributes:    builtinResourceAttributes(input),
+			CaptureContent:        input.CaptureContent,
+			MaxChars:              input.MaxChars,
+			Enabled:               input.Enabled,
+			NoConfig:              noConfig,
+		})
 	default:
 		return fmt.Errorf("%s does not have a built-in telemetry adapter", p.Name)
 	}
@@ -93,7 +109,7 @@ func removeBuiltinAdapter(p agent.Definition, purgeConfig, purgeState bool) erro
 	if purgeState {
 		printSingleDetail("State", removedOrKept(result.StatePurged))
 	}
-	if p.Name == "claude" || p.Name == "codex" {
+	if p.Name == "claude" || p.Name == "codex" || p.Name == "cursor" {
 		removeBuiltinLegacyResidue(p)
 	}
 	return nil
