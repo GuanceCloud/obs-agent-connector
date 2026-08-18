@@ -53,6 +53,29 @@ func resolveInstallInput(defaults installInput, cfg connectorConfig, agent strin
 	return input, nil
 }
 
+// resolveExternalInstallInput deliberately ignores the Agent's private runtime
+// config. The external plugin installer owns that config and must generate or
+// merge it from the standard arguments passed here.
+func resolveExternalInstallInput(defaults installInput, cfg connectorConfig, agent string) (installInput, error) {
+	input, err := resolveCommonInstallInput(defaults, cfg)
+	if err != nil {
+		return input, err
+	}
+	if strings.TrimSpace(input.AgentID) == "" {
+		agentID, err := generateAgentID()
+		if err != nil {
+			return input, err
+		}
+		input.AgentID = agentID
+	} else if !validAgentID(input.AgentID) {
+		return input, fmt.Errorf("invalid agent_id %q: expected agid_<32 hex characters>", input.AgentID)
+	}
+	if strings.TrimSpace(input.AgentName) == "" {
+		input.AgentName = defaultAgentName(agent, time.Now())
+	}
+	return input, nil
+}
+
 func existingAgentIdentity(name string) (string, string) {
 	value := existingAgentConfig(name)
 	resource, _ := value["resourceAttributes"].(map[string]any)

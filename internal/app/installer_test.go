@@ -177,6 +177,28 @@ func TestResolveInstallInputRejectsInvalidExplicitAgentID(t *testing.T) {
 	}
 }
 
+func TestResolveExternalInstallInputDoesNotReadAgentRuntimeConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".dsh", "gtrace.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"endpoint":"https://stale.example.com","resourceAttributes":{"agent_id":"fffffffffffff","agent_name":"stale"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input, err := resolveExternalInstallInput(installInput{}, connectorConfig{
+		Endpoint: "https://configured.example.com",
+		XToken:   "agent_test",
+	}, "dsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.Endpoint != "https://configured.example.com" || input.AgentName == "stale" || !uuidPattern.MatchString(input.AgentID) {
+		t.Fatalf("external install input read Agent-private config: %#v", input)
+	}
+}
+
 func TestResolveInstallInputExplicitTransportOverridesExistingConfig(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)
