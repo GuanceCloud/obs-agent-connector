@@ -66,8 +66,8 @@ func TestBuildProducesCanonicalTreeAndNoAssistantTokens(t *testing.T) {
 	if findSpan(t, spans, "skill:demo").ParentID != ids["tool:exec"] {
 		t.Fatal("skill must be a tool child")
 	}
-	if llm := findSpan(t, spans, "llm"); llm.Attributes["status"] != "info" {
-		t.Fatalf("llm status = %#v, want info", llm.Attributes["status"])
+	if llm := findSpan(t, spans, "llm"); llm.Attributes["status"] != "ok" {
+		t.Fatalf("llm status = %#v, want ok", llm.Attributes["status"])
 	}
 	skill := findSpan(t, spans, "skill:demo")
 	if skill.Attributes["status"] != "completed" {
@@ -77,14 +77,14 @@ func TestBuildProducesCanonicalTreeAndNoAssistantTokens(t *testing.T) {
 		t.Fatalf("unexpected skill previews: %#v", skill.Attributes)
 	}
 	tool := findSpan(t, spans, "tool:exec")
-	if tool.Attributes["status"] != "info" {
-		t.Fatalf("tool status = %#v, want info", tool.Attributes["status"])
+	if tool.Attributes["status"] != "ok" {
+		t.Fatalf("tool status = %#v, want ok", tool.Attributes["status"])
 	}
 	if tool.Attributes["triggered_by.llm_span_id"] != ids["llm"] {
 		t.Fatal("tool must reference the triggering llm")
 	}
-	if assistant := findSpan(t, spans, "assistant"); assistant.Attributes["status"] != "info" {
-		t.Fatalf("assistant status = %#v, want info", assistant.Attributes["status"])
+	if assistant := findSpan(t, spans, "assistant"); assistant.Attributes["status"] != "ok" {
+		t.Fatalf("assistant status = %#v, want ok", assistant.Attributes["status"])
 	}
 }
 
@@ -118,7 +118,7 @@ func TestBuildMarksInvokeAgentErrorWhenTurnCancelled(t *testing.T) {
 			StartUnixNano: now,
 			EndUnixNano:   now + int64(time.Millisecond),
 			OutputPreview: "cancelled",
-			Status:        "info",
+			Status:        "ok",
 		}},
 	})
 	if len(spans) == 0 {

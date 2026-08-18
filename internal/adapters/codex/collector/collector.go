@@ -314,7 +314,7 @@ func buildTurnSpans(turn *model.Turn, sessionMeta model.SessionMeta, cfg config.
 		setUsageAttrs(llmAttrs, usage)
 		setAttr(llmAttrs, "step_index", index)
 		setAttr(llmAttrs, "ttft", ttft)
-		setAttr(llmAttrs, "status", "info")
+		setAttr(llmAttrs, "status", "ok")
 
 		llmStart := step.StartTime
 		if ttft > 0 {
@@ -345,7 +345,7 @@ func buildTurnSpans(turn *model.Turn, sessionMeta model.SessionMeta, cfg config.
 			}
 			setAttr(assistantAttrs, "step_index", index)
 			setAttr(assistantAttrs, "message_index", messageIndex)
-			setAttr(assistantAttrs, "status", "info")
+			setAttr(assistantAttrs, "status", "ok")
 			spans = append(spans, makeSpan(traceID, randomSpanID(), rootSpanID, "assistant", message.StartTime, message.EndTime, assistantAttrs, resource, scope, ingest, model.SpanStatus{Code: "STATUS_CODE_UNSET"}))
 		}
 
@@ -1326,7 +1326,7 @@ func toolStatusValue(tc *model.ToolCall) string {
 	if tc != nil && tc.Error != "" {
 		return "error"
 	}
-	return "info"
+	return "ok"
 }
 
 func toolErrorType(tc *model.ToolCall) any {

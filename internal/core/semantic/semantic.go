@@ -280,7 +280,7 @@ func operationStatusValue(errorType string) string {
 	if errorType != "" {
 		return "error"
 	}
-	return "info"
+	return "ok"
 }
 
 func mergeAttrs(target, extra map[string]any) {
