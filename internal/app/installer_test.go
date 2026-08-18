@@ -246,6 +246,46 @@ func TestBuildInstallArgsIncludesGlobalTagsBeforeAgentIdentity(t *testing.T) {
 	}
 }
 
+func TestDshUsesStandardExternalInstallerContract(t *testing.T) {
+	p := agentDefinitionForTest("dsh")
+	args := buildInstallArgs("/tmp/install.sh", p, installInput{
+		Endpoint: "https://example.com",
+		XToken:   "token",
+		GlobalTags: []string{
+			"agent_id=agid_test",
+		},
+	})
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"latest", "--type gtrace", "--endpoint https://example.com", "--x-token token", "--tag agent_id=agid_test", "--profile web"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected standard installer argument %q in %q", want, joined)
+		}
+	}
+	if strings.Contains(joined, "--source") {
+		t.Fatalf("standard external installer must resolve its own archive: %q", joined)
+	}
+}
+
+func TestDshUsesStandardInstallerURLs(t *testing.T) {
+	p := agentDefinitionForTest("dsh")
+	for _, tc := range []struct {
+		name   string
+		source string
+		base   string
+		want   string
+	}{
+		{name: "oss", source: pluginSourceOSS, base: "https://static.example.com", want: "https://static.example.com/dsh-otel-plugin/install.sh"},
+		{name: "github", source: pluginSourceGitHub, base: "https://github.com/GuanceCloud", want: "https://github.com/GuanceCloud/dsh-otel-plugin/releases/latest/download/install-release.sh"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := installerURLForOS(pluginDownloadConfig{Source: tc.source, BaseURL: tc.base}, p, "linux")
+			if err != nil || got != tc.want {
+				t.Fatalf("installer URL = %q, err = %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
 func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	err := unsupportedPlatformError(agentDefinitionForTest("hermes"), "windows")
 	if err == nil {

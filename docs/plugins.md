@@ -65,6 +65,21 @@ Each built-in adapter writes structured Hook logs to `~/.obs-agent-connector/<ag
 
 The CLI always uses `--type gtrace`.
 
+## External Plugin Installer Contract
+
+All external OTEL plugins follow one installer contract. The connector downloads
+the platform installer and passes only the common telemetry arguments (`latest`,
+`--type gtrace`, endpoint, token, tags, and plugin-specific options). The
+installer is responsible for resolving its own release archive, verifying its
+checksum, installing into the Agent profile, and merging Agent-local runtime
+configuration. The connector must not inject `--source`, construct a plugin
+archive URL, or write an external plugin's private configuration.
+
+This keeps OSS and GitHub Release delivery interchangeable and makes Unix and
+Windows installers equivalent. New external plugins should implement
+`install.sh`, `install-release.sh`, and `install-release.ps1` against this
+contract and add a regression test for the generated command.
+
 ## Runtime Toggle
 
 `enable <agent>` and `disable <agent>` change the plugin runtime switch without reinstalling:
