@@ -103,7 +103,12 @@ func install(args []string) error {
 		value := *enable
 		inputDefaults.Enabled = &value
 	}
-	input, err := resolveInstallInput(inputDefaults, cfg, selected[0].Name)
+	var input installInput
+	if selected[0].IsBuiltin() {
+		input, err = resolveInstallInput(inputDefaults, cfg, selected[0].Name)
+	} else {
+		input, err = resolveExternalInstallInput(inputDefaults, cfg, selected[0].Name)
+	}
 	if err != nil {
 		return err
 	}

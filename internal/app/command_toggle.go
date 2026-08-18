@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	installpkg "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
 func enable(args []string) error {
@@ -60,9 +62,13 @@ func togglePlugin(args []string, enabled bool) error {
 		return fmt.Errorf("%s does not support %s; its runtime config is not a supported JSON enabled switch", p.Name, commandName)
 	}
 
-	configPath := agent.FirstExistingPath(p.ConfigFiles)
-	if configPath == "" {
+	effectiveConfigPath := agent.FirstExistingPath(p.ConfigFiles)
+	if effectiveConfigPath == "" {
 		return fmt.Errorf("%s config file was not found; expected one of: %s", p.Name, strings.Join(p.ConfigFiles, ", "))
+	}
+	configPath := effectiveConfigPath
+	if p.IsBuiltin() && len(p.ConfigFiles) > 0 {
+		configPath = agent.ExpandHome(p.ConfigFiles[0])
 	}
 
 	displayPath := agent.DisplayPath(configPath)
@@ -71,7 +77,19 @@ func togglePlugin(args []string, enabled bool) error {
 		return nil
 	}
 
-	if err := setJSONBoolPath(configPath, p.EnabledJSONPath, enabled); err != nil {
+	if effectiveConfigPath != configPath {
+		current, exists, err := installpkg.ReadRuntimeConfig(effectiveConfigPath)
+		if err != nil {
+			return fmt.Errorf("failed to read legacy %s config: %w", p.Name, err)
+		}
+		if !exists {
+			return fmt.Errorf("%s config file was not found: %s", p.Name, effectiveConfigPath)
+		}
+		setNestedJSONBool(current, p.EnabledJSONPath, enabled)
+		if err := installpkg.WriteRuntimeConfig(configPath, current); err != nil {
+			return fmt.Errorf("failed to migrate and %s %s: %w", commandName, p.Name, err)
+		}
+	} else if err := setJSONBoolPath(configPath, p.EnabledJSONPath, enabled); err != nil {
 		return fmt.Errorf("failed to %s %s: %w", commandName, p.Name, err)
 	}
 

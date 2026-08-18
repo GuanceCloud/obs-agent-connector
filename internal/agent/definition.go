@@ -26,6 +26,7 @@ type Definition struct {
 	ConfigFiles              []string
 	EnabledJSONPath          []string
 	RemoveCmds               [][]string
+	RemoveFallbackCmd        []string
 	RemovePaths              []string
 	RemoveCleanupDetails     []string
 	RemoveCleanup            func(Definition) error

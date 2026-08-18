@@ -25,7 +25,7 @@ func TestResolveCursorForInstallRequiresCursorHomeOrCommand(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got := resolved[0].ConfigFiles; len(got) != 1 || got[0] != "~/.cursor/gtrace.json" {
+	if got := resolved[0].ConfigFiles; len(got) != 2 || got[0] != "~/.obs-agent-connector/cursor/gtrace.json" || got[1] != "~/.cursor/gtrace.json" {
 		t.Fatalf("unexpected cursor config files: %#v", got)
 	}
 }

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 )
 
 type ClaudeOptions struct {
@@ -67,7 +69,7 @@ func InstallClaude(options ClaudeOptions) (ClaudeResult, error) {
 	}
 	configFile := options.ConfigFile
 	if configFile == "" {
-		configFile = filepath.Join(home, ".claude", "gtrace.json")
+		configFile = agentfiles.ConfigPath(home, "claude")
 	}
 
 	settings, err := readJSONObject(settingsFile)
@@ -77,6 +79,12 @@ func InstallClaude(options ClaudeOptions) (ClaudeResult, error) {
 	configValue, configExists, err := readJSONObjectIfExists(configFile)
 	if err != nil {
 		return ClaudeResult{}, fmt.Errorf("parse Claude GTrace config: %w", err)
+	}
+	if !configExists && options.ConfigFile == "" {
+		configValue, configExists, err = readJSONObjectIfExists(filepath.Join(home, ".claude", "gtrace.json"))
+		if err != nil {
+			return ClaudeResult{}, fmt.Errorf("parse legacy Claude GTrace config: %w", err)
+		}
 	}
 
 	absoluteSource, err := filepath.Abs(source)

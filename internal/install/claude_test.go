@@ -115,14 +115,15 @@ func TestInstallClaudeConfiguresGTraceAndPreservesUnknownFields(t *testing.T) {
 	root := t.TempDir()
 	home := filepath.Join(root, "home")
 	source := filepath.Join(root, "agent-telemetry")
-	configPath := filepath.Join(home, ".claude", "gtrace.json")
+	legacyConfigPath := filepath.Join(home, ".claude", "gtrace.json")
+	configPath := filepath.Join(home, ".obs-agent-connector", "claude", "gtrace.json")
 	if err := os.WriteFile(source, []byte("binary"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(legacyConfigPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	writeTestJSON(t, configPath, map[string]any{
+	writeTestJSON(t, legacyConfigPath, map[string]any{
 		"enabled": false,
 		"unknown": "keep",
 		"headers": map[string]any{"X-Custom": "keep"},
@@ -141,6 +142,9 @@ func TestInstallClaudeConfiguresGTraceAndPreservesUnknownFields(t *testing.T) {
 	}
 	if !result.Configured {
 		t.Fatalf("configuration was not written: %#v", result)
+	}
+	if result.ConfigFile != configPath {
+		t.Fatalf("config file = %q, want %q", result.ConfigFile, configPath)
 	}
 	var config map[string]any
 	readTestJSON(t, configPath, &config)

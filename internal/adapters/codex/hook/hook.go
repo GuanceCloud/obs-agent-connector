@@ -11,6 +11,7 @@ import (
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/collector"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/config"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/sidecar"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/metrics"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
@@ -265,7 +266,7 @@ func fallbackConfig() config.Config {
 	return config.Config{
 		Debug:       false,
 		FailOnError: false,
-		HookLogFile: filepath.Join(home, ".codex", "gtrace-hook.log"),
+		HookLogFile: agentfiles.HookLogPath(home, "codex"),
 		StateDir:    filepath.Join(home, ".codex", "state", "gtrace-agent"),
 	}
 }

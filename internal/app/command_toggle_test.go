@@ -13,14 +13,15 @@ func TestDisableCodexSetsEnabledFalse(t *testing.T) {
 	setTestHome(t, home)
 
 	markerPath := filepath.Join(home, ".codex", "plugin-sources", "codex-otel-plugin", "plugins", "tracing")
-	configPath := filepath.Join(home, ".codex", "gtrace.json")
+	legacyConfigPath := filepath.Join(home, ".codex", "gtrace.json")
+	configPath := filepath.Join(home, ".obs-agent-connector", "codex", "gtrace.json")
 	if err := os.MkdirAll(markerPath, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(legacyConfigPath), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(configPath, []byte("{\"enabled\":true,\"endpoint\":\"https://example.com\"}\n"), 0o644); err != nil {
+	if err := os.WriteFile(legacyConfigPath, []byte("{\"enabled\":true,\"endpoint\":\"https://example.com\"}\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -31,6 +32,9 @@ func TestDisableCodexSetsEnabledFalse(t *testing.T) {
 	config := readJSONFile(t, configPath)
 	if enabled, ok := config["enabled"].(bool); !ok || enabled {
 		t.Fatalf("expected enabled=false, got %#v", config["enabled"])
+	}
+	if config["endpoint"] != "https://example.com" {
+		t.Fatalf("legacy config values were not migrated: %#v", config)
 	}
 }
 

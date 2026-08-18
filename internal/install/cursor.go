@@ -6,6 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 )
 
 var cursorHookEvents = []string{
@@ -75,7 +77,7 @@ func InstallCursor(options CursorOptions) (CursorResult, error) {
 		destination = filepath.Join(home, ".local", "bin", name)
 	}
 	hooksFile := firstInstallPath(options.HooksFile, filepath.Join(home, ".cursor", "hooks.json"))
-	configFile := firstInstallPath(options.ConfigFile, filepath.Join(home, ".cursor", "gtrace.json"))
+	configFile := firstInstallPath(options.ConfigFile, agentfiles.ConfigPath(home, "cursor"))
 	hooks, err := readJSONObject(hooksFile)
 	if err != nil {
 		return CursorResult{}, fmt.Errorf("parse Cursor hooks: %w", err)
@@ -83,6 +85,12 @@ func InstallCursor(options CursorOptions) (CursorResult, error) {
 	configValue, configExists, err := readJSONObjectIfExists(configFile)
 	if err != nil {
 		return CursorResult{}, fmt.Errorf("parse Cursor GTrace config: %w", err)
+	}
+	if !configExists && options.ConfigFile == "" {
+		configValue, configExists, err = readJSONObjectIfExists(filepath.Join(home, ".cursor", "gtrace.json"))
+		if err != nil {
+			return CursorResult{}, fmt.Errorf("parse legacy Cursor GTrace config: %w", err)
+		}
 	}
 	absoluteSource, err := filepath.Abs(source)
 	if err != nil {

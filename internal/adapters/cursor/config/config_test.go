@@ -26,3 +26,21 @@ func TestResolveReadsCursorConfigAndEnvironmentOverrides(t *testing.T) {
 		t.Fatalf("Cursor config fields were not preserved: %#v", cfg)
 	}
 }
+
+func TestResolveManagedConfigAndHookLogPath(t *testing.T) {
+	home := t.TempDir()
+	managedDir := filepath.Join(home, ".obs-agent-connector", "cursor")
+	if err := os.MkdirAll(managedDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(managedDir, "gtrace.json"), []byte(`{"enabled":true,"endpoint":"https://managed.example","hookLogFile":"/tmp/legacy.log"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Resolve(ResolveOptions{Home: home, Cwd: t.TempDir(), Env: map[string]string{}})
+	if !cfg.Enabled || cfg.Transport.Endpoint != "https://managed.example" {
+		t.Fatalf("managed config was not loaded: %#v", cfg)
+	}
+	if want := filepath.Join(managedDir, "gtrace-hooks.json"); cfg.LogFile != want {
+		t.Fatalf("LogFile = %q, want %q", cfg.LogFile, want)
+	}
+}

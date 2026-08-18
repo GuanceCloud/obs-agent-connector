@@ -77,10 +77,10 @@ func TestUninstallDryRun(t *testing.T) {
 
 	for _, expected := range []string{
 		"Uninstall plan:",
-		"Binary       : " + executablePath,
-		"Built-in Hook: remove claude, codebuddy, codex, and cursor; keep Agent config and state",
-		"Config       : remove " + configPath,
-		"Shell PATH   : remove managed entry from " + zshrcPath,
+		"Binary         : " + executablePath,
+		"Built-in Agents: remove claude, codebuddy, codex, and cursor; remove managed config, logs, and state",
+		"Config         : remove " + configPath,
+		"Shell PATH     : remove managed entry from " + zshrcPath,
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected output to contain %q, got:\n%s", expected, output)
@@ -88,5 +88,129 @@ func TestUninstallDryRun(t *testing.T) {
 	}
 	if _, err := os.Stat(executablePath); err != nil {
 		t.Fatalf("expected binary to remain during dry-run: %v", err)
+	}
+}
+
+func TestUninstallRemovesAllBuiltInAdaptersAndManagedFiles(t *testing.T) {
+	home := t.TempDir()
+	setTestHome(t, home)
+	t.Setenv("PATH", t.TempDir())
+
+	executablePath := filepath.Join(home, ".local", "bin", "obs-agent-connector")
+	if err := os.MkdirAll(filepath.Dir(executablePath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(executablePath, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	configRoot := filepath.Join(home, ".obs-agent-connector")
+	if err := os.MkdirAll(configRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(configRoot, "config.json"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, adapter := range []string{"claude", "codebuddy", "codex", "cursor"} {
+		dir := filepath.Join(configRoot, adapter)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "gtrace.json"), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "gtrace-hooks.json"), []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	hookFiles := map[string]string{
+		filepath.Join(home, ".claude", "settings.json"):    `{"hooks":{"Stop":[{"hooks":[{"command":"/tmp/obs-agent-connector hook claude"}]}],"SessionEnd":[]}}`,
+		filepath.Join(home, ".codebuddy", "settings.json"): `{"hooks":{"Stop":[{"hooks":[{"command":"/tmp/obs-agent-connector hook codebuddy"}]}],"SessionEnd":[]}}`,
+		filepath.Join(home, ".codex", "hooks.json"):        `{"hooks":{"Stop":[{"hooks":[{"command":"/tmp/obs-agent-connector hook codex"}]}]}}`,
+		filepath.Join(home, ".cursor", "hooks.json"):       `{"version":1,"hooks":{"stop":[{"command":"/tmp/obs-agent-connector hook cursor stop"}]}}`,
+	}
+	for path, body := range hookFiles {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body+"\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	previousExecutable := currentExecutable
+	previousEvalSymlinks := currentEvalSymlinks
+	previousGOOS := currentGOOS
+	currentExecutable = func() (string, error) { return executablePath, nil }
+	currentEvalSymlinks = func(path string) (string, error) { return path, nil }
+	currentGOOS = "linux"
+	t.Cleanup(func() {
+		currentExecutable = previousExecutable
+		currentEvalSymlinks = previousEvalSymlinks
+		currentGOOS = previousGOOS
+	})
+
+	if err := uninstallConnector([]string{"--yes"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(executablePath); !os.IsNotExist(err) {
+		t.Fatalf("connector binary remains: %v", err)
+	}
+	if _, err := os.Stat(configRoot); !os.IsNotExist(err) {
+		t.Fatalf("connector config root remains: %v", err)
+	}
+	for path := range hookFiles {
+		body, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(body), "obs-agent-connector") {
+			t.Fatalf("managed Hook remains in %s: %s", path, body)
+		}
+	}
+}
+
+func TestUninstallKeepConfigPreservesManagedConfigAndRemovesHookLog(t *testing.T) {
+	home := t.TempDir()
+	setTestHome(t, home)
+	t.Setenv("PATH", t.TempDir())
+
+	executablePath := filepath.Join(home, ".local", "bin", "obs-agent-connector")
+	managedDir := filepath.Join(home, ".obs-agent-connector", "codex")
+	globalConfigPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	managedConfigPath := filepath.Join(managedDir, "gtrace.json")
+	managedLogPath := filepath.Join(managedDir, "gtrace-hooks.json")
+	for _, path := range []string{executablePath, globalConfigPath, managedConfigPath, managedLogPath} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	previousExecutable := currentExecutable
+	previousEvalSymlinks := currentEvalSymlinks
+	previousGOOS := currentGOOS
+	currentExecutable = func() (string, error) { return executablePath, nil }
+	currentEvalSymlinks = func(path string) (string, error) { return path, nil }
+	currentGOOS = "linux"
+	t.Cleanup(func() {
+		currentExecutable = previousExecutable
+		currentEvalSymlinks = previousEvalSymlinks
+		currentGOOS = previousGOOS
+	})
+
+	if err := uninstallConnector([]string{"--yes", "--keep-config"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{globalConfigPath, managedConfigPath} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("kept config is missing at %s: %v", path, err)
+		}
+	}
+	if _, err := os.Stat(managedLogPath); !os.IsNotExist(err) {
+		t.Fatalf("managed Hook log remains: %v", err)
 	}
 }

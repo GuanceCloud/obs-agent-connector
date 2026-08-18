@@ -36,9 +36,9 @@ func TestRemoveCodexDryRunShowsResolvedCommandWhenExplicitBinaryExists(t *testin
 	})
 
 	for _, expected := range []string{
-		"Command    : " + command + " plugin remove tracing@codex-otel-plugin",
-		"Command    : " + command + " plugin marketplace remove codex-otel-plugin",
-		"Cleanup    : ~/.codex/config.toml (remove marketplace and plugin registration)",
+		"Command      : " + command + " plugin remove tracing@codex-otel-plugin",
+		"Command      : " + command + " plugin marketplace remove codex-otel-plugin",
+		"Cleanup      : ~/.codex/config.toml (remove marketplace and plugin registration)",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected output to contain %q, got:\n%s", expected, output)
@@ -81,12 +81,13 @@ func TestRemoveCodexDryRunShowsLocalCleanupOnly(t *testing.T) {
 
 	for _, expected := range []string{
 		"Remove plan:",
-		"Agent      : codex",
-		"Cleanup    : ~/.codex/config.toml (remove marketplace and plugin registration)",
-		"Cleanup    : ~/.codex/hooks.json (remove managed Stop hooks)",
-		"Path       : ~/.codex/plugin-sources/codex-otel-plugin",
-		"Path       : ~/.codex/plugins/cache/codex-otel-plugin",
-		"Config Mode: kept",
+		"Agent        : codex",
+		"Cleanup      : ~/.codex/config.toml (remove marketplace and plugin registration)",
+		"Cleanup      : ~/.codex/hooks.json (remove managed Stop hooks)",
+		"Path         : ~/.codex/plugin-sources/codex-otel-plugin",
+		"Path         : ~/.codex/plugins/cache/codex-otel-plugin",
+		"Managed Files: remove ~/.obs-agent-connector/codex",
+		"Config Mode  : legacy and external config kept",
 	} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected output to contain %q, got:\n%s", expected, output)

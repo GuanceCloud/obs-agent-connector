@@ -119,7 +119,7 @@ func TestResolveInstallInputPreservesExistingAgentIdentity(t *testing.T) {
   "captureContent":"none",
   "max_chars":321,
   "enabled":false,
-  "resourceAttributes":{"agent_id":"existing-id","agent_name":"existing-name","env":"existing"}
+  "resourceAttributes":{"agent_id":"agid_1234567890abcdef1234567890abcdef","agent_name":"existing-name","env":"existing"}
 }`
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
@@ -131,7 +131,7 @@ func TestResolveInstallInputPreservesExistingAgentIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.AgentID != "existing-id" || input.AgentName != "existing-name" {
+	if input.AgentID != "agid_1234567890abcdef1234567890abcdef" || input.AgentName != "existing-name" {
 		t.Fatalf("existing identity was not preserved: %#v", input)
 	}
 	if input.Endpoint != "https://existing.example.com" || input.XToken != "existing-token" || input.TracePath != "existing/traces" || input.MetricsPath != "existing/metrics" {
@@ -142,6 +142,60 @@ func TestResolveInstallInputPreservesExistingAgentIdentity(t *testing.T) {
 	}
 	if strings.Join(input.GlobalTags, ",") != "env=existing" || strings.Join(input.Headers, ",") != "Authorization=keep,X-Token=existing-token" {
 		t.Fatalf("existing headers/resource attributes were not preserved: %#v", input)
+	}
+}
+
+func TestResolveInstallInputRegeneratesInvalidExistingAgentID(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".dsh", "gtrace.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"resourceAttributes":{"agent_id":"fffffffffffff","agent_name":"dsh-test"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input, err := resolveInstallInput(installInput{}, connectorConfig{
+		Endpoint: "https://llm-openway.guance.com",
+		XToken:   "agent_test",
+	}, "dsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !uuidPattern.MatchString(input.AgentID) {
+		t.Fatalf("expected invalid existing ID to be replaced, got %q", input.AgentID)
+	}
+}
+
+func TestResolveInstallInputRejectsInvalidExplicitAgentID(t *testing.T) {
+	_, err := resolveInstallInput(installInput{AgentID: "fffffffffffff"}, connectorConfig{
+		Endpoint: "https://llm-openway.guance.com",
+		XToken:   "agent_test",
+	}, "dsh")
+	if err == nil || !strings.Contains(err.Error(), "invalid agent_id") {
+		t.Fatalf("expected invalid explicit agent ID error, got %v", err)
+	}
+}
+
+func TestResolveExternalInstallInputDoesNotReadAgentRuntimeConfig(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".dsh", "gtrace.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"endpoint":"https://stale.example.com","resourceAttributes":{"agent_id":"fffffffffffff","agent_name":"stale"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input, err := resolveExternalInstallInput(installInput{}, connectorConfig{
+		Endpoint: "https://configured.example.com",
+		XToken:   "agent_test",
+	}, "dsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if input.Endpoint != "https://configured.example.com" || input.AgentName == "stale" || !uuidPattern.MatchString(input.AgentID) {
+		t.Fatalf("external install input read Agent-private config: %#v", input)
 	}
 }
 
@@ -246,6 +300,57 @@ func TestBuildInstallArgsIncludesGlobalTagsBeforeAgentIdentity(t *testing.T) {
 	}
 }
 
+func TestDshUsesStandardExternalInstallerContract(t *testing.T) {
+	p := agentDefinitionForTest("dsh")
+	args := buildInstallArgs("/tmp/install.sh", p, installInput{
+		Endpoint: "https://example.com",
+		XToken:   "token",
+		GlobalTags: []string{
+			"agent_id=agid_test",
+		},
+	})
+	joined := strings.Join(args, " ")
+	for _, want := range []string{"latest", "--type gtrace", "--endpoint https://example.com", "--x-token token", "--tag agent_id=agid_test", "--profile web"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("expected standard installer argument %q in %q", want, joined)
+		}
+	}
+	if strings.Contains(joined, "--source") {
+		t.Fatalf("standard external installer must resolve its own archive: %q", joined)
+	}
+}
+
+func TestDshUsesStandardInstallerURLs(t *testing.T) {
+	p := agentDefinitionForTest("dsh")
+	for _, tc := range []struct {
+		name   string
+		source string
+		base   string
+		want   string
+	}{
+		{name: "oss", source: pluginSourceOSS, base: "https://static.example.com", want: "https://static.example.com/dsh-otel-plugin/install.sh"},
+		{name: "github", source: pluginSourceGitHub, base: "https://github.com/GuanceCloud", want: "https://github.com/GuanceCloud/dsh-otel-plugin/releases/latest/download/install-release.sh"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := installerURLForOS(pluginDownloadConfig{Source: tc.source, BaseURL: tc.base}, p, "linux")
+			if err != nil || got != tc.want {
+				t.Fatalf("installer URL = %q, err = %v; want %q", got, err, tc.want)
+			}
+		})
+	}
+}
+
+func TestCacheBustedLatestURLOnlyTouchesGitHubLatestAssets(t *testing.T) {
+	latest := cacheBustedLatestURL("https://github.com/GuanceCloud/dsh-otel-plugin/releases/latest/download/install-release.sh")
+	if !strings.HasPrefix(latest, "https://github.com/GuanceCloud/dsh-otel-plugin/releases/latest/download/install-release.sh?cachebust=") {
+		t.Fatalf("unexpected cache-busted URL %q", latest)
+	}
+	static := "https://static.example.com/dsh-otel-plugin/install.sh"
+	if got := cacheBustedLatestURL(static); got != static {
+		t.Fatalf("static installer URL changed: %q", got)
+	}
+}
+
 func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	err := unsupportedPlatformError(agentDefinitionForTest("hermes"), "windows")
 	if err == nil {
@@ -255,7 +360,7 @@ func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	if !strings.Contains(message, "hermes is not supported on Windows") {
 		t.Fatalf("unexpected error message %q", message)
 	}
-	if !strings.Contains(message, "codex, cursor, openclaw, opencode, qoder, workbuddy") {
+	if !strings.Contains(message, "codex, cursor, dsh, openclaw, opencode, qoder, workbuddy") {
 		t.Fatalf("expected supported Windows agent list in %q", message)
 	}
 }

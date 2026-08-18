@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
 )
 
@@ -58,6 +59,7 @@ func Resolve(options ResolveOptions) Config {
 	for _, source := range []map[string]any{
 		readJSON(filepath.Join(home, ".cursor", "gtrace.json")),
 		readJSON(filepath.Join(cwd, ".cursor", "gtrace.json")),
+		readJSON(agentfiles.ConfigPath(home, "cursor")),
 		environmentConfig(env),
 	} {
 		merge(merged, source)
@@ -83,10 +85,6 @@ func Resolve(options ResolveOptions) Config {
 	if stateDir == "" {
 		stateDir = filepath.Join(home, ".cursor", "gtrace")
 	}
-	logFile := expandPath(firstString(merged, "hookLogFile", "hook_log_file"), home)
-	if logFile == "" {
-		logFile = filepath.Join(stateDir, "hook.log")
-	}
 	return Config{
 		Enabled: enabled,
 		Transport: transport.Config{
@@ -100,7 +98,7 @@ func Resolve(options ResolveOptions) Config {
 		CaptureContent:     capture,
 		MaxChars:           bounded(integer(merged["maxChars"], integer(merged["max_chars"], DefaultMaxChars)), 1, 100_000, DefaultMaxChars),
 		Debug:              boolValue(merged["debug"]),
-		LogFile:            logFile,
+		LogFile:            agentfiles.HookLogPath(home, "cursor"),
 		StateDir:           stateDir,
 	}
 }

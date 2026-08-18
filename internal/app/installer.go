@@ -13,9 +13,12 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
+
+	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
 var currentGOOS = runtime.GOOS
@@ -29,6 +32,9 @@ func resolveInstallInput(defaults installInput, cfg connectorConfig, agent strin
 		return input, err
 	}
 	existingID, existingName := existingAgentIdentity(agent)
+	if strings.TrimSpace(input.AgentID) != "" && !validAgentID(input.AgentID) {
+		return input, fmt.Errorf("invalid agent_id %q: expected agid_<32 hex characters>", input.AgentID)
+	}
 	if strings.TrimSpace(input.AgentID) == "" {
 		input.AgentID = existingID
 	}
@@ -48,12 +54,52 @@ func resolveInstallInput(defaults installInput, cfg connectorConfig, agent strin
 	return input, nil
 }
 
+// resolveExternalInstallInput deliberately ignores the Agent's private runtime
+// config. The external plugin installer owns that config and must generate or
+// merge it from the standard arguments passed here.
+func resolveExternalInstallInput(defaults installInput, cfg connectorConfig, agent string) (installInput, error) {
+	input, err := resolveCommonInstallInput(defaults, cfg)
+	if err != nil {
+		return input, err
+	}
+	if strings.TrimSpace(input.AgentID) == "" {
+		agentID, err := generateAgentID()
+		if err != nil {
+			return input, err
+		}
+		input.AgentID = agentID
+	} else if !validAgentID(input.AgentID) {
+		return input, fmt.Errorf("invalid agent_id %q: expected agid_<32 hex characters>", input.AgentID)
+	}
+	if strings.TrimSpace(input.AgentName) == "" {
+		input.AgentName = defaultAgentName(agent, time.Now())
+	}
+	return input, nil
+}
+
 func existingAgentIdentity(name string) (string, string) {
 	value := existingAgentConfig(name)
 	resource, _ := value["resourceAttributes"].(map[string]any)
 	agentID, _ := resource["agent_id"].(string)
 	agentName, _ := resource["agent_name"].(string)
-	return strings.TrimSpace(agentID), strings.TrimSpace(agentName)
+	agentID = strings.TrimSpace(agentID)
+	if !validAgentID(agentID) {
+		agentID = ""
+	}
+	return agentID, strings.TrimSpace(agentName)
+}
+
+func validAgentID(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) != len("agid_")+32 || !strings.HasPrefix(value, "agid_") {
+		return false
+	}
+	for _, char := range value[len("agid_"):] {
+		if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 func mergeExistingRuntimeDefaults(input installInput, name string) installInput {
@@ -235,7 +281,7 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 	}
 	printSingleDetail("Download", url)
 
-	if err := downloadFile(url, scriptPath); err != nil {
+	if err := downloadFile(cacheBustedLatestURL(url), scriptPath); err != nil {
 		return fmt.Errorf("failed to download %s installer: %w", p.Name, err)
 	}
 
@@ -290,7 +336,7 @@ func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 	}
 	printSingleDetail("Download", url)
 
-	if err := downloadFile(url, scriptPath); err != nil {
+	if err := downloadFile(cacheBustedLatestURL(url), scriptPath); err != nil {
 		return fmt.Errorf("failed to download %s installer: %w", p.Name, err)
 	}
 
@@ -325,22 +371,39 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 		{"Agent", p.Name},
 	})
 	if p.IsBuiltin() {
-		return removeBuiltinAdapter(p, purgeConfig, purgeConfig)
+		return removeBuiltinAdapter(p, telemetryinstall.RemoveOptions{
+			PurgeConfig:  purgeConfig,
+			PurgeState:   purgeConfig,
+			PurgeManaged: true,
+		})
 	}
 
 	for _, command := range p.RemoveCmds {
 		if len(command) == 0 {
 			continue
 		}
+		actual := command
+		env := os.Environ()
+		cleanup := func() {}
 		if _, err := exec.LookPath(command[0]); err != nil {
-			printSingleDetail("Skip", fmt.Sprintf("%s was not found: %s", command[0], strings.Join(command, " ")))
-			continue
+			if len(p.RemoveFallbackCmd) == 0 {
+				printSingleDetail("Skip", fmt.Sprintf("%s was not found: %s", command[0], strings.Join(command, " ")))
+				continue
+			}
+			var fallbackErr error
+			actual = append(append([]string{}, p.RemoveFallbackCmd...), command[1:]...)
+			env, cleanup, fallbackErr = packageManagerEnvironment()
+			if fallbackErr != nil {
+				return fmt.Errorf("prepare package manager for %s removal: %w", p.Name, fallbackErr)
+			}
 		}
-		printSingleDetail("Command", strings.Join(command, " "))
-		cmd := exec.Command(command[0], command[1:]...)
+		defer cleanup()
+		printSingleDetail("Command", strings.Join(actual, " "))
+		cmd := exec.Command(actual[0], actual[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
+		cmd.Env = env
 		if err := cmd.Run(); err != nil {
 			printSingleDetail("Warning", fmt.Sprintf("command failed; continuing local cleanup: %v", err))
 		}
@@ -381,6 +444,31 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 
 	printSingleDetail("Result", "removed")
 	return nil
+}
+
+func packageManagerEnvironment() ([]string, func(), error) {
+	if _, err := exec.LookPath("pnpm"); err == nil {
+		return os.Environ(), func() {}, nil
+	}
+	npm, err := exec.LookPath("npm")
+	if err != nil {
+		return nil, nil, fmt.Errorf("pnpm and npm were not found")
+	}
+	tempRoot, err := os.MkdirTemp("", "obs-agent-connector-pnpm-")
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd := exec.Command(npm, "install", "--prefix", tempRoot, "pnpm")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		os.RemoveAll(tempRoot)
+		return nil, nil, err
+	}
+	bin := filepath.Join(tempRoot, "node_modules", ".bin")
+	env := append([]string{}, os.Environ()...)
+	env = append(env, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return env, func() { _ = os.RemoveAll(tempRoot) }, nil
 }
 
 func buildInstallArgs(scriptPath string, p agent.Definition, input installInput) []string {
@@ -679,6 +767,17 @@ func downloadFile(url string, target string) error {
 		return err
 	}
 	return nil
+}
+
+func cacheBustedLatestURL(url string) string {
+	if !strings.Contains(url, "/releases/latest/download/") {
+		return url
+	}
+	separator := "?"
+	if strings.Contains(url, "?") {
+		separator = "&"
+	}
+	return url + separator + "cachebust=" + strconv.FormatInt(time.Now().UnixNano(), 10)
 }
 
 func renderPowerShellInstallCommand(scriptPath string, p agent.Definition, input installInput) string {

@@ -8,12 +8,12 @@ The tool provides one binary and one version for connector lifecycle operations 
 
 - Bootstrap the CLI and OBS defaults with one installer command.
 - Collect Claude, CodeBuddy, Codex, and Cursor turns through built-in adapters without separate repositories.
-- Install transitional external Agent plugins through their official remote installer scripts.
+- Install external Agent plugins through their standard release installers.
 - Auto-discover local Agents, install missing plugins, and sync all plugins with `discover -u`.
 - Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
-- Update one installed Agent plugin without modifying existing configuration.
+- Update one installed Agent plugin while preserving plugin-owned configuration.
 - Enable or disable an installed plugin by updating its runtime config.
-- Remove installed plugins while keeping configuration by default.
+- Remove installed plugins while keeping configuration by default, with an automatic CLI fallback when the native Agent command is unavailable.
 - Detect installed plugins and their configuration paths.
 - Show the current CLI version and check whether a newer GitHub release is available.
 - Run CLI self-update directly from the `version -u` command.
@@ -31,6 +31,7 @@ The tool provides one binary and one version for connector lifecycle operations 
 | `codebuddy` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook plus native `index.json` replay; Linux x64 is product-validated |
 | `codex` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop Hook adapter plus built-in Codex trust/config handling |
 | `cursor` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Detects `~/.cursor`, prefers `cursor-agent`, and manages user-level Cursor Hooks |
+| `dsh` | `dsh-otel-plugin` | `✅` | `✅` | `✅` | DeepSeek Harness profile bundle |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
@@ -47,6 +48,7 @@ obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codebuddy
 obs-agent-connector install cursor
+obs-agent-connector install dsh
 obs-agent-connector config codex list
 obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
 obs-agent-connector install opencode
@@ -70,10 +72,12 @@ For plugin installation, `obs-agent-connector` first reuses the CLI download sou
 If that source is unavailable, the CLI derives the installer base from `--endpoint` by mapping the root domain to `https://static.<root-domain>`.
 Use `--static-base` to override this behavior.
 
+External plugins use one installer contract for OSS and GitHub Release sources. The connector passes the common version, `--type gtrace`, endpoint, X-Token, tags, and profile/variant arguments. The plugin installer owns archive download and checksum verification, plugin registration, and its private runtime configuration. The connector does not pass `--source` or read an external plugin's private `gtrace.json`.
+
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
+- On Windows, `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
 - Claude, CodeBuddy, Codex, and Cursor register the connector directly; external plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
 
 Bootstrap the CLI with shared defaults:
@@ -95,13 +99,34 @@ The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claud
 `list` and `discover` also show the detected plugin version when it can be resolved from the local install layout.
 `status <agent>` prints a single-Agent view including install state, version, config path, plugin path, and runtime `enabled` status when the plugin uses a supported JSON config.
 `config <agent> list` shows the current managed `gtrace.json` parameters for supported Agents. `config <agent> edit` merges one or more parameters into the existing file and rewrites it.
+Built-in adapters keep runtime config and Hook logs under the connector directory:
+
+```text
+~/.obs-agent-connector/
+├── claude/
+│   ├── gtrace.json
+│   └── gtrace-hooks.json
+├── codebuddy/
+│   ├── gtrace.json
+│   └── gtrace-hooks.json
+├── codex/
+│   ├── gtrace.json
+│   └── gtrace-hooks.json
+├── cursor/
+│   ├── gtrace.json
+│   └── gtrace-hooks.json
+└── config.json
+```
+
+Existing Agent-local `gtrace.json` files remain readable for upgrade compatibility. New installs and config edits write the connector-managed path.
 Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
 Cursor is discovered when `~/.cursor` already exists, or when the Cursor CLI family is available in `PATH`. `cursor-agent` is preferred when multiple compatible Cursor binaries are present.
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
+DSH is discovered when the `dsh` command is in `PATH` or when `~/.dsh` exists. The connector installs the bundle into the `web` profile by default and honors `DSH_HOME` and `DSH_PROFILE` when set. DSH runtime configuration is generated and merged by `dsh-otel-plugin`; the connector only supplies the standard installer arguments.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
 `config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
-`remove claude`, `remove codebuddy`, `remove codex`, and `remove cursor` remove only connector-managed Hooks by default and preserve runtime config unless `--purge-config` is supplied. `uninstall` removes the connector binary and its managed built-in Hooks while preserving Agent config and state.
+`remove claude`, `remove codebuddy`, `remove codex`, and `remove cursor` remove connector-managed Hooks and the matching `~/.obs-agent-connector/<agent>/` directory. Legacy Agent-local configuration is preserved unless `--purge-config` is supplied. `uninstall` removes all managed built-in adapters before removing the connector binary, configuration, and PATH entry; use `--keep-config` to retain connector-managed configuration.
 
 ## Build
 
@@ -132,7 +157,9 @@ GitHub Actions:
 
 - `CI` runs on pushes and pull requests.
 - `Package` runs manually and uploads packaged artifacts as a workflow artifact.
-- `Release` runs on tags matching `v*`, reuses the `Package` workflow, renders release notes from commit subjects, and publishes the same artifacts to GitHub Releases.
+- `Release` runs on tags matching `v*`, reuses the `Package` workflow, and publishes the same artifacts to GitHub Releases. RC tags are pre-releases; the final release note consolidates the RC changes.
+
+The current stable release is [v0.1.20](https://github.com/GuanceCloud/obs-agent-connector/releases/tag/v0.1.20).
 
 ## Project Layout
 

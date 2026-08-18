@@ -8,21 +8,25 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 )
 
 type RemoveResult struct {
-	Adapter       string
-	HookFile      string
-	ConfigFile    string
-	HookRemoved   bool
-	TrustRemoved  bool
-	ConfigRemoved bool
-	StatePurged   bool
+	Adapter             string
+	HookFile            string
+	ConfigFile          string
+	HookRemoved         bool
+	TrustRemoved        bool
+	ConfigRemoved       bool
+	StatePurged         bool
+	ManagedFilesRemoved bool
 }
 
 type RemoveOptions struct {
 	PurgeConfig   bool
 	PurgeState    bool
+	PurgeManaged  bool
 	ConnectorOnly bool
 }
 
@@ -34,22 +38,36 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 			return RemoveResult{}, err
 		}
 	}
+	var result RemoveResult
+	var err error
 	switch adapter {
 	case "claude":
-		return removeClaude(home, options)
+		result, err = removeClaude(home, options)
 	case "codebuddy":
-		return removeCodeBuddy(home, options)
+		result, err = removeCodeBuddy(home, options)
 	case "codex":
-		return removeCodex(home, options)
+		result, err = removeCodex(home, options)
 	case "cursor":
-		return removeCursor(home, options)
+		result, err = removeCursor(home, options)
 	default:
 		return RemoveResult{}, errors.New("unsupported adapter " + adapter)
 	}
+	if err != nil {
+		return result, err
+	}
+	if options.PurgeManaged {
+		managedDir := agentfiles.Directory(home, adapter)
+		if err := os.RemoveAll(managedDir); err != nil {
+			return result, fmt.Errorf("remove managed %s files: %w", adapter, err)
+		}
+		result.ConfigRemoved = true
+		result.ManagedFilesRemoved = true
+	}
+	return result, nil
 }
 
 func removeCursor(home string, options RemoveOptions) (RemoveResult, error) {
-	result := RemoveResult{Adapter: "cursor", HookFile: filepath.Join(home, ".cursor", "hooks.json"), ConfigFile: filepath.Join(home, ".cursor", "gtrace.json")}
+	result := RemoveResult{Adapter: "cursor", HookFile: filepath.Join(home, ".cursor", "hooks.json"), ConfigFile: agentfiles.ConfigPath(home, "cursor")}
 	settings, exists, err := readJSONObjectIfExists(result.HookFile)
 	if err != nil {
 		return result, err
@@ -83,7 +101,7 @@ func removeCursor(home string, options RemoveOptions) (RemoveResult, error) {
 		}
 	}
 	if options.PurgeConfig {
-		if err := removeFileIfExists(result.ConfigFile); err != nil {
+		if err := removeConfigFiles(result.ConfigFile, filepath.Join(home, ".cursor", "gtrace.json")); err != nil {
 			return result, err
 		}
 		result.ConfigRemoved = true
@@ -92,13 +110,16 @@ func removeCursor(home string, options RemoveOptions) (RemoveResult, error) {
 		if err := os.RemoveAll(filepath.Join(home, ".cursor", "gtrace")); err != nil {
 			return result, err
 		}
+		if err := removeFileIfExists(agentfiles.HookLogPath(home, "cursor")); err != nil {
+			return result, err
+		}
 		result.StatePurged = true
 	}
 	return result, nil
 }
 
 func removeCodeBuddy(home string, options RemoveOptions) (RemoveResult, error) {
-	result := RemoveResult{Adapter: "codebuddy", HookFile: filepath.Join(home, ".codebuddy", "settings.json"), ConfigFile: filepath.Join(home, ".codebuddy", "gtrace.json")}
+	result := RemoveResult{Adapter: "codebuddy", HookFile: filepath.Join(home, ".codebuddy", "settings.json"), ConfigFile: agentfiles.ConfigPath(home, "codebuddy")}
 	settings, exists, err := readJSONObjectIfExists(result.HookFile)
 	if err != nil {
 		return result, err
@@ -124,13 +145,16 @@ func removeCodeBuddy(home string, options RemoveOptions) (RemoveResult, error) {
 		}
 	}
 	if options.PurgeConfig {
-		if err := removeFileIfExists(result.ConfigFile); err != nil {
+		if err := removeConfigFiles(result.ConfigFile, filepath.Join(home, ".codebuddy", "gtrace.json")); err != nil {
 			return result, err
 		}
 		result.ConfigRemoved = true
 	}
 	if options.PurgeState {
 		if err := os.RemoveAll(filepath.Join(home, ".codebuddy", "gtrace")); err != nil {
+			return result, err
+		}
+		if err := removeFileIfExists(agentfiles.HookLogPath(home, "codebuddy")); err != nil {
 			return result, err
 		}
 		result.StatePurged = true
@@ -163,7 +187,7 @@ func removeClaude(home string, options RemoveOptions) (RemoveResult, error) {
 	result := RemoveResult{
 		Adapter:    "claude",
 		HookFile:   filepath.Join(home, ".claude", "settings.json"),
-		ConfigFile: filepath.Join(home, ".claude", "gtrace.json"),
+		ConfigFile: agentfiles.ConfigPath(home, "claude"),
 	}
 	settings, exists, err := readJSONObjectIfExists(result.HookFile)
 	if err != nil {
@@ -190,7 +214,7 @@ func removeClaude(home string, options RemoveOptions) (RemoveResult, error) {
 		}
 	}
 	if options.PurgeConfig {
-		if err := removeFileIfExists(result.ConfigFile); err != nil {
+		if err := removeConfigFiles(result.ConfigFile, filepath.Join(home, ".claude", "gtrace.json")); err != nil {
 			return result, err
 		}
 		result.ConfigRemoved = true
@@ -201,6 +225,9 @@ func removeClaude(home string, options RemoveOptions) (RemoveResult, error) {
 				return result, err
 			}
 		}
+		if err := removeFileIfExists(agentfiles.HookLogPath(home, "claude")); err != nil {
+			return result, err
+		}
 		result.StatePurged = true
 	}
 	return result, nil
@@ -210,7 +237,7 @@ func removeCodex(home string, options RemoveOptions) (RemoveResult, error) {
 	result := RemoveResult{
 		Adapter:    "codex",
 		HookFile:   filepath.Join(home, ".codex", "hooks.json"),
-		ConfigFile: filepath.Join(home, ".codex", "gtrace.json"),
+		ConfigFile: agentfiles.ConfigPath(home, "codex"),
 	}
 	settings, exists, err := readJSONObjectIfExists(result.HookFile)
 	if err != nil {
@@ -255,7 +282,7 @@ func removeCodex(home string, options RemoveOptions) (RemoveResult, error) {
 		}
 	}
 	if options.PurgeConfig {
-		if err := removeFileIfExists(result.ConfigFile); err != nil {
+		if err := removeConfigFiles(result.ConfigFile, filepath.Join(home, ".codex", "gtrace.json")); err != nil {
 			return result, err
 		}
 		result.ConfigRemoved = true
@@ -266,9 +293,21 @@ func removeCodex(home string, options RemoveOptions) (RemoveResult, error) {
 				return result, err
 			}
 		}
+		if err := removeFileIfExists(agentfiles.HookLogPath(home, "codex")); err != nil {
+			return result, err
+		}
 		result.StatePurged = true
 	}
 	return result, nil
+}
+
+func removeConfigFiles(paths ...string) error {
+	for _, path := range paths {
+		if err := removeFileIfExists(path); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func managedCodexTrustLocations(groups []any, managed func(any) bool) map[string]struct{} {
