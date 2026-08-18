@@ -231,7 +231,7 @@ func TestBuildInstallArgsIncludesGlobalTagsBeforeAgentIdentity(t *testing.T) {
 		AgentID:    "agid_1234567890abcdef1234567890abcdef",
 		AgentName:  "demo_codex_20260727",
 		GlobalTags: []string{"team=platform", "env=prod"},
-	})
+	}, pluginDownloadConfig{})
 	want := []string{
 		"--tag", "team=platform",
 		"--tag", "env=prod",
@@ -255,7 +255,7 @@ func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	if !strings.Contains(message, "hermes is not supported on Windows") {
 		t.Fatalf("unexpected error message %q", message)
 	}
-	if !strings.Contains(message, "codex, cursor, openclaw, opencode, qoder, workbuddy") {
+	if !strings.Contains(message, "codex, cursor, dsh, openclaw, opencode, qoder, workbuddy") {
 		t.Fatalf("expected supported Windows agent list in %q", message)
 	}
 }

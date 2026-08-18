@@ -225,9 +225,12 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 	}
 
 	if usesPackageArchive(currentGOOS, p) {
-		return runPackageInstaller(download, p, "installation", func(extractDir string) []string {
+		if err := runPackageInstaller(download, p, "installation", func(extractDir string) []string {
 			return buildPackageInstallArgs(extractDir, p, input)
-		})
+		}); err != nil {
+			return err
+		}
+		return configureConnectorManagedPlugin(p, input)
 	}
 
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
@@ -242,13 +245,13 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 	}
 
 	if currentGOOS == "windows" {
-		command := renderPowerShellInstallCommand(scriptPath, p, input)
+		command := renderPowerShellInstallCommand(scriptPath, p, input, download)
 		printSingleDetail("Command", redactSecret(command, input.XToken))
 		if err := runPowerShell(command); err != nil {
 			return fmt.Errorf("%s installation failed: %w", p.Name, err)
 		}
 	} else {
-		args := buildInstallArgs(scriptPath, p, input)
+		args := buildInstallArgs(scriptPath, p, input, download)
 		printSingleDetail("Command", renderBashCommand(redactInstallerArgs(args)))
 
 		cmd := exec.Command("bash", args...)
@@ -261,7 +264,42 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 		}
 	}
 
+	if err := configureConnectorManagedPlugin(p, input); err != nil {
+		return err
+	}
 	printSingleDetail("Result", "installed")
+	return nil
+}
+
+func configureConnectorManagedPlugin(p agent.Definition, input installInput) error {
+	if !p.ConnectorManagedConfig || len(p.ConfigFiles) == 0 {
+		return nil
+	}
+	configPath := agent.ExpandHome(p.ConfigFiles[0])
+	current, exists, err := telemetryinstall.ReadRuntimeConfig(configPath)
+	if err != nil {
+		return fmt.Errorf("read %s runtime config: %w", p.Name, err)
+	}
+	tags := append([]string{}, input.GlobalTags...)
+	if input.AgentID != "" {
+		tags = append(tags, "agent_id="+input.AgentID)
+	}
+	if input.AgentName != "" {
+		tags = append(tags, "agent_name="+input.AgentName)
+	}
+	next, err := telemetryinstall.MergeRuntimeConfig(current, telemetryinstall.CodexOptions{
+		Endpoint: input.Endpoint, TracePath: input.TracePath, MetricsPath: input.MetricsPath,
+		InstallType: fixedType, XToken: input.XToken, Headers: input.Headers,
+		ResourceAttributes: tags, CaptureContent: input.CaptureContent, MaxChars: input.MaxChars,
+		Enabled: input.Enabled,
+	}, exists)
+	if err != nil {
+		return fmt.Errorf("merge %s runtime config: %w", p.Name, err)
+	}
+	if err := telemetryinstall.WriteRuntimeConfig(configPath, next); err != nil {
+		return fmt.Errorf("write %s runtime config: %w", p.Name, err)
+	}
+	printSingleDetail("Config", agent.DisplayPath(configPath))
 	return nil
 }
 
@@ -297,13 +335,13 @@ func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 	}
 
 	if currentGOOS == "windows" {
-		command := renderPowerShellUpdateCommand(scriptPath, p)
+		command := renderPowerShellUpdateCommand(scriptPath, p, download)
 		printSingleDetail("Command", command)
 		if err := runPowerShell(command); err != nil {
 			return fmt.Errorf("%s update failed: %w", p.Name, err)
 		}
 	} else {
-		args := buildPluginUpdateArgs(scriptPath, p)
+		args := buildPluginUpdateArgs(scriptPath, p, download)
 		printSingleDetail("Command", renderBashCommand(args))
 
 		cmd := exec.Command("bash", args...)
@@ -389,7 +427,14 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 	return nil
 }
 
-func buildInstallArgs(scriptPath string, p agent.Definition, input installInput) []string {
+func buildInstallArgs(scriptPath string, p agent.Definition, input installInput, download pluginDownloadConfig) []string {
+	if p.ConnectorManagedConfig {
+		args := append([]string{scriptPath}, p.InstallArgs...)
+		if p.Name == "dsh" {
+			args = append(args, "--source", packageArchiveURL(download, p))
+		}
+		return args
+	}
 	args := []string{
 		scriptPath,
 		"latest",
@@ -402,7 +447,14 @@ func buildInstallArgs(scriptPath string, p agent.Definition, input installInput)
 	return args
 }
 
-func buildPluginUpdateArgs(scriptPath string, p agent.Definition) []string {
+func buildPluginUpdateArgs(scriptPath string, p agent.Definition, download pluginDownloadConfig) []string {
+	if p.ConnectorManagedConfig {
+		args := append([]string{scriptPath}, p.InstallArgs...)
+		if p.Name == "dsh" {
+			args = append(args, "--source", packageArchiveURL(download, p))
+		}
+		return args
+	}
 	args := []string{
 		scriptPath,
 		"latest",
@@ -418,7 +470,7 @@ func renderInstallCommand(download pluginDownloadConfig, p agent.Definition, inp
 	}
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	if currentGOOS == "windows" {
-		return renderPowerShellInstallCommand(scriptPath, p, input)
+		return renderPowerShellInstallCommand(scriptPath, p, input, download)
 	}
 	envAssignments := renderEnvAssignments(download, p)
 	envLine := ""
@@ -430,7 +482,7 @@ func renderInstallCommand(download pluginDownloadConfig, p agent.Definition, inp
 		shellQuote(scriptPath),
 		shellQuote(mustInstallerURL(download, p, currentGOOS)),
 		envLine,
-		renderBashCommand(buildInstallArgs(scriptPath, p, input)),
+		renderBashCommand(buildInstallArgs(scriptPath, p, input, download)),
 	)
 }
 
@@ -440,7 +492,7 @@ func renderPluginUpdateCommand(download pluginDownloadConfig, p agent.Definition
 	}
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	if currentGOOS == "windows" {
-		return renderPowerShellUpdateCommand(scriptPath, p)
+		return renderPowerShellUpdateCommand(scriptPath, p, download)
 	}
 	envAssignments := renderEnvAssignments(download, p)
 	envLine := ""
@@ -452,7 +504,7 @@ func renderPluginUpdateCommand(download pluginDownloadConfig, p agent.Definition
 		shellQuote(scriptPath),
 		shellQuote(mustInstallerURL(download, p, currentGOOS)),
 		envLine,
-		renderBashCommand(buildPluginUpdateArgs(scriptPath, p)),
+		renderBashCommand(buildPluginUpdateArgs(scriptPath, p, download)),
 	)
 }
 
@@ -551,6 +603,13 @@ func packageExtractPath(p agent.Definition) string {
 }
 
 func buildPackageInstallArgs(extractDir string, p agent.Definition, input installInput) []string {
+	if p.ConnectorManagedConfig {
+		args := make([]string, 0, len(p.PackageArgs)+1)
+		if p.PackageRootArg {
+			args = append(args, extractDir)
+		}
+		return append(args, p.PackageArgs...)
+	}
 	args := make([]string, 0, len(p.PackageArgs)+8+(len(input.GlobalTags)*2))
 	if p.PackageRootArg {
 		args = append(args, extractDir)
@@ -567,6 +626,13 @@ func buildPackageInstallArgs(extractDir string, p agent.Definition, input instal
 }
 
 func buildPackageUpdateArgs(extractDir string, p agent.Definition) []string {
+	if p.ConnectorManagedConfig {
+		args := make([]string, 0, len(p.PackageArgs)+1)
+		if p.PackageRootArg {
+			args = append(args, extractDir)
+		}
+		return append(args, p.PackageArgs...)
+	}
 	args := make([]string, 0, len(p.PackageArgs)+2)
 	if p.PackageRootArg {
 		args = append(args, extractDir)
@@ -687,7 +753,17 @@ func downloadFile(url string, target string) error {
 	return nil
 }
 
-func renderPowerShellInstallCommand(scriptPath string, p agent.Definition, input installInput) string {
+func renderPowerShellInstallCommand(scriptPath string, p agent.Definition, input installInput, download pluginDownloadConfig) string {
+	if p.ConnectorManagedConfig {
+		args := []string{"& " + powershellSingleQuote(scriptPath)}
+		for _, arg := range renderPowerShellOptionArgs(p.WindowsArgs) {
+			args = append(args, arg)
+		}
+		if p.Name == "dsh" {
+			args = append(args, "-Source "+powershellSingleQuote(packageArchiveURL(download, p)))
+		}
+		return "& { " + strings.Join(args, " ") + " }"
+	}
 	tagValues := make([]string, 0, len(input.GlobalTags)+2)
 	for _, value := range input.GlobalTags {
 		tagValues = append(tagValues, powershellSingleQuote(value))
@@ -709,7 +785,17 @@ func renderPowerShellInstallCommand(scriptPath string, p agent.Definition, input
 	return "& { " + strings.Join(args, " ") + " }"
 }
 
-func renderPowerShellUpdateCommand(scriptPath string, p agent.Definition) string {
+func renderPowerShellUpdateCommand(scriptPath string, p agent.Definition, download pluginDownloadConfig) string {
+	if p.ConnectorManagedConfig {
+		args := []string{"& " + powershellSingleQuote(scriptPath)}
+		for _, arg := range renderPowerShellOptionArgs(p.WindowsArgs) {
+			args = append(args, arg)
+		}
+		if p.Name == "dsh" {
+			args = append(args, "-Source "+powershellSingleQuote(packageArchiveURL(download, p)))
+		}
+		return "& { " + strings.Join(args, " ") + " }"
+	}
 	args := []string{
 		"& " + powershellSingleQuote(scriptPath),
 		"-Version " + powershellSingleQuote("latest"),

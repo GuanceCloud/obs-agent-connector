@@ -134,7 +134,7 @@ Supported edit parameters:
 Notes:
 
 - `edit` merges the supplied values into the existing config and rewrites the file atomically
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are excluded because they do not use the managed `gtrace.json` layout
 
 ## Install
@@ -223,7 +223,7 @@ obs-agent-connector disable codex --dry-run
 
 `enable` and `disable` update the Agent runtime JSON config in place:
 
-- `claude`, `codebuddy`, `codex`, `opencode`, and `qoder` set top-level `enabled`
+- `claude`, `codebuddy`, `codex`, `dsh`, `opencode`, and `qoder` set top-level `enabled`
 - `openclaw` sets `plugins.entries.openclaw-otel-plugin.enabled`
 
 `hermes` is not currently supported because its runtime config is YAML rather than a supported JSON `enabled` switch.

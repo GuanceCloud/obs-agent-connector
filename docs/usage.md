@@ -10,6 +10,7 @@ Supported Agents:
 - `codebuddy`
 - `codex`
 - `cursor`
+- `dsh`
 - `hermes`
 - `opencode`
 - `openclaw`
@@ -19,7 +20,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
+- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
 
 ## Install obs-agent-connector
 
@@ -163,6 +164,7 @@ obs-agent-connector disable codex
 obs-agent-connector remove codex
 obs-agent-connector uninstall
 obs-agent-connector install workbuddy
+obs-agent-connector install dsh
 obs-agent-connector version
 obs-agent-connector version -u
 ```

@@ -31,6 +31,7 @@ The tool provides one binary and one version for connector lifecycle operations 
 | `codebuddy` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook plus native `index.json` replay; Linux x64 is product-validated |
 | `codex` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop Hook adapter plus built-in Codex trust/config handling |
 | `cursor` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Detects `~/.cursor`, prefers `cursor-agent`, and manages user-level Cursor Hooks |
+| `dsh` | `dsh-otel-plugin` | `✅` | `✅` | `✅` | DeepSeek Harness profile bundle |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
@@ -47,6 +48,7 @@ obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codebuddy
 obs-agent-connector install cursor
+obs-agent-connector install dsh
 obs-agent-connector config codex list
 obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
 obs-agent-connector install opencode
@@ -73,7 +75,7 @@ Use `--static-base` to override this behavior.
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
+- On Windows, `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
 - Claude, CodeBuddy, Codex, and Cursor register the connector directly; external plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
 
 Bootstrap the CLI with shared defaults:
@@ -119,6 +121,7 @@ Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
 Cursor is discovered when `~/.cursor` already exists, or when the Cursor CLI family is available in `PATH`. `cursor-agent` is preferred when multiple compatible Cursor binaries are present.
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
+DSH is discovered when the `dsh` command is in `PATH` or when `~/.dsh` exists. The connector installs the bundle into the `web` profile by default and honors `DSH_HOME` and `DSH_PROFILE` when set.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
 `config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
 `remove claude`, `remove codebuddy`, `remove codex`, and `remove cursor` remove connector-managed Hooks and the matching `~/.obs-agent-connector/<agent>/` directory. Legacy Agent-local configuration is preserved unless `--purge-config` is supplied. `uninstall` removes all managed built-in adapters before removing the connector binary, configuration, and PATH entry; use `--keep-config` to retain connector-managed configuration.
