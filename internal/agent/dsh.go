@@ -15,7 +15,6 @@ func dshPlugin() Definition {
 		WindowsInstaller:         "install-release.ps1",
 		InstallArgs:              []string{"--profile", "web"},
 		WindowsArgs:              []string{"-Profile", "web"},
-		ConnectorManagedConfig:   true,
 		DiscoveryCommandOptional: true,
 		Markers: []string{
 			"~/.dsh/profiles/web/node_modules/dsh-otel-plugin",

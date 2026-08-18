@@ -231,7 +231,7 @@ func TestBuildInstallArgsIncludesGlobalTagsBeforeAgentIdentity(t *testing.T) {
 		AgentID:    "agid_1234567890abcdef1234567890abcdef",
 		AgentName:  "demo_codex_20260727",
 		GlobalTags: []string{"team=platform", "env=prod"},
-	}, pluginDownloadConfig{})
+	})
 	want := []string{
 		"--tag", "team=platform",
 		"--tag", "env=prod",

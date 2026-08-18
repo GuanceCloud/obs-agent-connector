@@ -18,7 +18,6 @@ type Definition struct {
 	PackageScript            string
 	PackageArgs              []string
 	PackageRootArg           bool
-	ConnectorManagedConfig   bool
 	DiscoveryCommandOptional bool
 	Env                      []string
 	InstallArgs              []string
