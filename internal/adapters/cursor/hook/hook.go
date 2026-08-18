@@ -347,7 +347,7 @@ func buildTurn(events []storedEvent, cfg cursorconfig.Config) model.Turn {
 			Name:          name,
 			StartUnixNano: startEvent.RecordedNano,
 			EndUnixNano:   end,
-			Status:        "ok",
+			Status:        "info",
 			ResultStatus:  "completed",
 			ExtraAttributes: map[string]any{
 				"agent.cursor.hook_event_name": resultEvent.Event,
@@ -624,7 +624,7 @@ func statusValue(errorType string) string {
 	if errorType != "" {
 		return "error"
 	}
-	return "ok"
+	return "info"
 }
 
 func stringValue(value map[string]any, keys ...string) string {

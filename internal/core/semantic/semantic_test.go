@@ -60,16 +60,31 @@ func TestBuildProducesCanonicalTreeAndNoAssistantTokens(t *testing.T) {
 			}
 		}
 	}
+	if root.Attributes["status"] != "ok" {
+		t.Fatalf("invoke_agent status = %#v, want ok", root.Attributes["status"])
+	}
 	if findSpan(t, spans, "skill:demo").ParentID != ids["tool:exec"] {
 		t.Fatal("skill must be a tool child")
 	}
+	if llm := findSpan(t, spans, "llm"); llm.Attributes["status"] != "info" {
+		t.Fatalf("llm status = %#v, want info", llm.Attributes["status"])
+	}
 	skill := findSpan(t, spans, "skill:demo")
+	if skill.Attributes["status"] != "completed" {
+		t.Fatalf("skill status = %#v, want explicit completed passthrough", skill.Attributes["status"])
+	}
 	if skill.Attributes["input_preview"] != "skill/demo" || skill.Attributes["output_preview"] != "done" {
 		t.Fatalf("unexpected skill previews: %#v", skill.Attributes)
 	}
 	tool := findSpan(t, spans, "tool:exec")
+	if tool.Attributes["status"] != "info" {
+		t.Fatalf("tool status = %#v, want info", tool.Attributes["status"])
+	}
 	if tool.Attributes["triggered_by.llm_span_id"] != ids["llm"] {
 		t.Fatal("tool must reference the triggering llm")
+	}
+	if assistant := findSpan(t, spans, "assistant"); assistant.Attributes["status"] != "info" {
+		t.Fatalf("assistant status = %#v, want info", assistant.Attributes["status"])
 	}
 }
 

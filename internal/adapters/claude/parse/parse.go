@@ -351,7 +351,7 @@ func normalizeTurn(
 			OutputKind:     ternary(len(toolUses) > 0, "tool_call", "text"),
 			FinishReasons:  nonEmptyStrings(stopReason(assistant)),
 			Usage:          usage,
-			Status:         ternary(apiErrorType != "", "error", "ok"),
+			Status:         ternary(apiErrorType != "", "error", "info"),
 			ErrorType:      apiErrorType,
 			Reason:         apiReason,
 			ExtraAttributes: map[string]any{
@@ -405,7 +405,7 @@ func normalizeTurn(
 				Result:            resultValue,
 				Command:           command(toolUse["input"], cfg.MaxChars),
 				ResultStatus:      resultStatus,
-				Status:            ternary(errorType != "", "error", "ok"),
+				Status:            ternary(errorType != "", "error", "info"),
 				ErrorType:         errorType,
 				Reason:            reason,
 				InputPreview:      toolInputPreview,
@@ -448,7 +448,7 @@ func normalizeTurn(
 				Provider:       "anthropic",
 				RequestModel:   modelName,
 				ResponseModel:  modelName,
-				Status:         ternary(apiErrorType != "", "error", "ok"),
+				Status:         ternary(apiErrorType != "", "error", "info"),
 				ErrorType:      apiErrorType,
 				Reason:         apiReason,
 			})

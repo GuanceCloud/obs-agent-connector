@@ -269,11 +269,11 @@ func buildTurn(input HookInput, request requestIndex, messageSet map[string]stru
 	turn.LLMCalls = append(turn.LLMCalls, model.LLMCall{
 		CallID: request.ID, StartUnixNano: start, EndUnixNano: end, RequestModel: input.Model, ResponseModel: input.Model,
 		InputMessages: inputMessages, OutputMessages: outputMessages, InputPreview: inputPreview, OutputPreview: outputPreview,
-		OutputKind: llmOutputKind, FinishReasons: []string{finishReason}, Usage: usage, Status: "ok",
+		OutputKind: llmOutputKind, FinishReasons: []string{finishReason}, Usage: usage, Status: "info",
 		ExtraAttributes: map[string]any{"timing.source": "inferred"},
 	})
 	for _, raw := range tools {
-		tool := model.ToolCall{CallID: raw.ID, TriggeringLLMCall: request.ID, Name: firstNonEmpty(raw.Name, "unknown"), StartUnixNano: raw.StartUnixNano, EndUnixNano: raw.EndUnixNano, Status: "ok", ResultStatus: "completed", ExtraAttributes: map[string]any{"timing.source": "inferred"}}
+		tool := model.ToolCall{CallID: raw.ID, TriggeringLLMCall: request.ID, Name: firstNonEmpty(raw.Name, "unknown"), StartUnixNano: raw.StartUnixNano, EndUnixNano: raw.EndUnixNano, Status: "info", ResultStatus: "completed", ExtraAttributes: map[string]any{"timing.source": "inferred"}}
 		if tool.StartUnixNano == 0 {
 			tool.StartUnixNano = start
 		}
@@ -295,7 +295,7 @@ func buildTurn(input HookInput, request requestIndex, messageSet map[string]stru
 	if strings.TrimSpace(assistantText) != "" {
 		turn.AssistantOutputs = append(turn.AssistantOutputs, model.AssistantOutput{
 			StartUnixNano: end - 1, EndUnixNano: end, OutputMessages: outputMessages, OutputPreview: outputPreview,
-			OutputKind: "text", RequestModel: input.Model, ResponseModel: input.Model, Status: "ok",
+			OutputKind: "text", RequestModel: input.Model, ResponseModel: input.Model, Status: "info",
 			ExtraAttributes: map[string]any{"timing.source": "inferred"},
 		})
 	}
