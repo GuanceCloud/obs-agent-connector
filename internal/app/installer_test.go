@@ -119,7 +119,7 @@ func TestResolveInstallInputPreservesExistingAgentIdentity(t *testing.T) {
   "captureContent":"none",
   "max_chars":321,
   "enabled":false,
-  "resourceAttributes":{"agent_id":"existing-id","agent_name":"existing-name","env":"existing"}
+  "resourceAttributes":{"agent_id":"agid_1234567890abcdef1234567890abcdef","agent_name":"existing-name","env":"existing"}
 }`
 	if err := os.WriteFile(configPath, []byte(config), 0o600); err != nil {
 		t.Fatal(err)
@@ -131,7 +131,7 @@ func TestResolveInstallInputPreservesExistingAgentIdentity(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if input.AgentID != "existing-id" || input.AgentName != "existing-name" {
+	if input.AgentID != "agid_1234567890abcdef1234567890abcdef" || input.AgentName != "existing-name" {
 		t.Fatalf("existing identity was not preserved: %#v", input)
 	}
 	if input.Endpoint != "https://existing.example.com" || input.XToken != "existing-token" || input.TracePath != "existing/traces" || input.MetricsPath != "existing/metrics" {
@@ -142,6 +142,38 @@ func TestResolveInstallInputPreservesExistingAgentIdentity(t *testing.T) {
 	}
 	if strings.Join(input.GlobalTags, ",") != "env=existing" || strings.Join(input.Headers, ",") != "Authorization=keep,X-Token=existing-token" {
 		t.Fatalf("existing headers/resource attributes were not preserved: %#v", input)
+	}
+}
+
+func TestResolveInstallInputRegeneratesInvalidExistingAgentID(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	configPath := filepath.Join(home, ".dsh", "gtrace.json")
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"resourceAttributes":{"agent_id":"fffffffffffff","agent_name":"dsh-test"}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	input, err := resolveInstallInput(installInput{}, connectorConfig{
+		Endpoint: "https://llm-openway.guance.com",
+		XToken:   "agent_test",
+	}, "dsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !uuidPattern.MatchString(input.AgentID) {
+		t.Fatalf("expected invalid existing ID to be replaced, got %q", input.AgentID)
+	}
+}
+
+func TestResolveInstallInputRejectsInvalidExplicitAgentID(t *testing.T) {
+	_, err := resolveInstallInput(installInput{AgentID: "fffffffffffff"}, connectorConfig{
+		Endpoint: "https://llm-openway.guance.com",
+		XToken:   "agent_test",
+	}, "dsh")
+	if err == nil || !strings.Contains(err.Error(), "invalid agent_id") {
+		t.Fatalf("expected invalid explicit agent ID error, got %v", err)
 	}
 }
 

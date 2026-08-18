@@ -31,6 +31,9 @@ func resolveInstallInput(defaults installInput, cfg connectorConfig, agent strin
 		return input, err
 	}
 	existingID, existingName := existingAgentIdentity(agent)
+	if strings.TrimSpace(input.AgentID) != "" && !validAgentID(input.AgentID) {
+		return input, fmt.Errorf("invalid agent_id %q: expected agid_<32 hex characters>", input.AgentID)
+	}
 	if strings.TrimSpace(input.AgentID) == "" {
 		input.AgentID = existingID
 	}
@@ -55,7 +58,24 @@ func existingAgentIdentity(name string) (string, string) {
 	resource, _ := value["resourceAttributes"].(map[string]any)
 	agentID, _ := resource["agent_id"].(string)
 	agentName, _ := resource["agent_name"].(string)
-	return strings.TrimSpace(agentID), strings.TrimSpace(agentName)
+	agentID = strings.TrimSpace(agentID)
+	if !validAgentID(agentID) {
+		agentID = ""
+	}
+	return agentID, strings.TrimSpace(agentName)
+}
+
+func validAgentID(value string) bool {
+	value = strings.TrimSpace(value)
+	if len(value) != len("agid_")+32 || !strings.HasPrefix(value, "agid_") {
+		return false
+	}
+	for _, char := range value[len("agid_"):] {
+		if !((char >= '0' && char <= '9') || (char >= 'a' && char <= 'f')) {
+			return false
+		}
+	}
+	return true
 }
 
 func mergeExistingRuntimeDefaults(input installInput, name string) installInput {
