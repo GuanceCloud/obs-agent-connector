@@ -103,6 +103,32 @@ func TestBuildSkipsUnsetAndBlankTurns(t *testing.T) {
 	}
 }
 
+func TestBuildMarksInvokeAgentErrorWhenTurnCancelled(t *testing.T) {
+	now := time.Now().UnixNano()
+	spans := (Builder{}).Build(model.Turn{
+		SessionID:      "session-cancelled",
+		AgentRuntime:   "test-agent",
+		AgentName:      "test-agent",
+		StartUnixNano:  now,
+		EndUnixNano:    now + int64(time.Second),
+		FinalStatus:    model.FinalStatusCancelled,
+		InputPreview:   "hello",
+		OutputPreview:  "cancelled",
+		AssistantOutputs: []model.AssistantOutput{{
+			StartUnixNano: now,
+			EndUnixNano:   now + int64(time.Millisecond),
+			OutputPreview: "cancelled",
+			Status:        "info",
+		}},
+	})
+	if len(spans) == 0 {
+		t.Fatal("expected spans for cancelled turn")
+	}
+	if spans[0].Attributes["status"] != "error" {
+		t.Fatalf("cancelled invoke_agent status = %#v, want error", spans[0].Attributes["status"])
+	}
+}
+
 func findSpan(t *testing.T, spans []model.Span, name string) model.Span {
 	t.Helper()
 	for _, span := range spans {

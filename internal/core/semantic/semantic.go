@@ -47,7 +47,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 	rootAttrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 	rootAttrs["gen_ai.operation.name"] = "invoke_agent"
 	rootAttrs["final_status"] = string(turn.FinalStatus)
-	rootAttrs["status"] = rootStatusValue(turn.ErrorType)
+	rootAttrs["status"] = rootStatusValue(turn.FinalStatus, turn.ErrorType)
 	setAttr(rootAttrs, "error.type", turn.ErrorType)
 	setAttr(rootAttrs, "reason", turn.Reason)
 	setAttr(rootAttrs, "gen_ai.input.messages", turn.InputMessages)
@@ -269,8 +269,8 @@ func addSkillAttrs(attrs map[string]any, skill model.SkillUse) {
 	setAttr(attrs, "skill_call_id", skill.CallID)
 }
 
-func rootStatusValue(errorType string) string {
-	if errorType != "" {
+func rootStatusValue(finalStatus model.FinalStatus, errorType string) string {
+	if errorType != "" || finalStatus != model.FinalStatusCompleted {
 		return "error"
 	}
 	return "ok"
