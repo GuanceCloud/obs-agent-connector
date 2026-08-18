@@ -13,6 +13,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 	"unicode"
@@ -280,7 +281,7 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 	}
 	printSingleDetail("Download", url)
 
-	if err := downloadFile(url, scriptPath); err != nil {
+	if err := downloadFile(cacheBustedLatestURL(url), scriptPath); err != nil {
 		return fmt.Errorf("failed to download %s installer: %w", p.Name, err)
 	}
 
@@ -335,7 +336,7 @@ func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 	}
 	printSingleDetail("Download", url)
 
-	if err := downloadFile(url, scriptPath); err != nil {
+	if err := downloadFile(cacheBustedLatestURL(url), scriptPath); err != nil {
 		return fmt.Errorf("failed to download %s installer: %w", p.Name, err)
 	}
 
@@ -766,6 +767,17 @@ func downloadFile(url string, target string) error {
 		return err
 	}
 	return nil
+}
+
+func cacheBustedLatestURL(url string) string {
+	if !strings.Contains(url, "/releases/latest/download/") {
+		return url
+	}
+	separator := "?"
+	if strings.Contains(url, "?") {
+		separator = "&"
+	}
+	return url + separator + "cachebust=" + strconv.FormatInt(time.Now().UnixNano(), 10)
 }
 
 func renderPowerShellInstallCommand(scriptPath string, p agent.Definition, input installInput) string {

@@ -340,6 +340,17 @@ func TestDshUsesStandardInstallerURLs(t *testing.T) {
 	}
 }
 
+func TestCacheBustedLatestURLOnlyTouchesGitHubLatestAssets(t *testing.T) {
+	latest := cacheBustedLatestURL("https://github.com/GuanceCloud/dsh-otel-plugin/releases/latest/download/install-release.sh")
+	if !strings.HasPrefix(latest, "https://github.com/GuanceCloud/dsh-otel-plugin/releases/latest/download/install-release.sh?cachebust=") {
+		t.Fatalf("unexpected cache-busted URL %q", latest)
+	}
+	static := "https://static.example.com/dsh-otel-plugin/install.sh"
+	if got := cacheBustedLatestURL(static); got != static {
+		t.Fatalf("static installer URL changed: %q", got)
+	}
+}
+
 func TestUnsupportedPlatformErrorForWindows(t *testing.T) {
 	err := unsupportedPlatformError(agentDefinitionForTest("hermes"), "windows")
 	if err == nil {
