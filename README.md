@@ -8,12 +8,12 @@ The tool provides one binary and one version for connector lifecycle operations 
 
 - Bootstrap the CLI and OBS defaults with one installer command.
 - Collect Claude, CodeBuddy, Codex, and Cursor turns through built-in adapters without separate repositories.
-- Install transitional external Agent plugins through their official remote installer scripts.
+- Install external Agent plugins through their standard release installers.
 - Auto-discover local Agents, install missing plugins, and sync all plugins with `discover -u`.
 - Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
-- Update one installed Agent plugin without modifying existing configuration.
+- Update one installed Agent plugin while preserving plugin-owned configuration.
 - Enable or disable an installed plugin by updating its runtime config.
-- Remove installed plugins while keeping configuration by default.
+- Remove installed plugins while keeping configuration by default, with an automatic CLI fallback when the native Agent command is unavailable.
 - Detect installed plugins and their configuration paths.
 - Show the current CLI version and check whether a newer GitHub release is available.
 - Run CLI self-update directly from the `version -u` command.
@@ -72,6 +72,8 @@ For plugin installation, `obs-agent-connector` first reuses the CLI download sou
 If that source is unavailable, the CLI derives the installer base from `--endpoint` by mapping the root domain to `https://static.<root-domain>`.
 Use `--static-base` to override this behavior.
 
+External plugins use one installer contract for OSS and GitHub Release sources. The connector passes the common version, `--type gtrace`, endpoint, X-Token, tags, and profile/variant arguments. The plugin installer owns archive download and checksum verification, plugin registration, and its private runtime configuration. The connector does not pass `--source` or read an external plugin's private `gtrace.json`.
+
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
@@ -121,7 +123,7 @@ Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
 OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
 Cursor is discovered when `~/.cursor` already exists, or when the Cursor CLI family is available in `PATH`. `cursor-agent` is preferred when multiple compatible Cursor binaries are present.
 WorkBuddy is considered installed only when its profile directory already exists, for example `~/.workbuddy`.
-DSH is discovered when the `dsh` command is in `PATH` or when `~/.dsh` exists. The connector installs the bundle into the `web` profile by default and honors `DSH_HOME` and `DSH_PROFILE` when set.
+DSH is discovered when the `dsh` command is in `PATH` or when `~/.dsh` exists. The connector installs the bundle into the `web` profile by default and honors `DSH_HOME` and `DSH_PROFILE` when set. DSH runtime configuration is generated and merged by `dsh-otel-plugin`; the connector only supplies the standard installer arguments.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
 `config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
 `remove claude`, `remove codebuddy`, `remove codex`, and `remove cursor` remove connector-managed Hooks and the matching `~/.obs-agent-connector/<agent>/` directory. Legacy Agent-local configuration is preserved unless `--purge-config` is supplied. `uninstall` removes all managed built-in adapters before removing the connector binary, configuration, and PATH entry; use `--keep-config` to retain connector-managed configuration.
@@ -155,7 +157,9 @@ GitHub Actions:
 
 - `CI` runs on pushes and pull requests.
 - `Package` runs manually and uploads packaged artifacts as a workflow artifact.
-- `Release` runs on tags matching `v*`, reuses the `Package` workflow, renders release notes from commit subjects, and publishes the same artifacts to GitHub Releases.
+- `Release` runs on tags matching `v*`, reuses the `Package` workflow, and publishes the same artifacts to GitHub Releases. RC tags are pre-releases; the final release note consolidates the RC changes.
+
+The current stable release is [v0.1.20](https://github.com/GuanceCloud/obs-agent-connector/releases/tag/v0.1.20).
 
 ## Project Layout
 
