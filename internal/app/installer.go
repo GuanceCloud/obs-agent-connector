@@ -381,15 +381,28 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 		if len(command) == 0 {
 			continue
 		}
+		actual := command
+		env := os.Environ()
+		cleanup := func() {}
 		if _, err := exec.LookPath(command[0]); err != nil {
-			printSingleDetail("Skip", fmt.Sprintf("%s was not found: %s", command[0], strings.Join(command, " ")))
-			continue
+			if len(p.RemoveFallbackCmd) == 0 {
+				printSingleDetail("Skip", fmt.Sprintf("%s was not found: %s", command[0], strings.Join(command, " ")))
+				continue
+			}
+			var fallbackErr error
+			actual = append(append([]string{}, p.RemoveFallbackCmd...), command[1:]...)
+			env, cleanup, fallbackErr = packageManagerEnvironment()
+			if fallbackErr != nil {
+				return fmt.Errorf("prepare package manager for %s removal: %w", p.Name, fallbackErr)
+			}
 		}
-		printSingleDetail("Command", strings.Join(command, " "))
-		cmd := exec.Command(command[0], command[1:]...)
+		defer cleanup()
+		printSingleDetail("Command", strings.Join(actual, " "))
+		cmd := exec.Command(actual[0], actual[1:]...)
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
 		cmd.Stdin = os.Stdin
+		cmd.Env = env
 		if err := cmd.Run(); err != nil {
 			printSingleDetail("Warning", fmt.Sprintf("command failed; continuing local cleanup: %v", err))
 		}
@@ -430,6 +443,31 @@ func removeOne(p agent.Definition, purgeConfig bool) error {
 
 	printSingleDetail("Result", "removed")
 	return nil
+}
+
+func packageManagerEnvironment() ([]string, func(), error) {
+	if _, err := exec.LookPath("pnpm"); err == nil {
+		return os.Environ(), func() {}, nil
+	}
+	npm, err := exec.LookPath("npm")
+	if err != nil {
+		return nil, nil, fmt.Errorf("pnpm and npm were not found")
+	}
+	tempRoot, err := os.MkdirTemp("", "obs-agent-connector-pnpm-")
+	if err != nil {
+		return nil, nil, err
+	}
+	cmd := exec.Command(npm, "install", "--prefix", tempRoot, "pnpm")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		os.RemoveAll(tempRoot)
+		return nil, nil, err
+	}
+	bin := filepath.Join(tempRoot, "node_modules", ".bin")
+	env := append([]string{}, os.Environ()...)
+	env = append(env, "PATH="+bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	return env, func() { _ = os.RemoveAll(tempRoot) }, nil
 }
 
 func buildInstallArgs(scriptPath string, p agent.Definition, input installInput) []string {

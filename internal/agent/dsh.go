@@ -25,6 +25,7 @@ func dshPlugin() Definition {
 		RemoveCmds: [][]string{
 			{"dsh", "plugin", "--profile", "web", "remove", "dsh-otel-plugin"},
 		},
+		RemoveFallbackCmd: []string{"npx", "--yes", "@deepseek-ai/dsh"},
 		RemovePaths: []string{
 			"~/.dsh/profiles/web/node_modules/dsh-otel-plugin",
 			"~/.dsh/profiles/node_modules/dsh-otel-plugin",
