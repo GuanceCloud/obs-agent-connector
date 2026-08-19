@@ -168,9 +168,9 @@ obs-agent-connector install codex \
 
 By default, `install` reuses the CLI download source recorded in `~/.obs-agent-connector/config.json`.
 If that source is unavailable, `install` derives the installer base from `--endpoint`.
-For example, `https://llm-openway.guance.com` maps to `https://static.guance.com`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com`.
+For example, `https://llm-openway.guance.com` maps to `https://static.guance.com/agent_plugins`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com/agent_plugins`.
 Use `--static-base` when you need to override the installer base.
-On Windows, Claude, CodeBuddy, Codex, and Cursor register the current connector executable directly. External plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
+On Windows, Claude, CodeBuddy, Codex, and Cursor register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
 Claude, Cursor, CodeBuddy, Codex, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows.
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
@@ -197,7 +197,7 @@ obs-agent-connector update codex
 `update` intentionally requires a single Agent name.
 
 Updates preserve existing configuration. CodeBuddy reconciles its Hook with the current connector runtime; external plugins receive `--no-config`.
-On Windows, `update` also uses the plugin's GitHub release PowerShell installer and follows the same support matrix as `install`.
+On Windows, `update` also uses the plugin's PowerShell installer from the configured source and follows the same support matrix as `install`.
 
 For `qoder`, the CLI also detects the local layout and passes the matching `--variant cn` or `--variant global` flag before running the installer.
 

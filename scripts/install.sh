@@ -117,11 +117,19 @@ plugin_base_from_download_base() {
   value="${value%/}"
   case "$value" in
     */*)
-      printf '%s\n' "${value%/*}"
+	  printf '%s/agent_plugins\n' "${value%/*}"
       ;;
     *)
       printf '%s\n' "$value"
       ;;
+  esac
+}
+
+normalize_oss_plugin_base() {
+  value="${1%/}"
+  case "$value" in
+    */agent_plugins) printf '%s\n' "$value" ;;
+    *) printf '%s/agent_plugins\n' "$value" ;;
   esac
 }
 
@@ -221,6 +229,9 @@ fi
 if [ "${PLUGIN_SOURCE}" = "github" ] && [ -z "${PLUGIN_BASE_URL}" ]; then
   echo "plugin_base_url is required when plugin_source=github; pass --plugin-base-url <url>" >&2
   exit 2
+fi
+if [ "${PLUGIN_SOURCE}" = "oss" ]; then
+  PLUGIN_BASE_URL="$(normalize_oss_plugin_base "${PLUGIN_BASE_URL}")"
 fi
 if [ -n "${GLOBAL_TAGS_LINES}" ]; then
   old_ifs="${IFS}"

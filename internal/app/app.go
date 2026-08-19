@@ -6,6 +6,7 @@ const (
 	appName            = "obs-agent-connector"
 	fixedType          = "gtrace"
 	defaultStaticBase  = "https://static.guance.com"
+	pluginOSSDirectory = "agent_plugins"
 	pluginSourceOSS    = "oss"
 	pluginSourceGitHub = "github"
 	configDirName      = ".obs-agent-connector"

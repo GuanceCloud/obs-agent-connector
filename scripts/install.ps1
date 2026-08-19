@@ -58,7 +58,17 @@ function Get-PluginBaseFromDownloadBase {
   if ($SlashIndex -lt 0) {
     return $Trimmed
   }
-  return $Trimmed.Substring(0, $SlashIndex)
+  return "$($Trimmed.Substring(0, $SlashIndex))/agent_plugins"
+}
+
+function Get-NormalizedOssPluginBase {
+  param([string]$Value)
+
+  $Trimmed = $Value.TrimEnd("/")
+  if ($Trimmed.EndsWith("/agent_plugins", [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $Trimmed
+  }
+  return "$Trimmed/agent_plugins"
 }
 
 if (-not $DownloadBaseUrl) {
@@ -80,6 +90,9 @@ if (-not $DownloadBaseUrl) {
 }
 if (($PluginSource -eq "github") -and (-not $PluginBaseUrl)) {
   throw "plugin_base_url is required when plugin_source=github; pass -PluginBaseUrl <url>"
+}
+if ($PluginSource -eq "oss") {
+  $PluginBaseUrl = Get-NormalizedOssPluginBase -Value $PluginBaseUrl
 }
 foreach ($Assignment in @($Tag)) {
   if ((-not $Assignment) -or (-not $Assignment.Contains("=")) -or ($Assignment.IndexOf("=") -le 0)) {

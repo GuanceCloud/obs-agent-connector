@@ -549,7 +549,7 @@ func renderBashCommand(args []string) string {
 func pluginEnv(download pluginDownloadConfig, p agent.Definition) []string {
 	env := []string{}
 	if download.Source == pluginSourceOSS {
-		env = append(env, "OSS_ENDPOINT="+download.BaseURL)
+		env = append(env, "OSS_ENDPOINT="+ossPluginBaseURL(download.BaseURL))
 	}
 	for _, item := range p.Env {
 		key, value, ok := splitEnvAssignment(item)
@@ -564,7 +564,7 @@ func pluginEnv(download pluginDownloadConfig, p agent.Definition) []string {
 func renderEnvAssignments(download pluginDownloadConfig, p agent.Definition) string {
 	assignments := []string{}
 	if download.Source == pluginSourceOSS {
-		assignments = append(assignments, "OSS_ENDPOINT="+shellQuote(download.BaseURL))
+		assignments = append(assignments, "OSS_ENDPOINT="+shellQuote(ossPluginBaseURL(download.BaseURL)))
 	}
 	for _, item := range p.Env {
 		key, value, ok := splitEnvAssignment(item)
@@ -593,7 +593,7 @@ func installerURLForOS(download pluginDownloadConfig, p agent.Definition, goos s
 		case pluginSourceGitHub:
 			return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/releases/latest/download/install-release.ps1", nil
 		case pluginSourceOSS:
-			return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/" + strings.TrimLeft(strings.TrimSpace(p.WindowsInstaller), "/"), nil
+			return ossPluginBaseURL(download.BaseURL) + "/" + p.PluginName + "/" + strings.TrimLeft(strings.TrimSpace(p.WindowsInstaller), "/"), nil
 		default:
 			return "", fmt.Errorf("unsupported plugin source %q", download.Source)
 		}
@@ -602,7 +602,7 @@ func installerURLForOS(download pluginDownloadConfig, p agent.Definition, goos s
 	case pluginSourceGitHub:
 		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/releases/latest/download/install-release.sh", nil
 	case pluginSourceOSS:
-		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/install.sh", nil
+		return ossPluginBaseURL(download.BaseURL) + "/" + p.PluginName + "/install.sh", nil
 	default:
 		return "", fmt.Errorf("unsupported plugin source %q", download.Source)
 	}
@@ -620,7 +620,7 @@ func packageArchiveURL(download pluginDownloadConfig, p agent.Definition) string
 	case pluginSourceGitHub:
 		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/releases/latest/download/" + p.PluginName + ".tar.gz"
 	default:
-		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/" + p.PluginName + ".tar.gz"
+		return ossPluginBaseURL(download.BaseURL) + "/" + p.PluginName + "/" + p.PluginName + ".tar.gz"
 	}
 }
 

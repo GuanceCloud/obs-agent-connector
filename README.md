@@ -69,7 +69,7 @@ For Qoder installs, `obs-agent-connector` detects the local layout and uses:
 - `--variant global` with `~/.qoder` when the global layout is detected
 
 For plugin installation, `obs-agent-connector` first reuses the CLI download source recorded in `~/.obs-agent-connector/config.json`.
-If that source is unavailable, the CLI derives the installer base from `--endpoint` by mapping the root domain to `https://static.<root-domain>`.
+If that source is unavailable, the CLI derives the installer base from `--endpoint` by mapping the root domain to `https://static.<root-domain>/agent_plugins`.
 Use `--static-base` to override this behavior.
 
 External plugins use one installer contract for OSS and GitHub Release sources. The connector passes the common version, `--type gtrace`, endpoint, X-Token, tags, and profile/variant arguments. The plugin installer owns archive download and checksum verification, plugin registration, and its private runtime configuration. The connector does not pass `--source` or read an external plugin's private `gtrace.json`.
@@ -78,7 +78,7 @@ Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
 - On Windows, `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
-- Claude, CodeBuddy, Codex, and Cursor register the connector directly; external plugins use their GitHub release PowerShell installer instead of the OSS shell installer.
+- Claude, CodeBuddy, Codex, and Cursor register the connector directly; external plugins use the PowerShell installer from the configured OSS or GitHub source.
 
 Bootstrap the CLI with shared defaults:
 
