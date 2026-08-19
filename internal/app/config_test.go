@@ -184,6 +184,21 @@ func TestPluginDownloadSettingsUsesConfigForGitHub(t *testing.T) {
 	}
 }
 
+func TestPluginDownloadSettingsAddsOSSDirectory(t *testing.T) {
+	for _, base := range []string{
+		"https://static.example.com",
+		"https://static.example.com/agent_plugins",
+	} {
+		download, err := pluginDownloadSettings(base, connectorConfig{}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if download.Source != pluginSourceOSS || download.BaseURL != "https://static.example.com/agent_plugins" {
+			t.Fatalf("unexpected plugin download config: %#v", download)
+		}
+	}
+}
+
 func TestPluginDownloadSettingsRejectsGitHubWithoutBaseURL(t *testing.T) {
 	_, err := pluginDownloadSettings("", connectorConfig{PluginSource: "github"}, "")
 	if err == nil {

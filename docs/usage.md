@@ -66,7 +66,7 @@ Typical content:
 {
   "download_base_url": "https://static.guance.com/obs-agent-connector",
   "plugin_source": "oss",
-  "plugin_base_url": "https://static.guance.com",
+  "plugin_base_url": "https://static.guance.com/agent_plugins",
   "endpoint": "https://llm-openway.guance.com",
   "x_token": "agent_xxx"
 }
@@ -78,7 +78,7 @@ Field reference:
 | --- | --- |
 | `download_base_url` | Download base URL for the connector itself, including metadata and binary packages |
 | `plugin_source` | Agent plugin source, currently `oss` or `github` |
-| `plugin_base_url` | Base URL used for Agent plugin downloads |
+| `plugin_base_url` | Base URL used for Agent plugin downloads; OSS defaults to the `agent_plugins` directory |
 | `endpoint` | OBS / GTrace ingest endpoint |
 | `x_token` | Authentication token |
 
@@ -122,7 +122,8 @@ Default behavior:
 - if `--download-base-url` is omitted, it is derived from `--endpoint`  
   Example: `https://llm-openway.guance.com` -> `https://static.guance.com/obs-agent-connector`
 - if `--plugin-source` is omitted, the default is `oss`
-- if `plugin_source=oss` and `--plugin-base-url` is omitted, the value is derived from `download_base_url`
+- if `plugin_source=oss` and `--plugin-base-url` is omitted, the value is derived from `download_base_url` and ends in `/agent_plugins`
+- legacy OSS base URLs without `/agent_plugins` are normalized automatically
 
 ### `install.ps1`
 
@@ -522,7 +523,7 @@ Supported Agents on Windows:
 Notes:
 
 - built-in adapters register the current connector executable directly
-- external plugins use their GitHub release PowerShell installer
+- external plugins use the PowerShell installer from the configured OSS or GitHub source
 - unsupported Agents return a friendly error
 
 ## Qoder Notes

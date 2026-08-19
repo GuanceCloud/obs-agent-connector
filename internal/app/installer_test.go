@@ -91,6 +91,7 @@ func TestResolveInstallInputKeepsExplicitAgentName(t *testing.T) {
 }
 
 func TestResolveInstallInputLoadsGlobalTagsFromConfig(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
 	input, err := resolveInstallInput(installInput{}, connectorConfig{
 		Endpoint:   "https://llm-openway.guance.com",
 		XToken:     "agent_test",
@@ -231,7 +232,7 @@ func TestInstallerURLForWindowsUsesOSSReleaseScript(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://static.example.com/openclaw-otel-plugin/install-release.ps1"
+	expected := "https://static.example.com/agent_plugins/openclaw-otel-plugin/install-release.ps1"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
@@ -275,6 +276,29 @@ func TestRenderInstallCommandForWindowsUsesPowerShell(t *testing.T) {
 	}
 	if !strings.Contains(command, "team=platform") {
 		t.Fatalf("expected Windows command to include global tag, got %q", command)
+	}
+}
+
+func TestRenderInstallCommandUsesNormalizedOSSBase(t *testing.T) {
+	previous := currentGOOS
+	currentGOOS = "linux"
+	t.Cleanup(func() {
+		currentGOOS = previous
+	})
+
+	command := renderInstallCommand(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("openclaw"), installInput{
+		Endpoint:  "https://llm-openway.guance.com",
+		XToken:    "agent_test",
+		AgentID:   "agid_123",
+		AgentName: "demo",
+	})
+	for _, want := range []string{
+		"https://static.example.com/agent_plugins/openclaw-otel-plugin/install.sh",
+		"OSS_ENDPOINT=https://static.example.com/agent_plugins",
+	} {
+		if !strings.Contains(command, want) {
+			t.Fatalf("expected command to contain %q, got %q", want, command)
+		}
 	}
 }
 
@@ -328,7 +352,7 @@ func TestDshUsesStandardInstallerURLs(t *testing.T) {
 		base   string
 		want   string
 	}{
-		{name: "oss", source: pluginSourceOSS, base: "https://static.example.com", want: "https://static.example.com/dsh-otel-plugin/install.sh"},
+		{name: "oss", source: pluginSourceOSS, base: "https://static.example.com", want: "https://static.example.com/agent_plugins/dsh-otel-plugin/install.sh"},
 		{name: "github", source: pluginSourceGitHub, base: "https://github.com/GuanceCloud", want: "https://github.com/GuanceCloud/dsh-otel-plugin/releases/latest/download/install-release.sh"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -345,7 +369,7 @@ func TestCacheBustedLatestURLOnlyTouchesGitHubLatestAssets(t *testing.T) {
 	if !strings.HasPrefix(latest, "https://github.com/GuanceCloud/dsh-otel-plugin/releases/latest/download/install-release.sh?cachebust=") {
 		t.Fatalf("unexpected cache-busted URL %q", latest)
 	}
-	static := "https://static.example.com/dsh-otel-plugin/install.sh"
+	static := "https://static.example.com/agent_plugins/dsh-otel-plugin/install.sh"
 	if got := cacheBustedLatestURL(static); got != static {
 		t.Fatalf("static installer URL changed: %q", got)
 	}
@@ -370,7 +394,7 @@ func TestDownloadSourceURLUsesOSSArchiveForQoderOnUnix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://static.example.com/qoder-otel-plugin/qoder-otel-plugin.tar.gz"
+	expected := "https://static.example.com/agent_plugins/qoder-otel-plugin/qoder-otel-plugin.tar.gz"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
@@ -384,7 +408,7 @@ func TestRenderPluginUpdateCommandUsesOSSArchiveForQoder(t *testing.T) {
 	})
 
 	command := renderPluginUpdateCommand(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("qoder"))
-	if !strings.Contains(command, "https://static.example.com/qoder-otel-plugin/qoder-otel-plugin.tar.gz") {
+	if !strings.Contains(command, "https://static.example.com/agent_plugins/qoder-otel-plugin/qoder-otel-plugin.tar.gz") {
 		t.Fatalf("expected qoder OSS archive in command %q", command)
 	}
 	if strings.Contains(command, "github.com") {
@@ -408,9 +432,44 @@ func TestDownloadSourceURLUsesOSSArchiveForOpencodeOnUnix(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://static.example.com/opencode-otel-plugin/opencode-otel-plugin.tar.gz"
+	expected := "https://static.example.com/agent_plugins/opencode-otel-plugin/opencode-otel-plugin.tar.gz"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
+	}
+}
+
+func TestOSSDownloadURLsUseAgentPluginsDirectory(t *testing.T) {
+	for _, tc := range []struct {
+		agent string
+		goos  string
+		path  string
+	}{
+		{agent: "dsh", goos: "linux", path: "dsh-otel-plugin/install.sh"},
+		{agent: "dsh", goos: "windows", path: "dsh-otel-plugin/install-release.ps1"},
+		{agent: "hermes", goos: "linux", path: "hermes-otel-plugin/install.sh"},
+		{agent: "opencode", goos: "linux", path: "opencode-otel-plugin/opencode-otel-plugin.tar.gz"},
+		{agent: "opencode", goos: "windows", path: "opencode-otel-plugin/install-release.ps1"},
+		{agent: "openclaw", goos: "linux", path: "openclaw-otel-plugin/install.sh"},
+		{agent: "openclaw", goos: "windows", path: "openclaw-otel-plugin/install-release.ps1"},
+		{agent: "qoder", goos: "linux", path: "qoder-otel-plugin/qoder-otel-plugin.tar.gz"},
+		{agent: "qoder", goos: "windows", path: "qoder-otel-plugin/install-release.ps1"},
+		{agent: "workbuddy", goos: "darwin", path: "workbuddy-otel-plugin/workbuddy-otel-plugin.tar.gz"},
+		{agent: "workbuddy", goos: "windows", path: "workbuddy-otel-plugin/install-release.ps1"},
+	} {
+		t.Run(tc.agent+"_"+tc.goos, func(t *testing.T) {
+			got, err := downloadSourceURL(
+				pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"},
+				agentDefinitionForTest(tc.agent),
+				tc.goos,
+			)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "https://static.example.com/agent_plugins/" + tc.path
+			if got != want {
+				t.Fatalf("expected %q, got %q", want, got)
+			}
+		})
 	}
 }
 

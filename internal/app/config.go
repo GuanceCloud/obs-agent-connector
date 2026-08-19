@@ -58,6 +58,7 @@ func pluginDownloadSettings(overrideBase string, cfg connectorConfig, endpoint s
 		if baseURL == "" {
 			baseURL = staticBaseURL("", endpoint)
 		}
+		baseURL = ossPluginBaseURL(baseURL)
 	case pluginSourceGitHub:
 		if baseURL == "" {
 			return pluginDownloadConfig{}, fmt.Errorf("plugin_base_url is required when plugin_source=github")
@@ -70,6 +71,14 @@ func pluginDownloadSettings(overrideBase string, cfg connectorConfig, endpoint s
 		Source:  source,
 		BaseURL: strings.TrimRight(baseURL, "/"),
 	}, nil
+}
+
+func ossPluginBaseURL(value string) string {
+	value = strings.TrimRight(strings.TrimSpace(value), "/")
+	if value == "" || strings.HasSuffix(value, "/"+pluginOSSDirectory) {
+		return value
+	}
+	return value + "/" + pluginOSSDirectory
 }
 
 func normalizePluginSource(value string) string {

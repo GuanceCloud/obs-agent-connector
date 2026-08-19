@@ -33,7 +33,7 @@ func install(args []string) error {
 	var tags repeatedValue
 	fs.Var(&headers, "header", "Built-in adapter HTTP header KEY=VALUE; may be repeated")
 	fs.Var(&tags, "tag", "Resource attribute KEY=VALUE; may be repeated")
-	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
+	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. OSS paths use the agent_plugins directory")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without installing")
 
