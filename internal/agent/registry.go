@@ -14,6 +14,7 @@ var definitions = map[string]Definition{
 	"cursor":    cursorPlugin(),
 	"dsh":       dshPlugin(),
 	"hermes":    hermesPlugin(),
+	"kiro":      kiroPlugin(),
 	"opencode":  opencodePlugin(),
 	"openclaw":  openClawPlugin(),
 	"qoder":     qoderPlugin(),

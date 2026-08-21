@@ -13,7 +13,7 @@ obs-agent-connector <command> [arguments]
 | `list` | List installed Agent plugins detected on the local machine, including best-effort plugin version detection. |
 | `status <agent>` | Show one Agent plugin status, including install state, config path, plugin path, version, and runtime `enabled` state when supported. |
 | `discover` | Detect supported local Agents and install any missing plugins by using connector defaults from `config.json`. Use `discover -u` to update installed plugins and install any missing plugins in one run. |
-| `install <agent>` | Install one Agent integration. CodeBuddy is built in; other Agents use their external plugins. |
+| `install <agent>` | Install one Agent integration. Built-in Agents register the current connector; external Agents use their plugin installers. |
 | `config <agent>` | List or edit the managed runtime `gtrace.json` for supported Agents. |
 | `enable <agent>` | Enable one installed Agent plugin by setting its runtime JSON `enabled` switch to `true`. |
 | `disable <agent>` | Disable one installed Agent plugin by setting its runtime JSON `enabled` switch to `false`. |
@@ -22,7 +22,7 @@ obs-agent-connector <command> [arguments]
 | `uninstall` | Uninstall all managed built-in adapters and then remove `obs-agent-connector`, its config, and its managed PATH entry. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print or run a matching self-update action when a newer release is available. |
 
-Claude, CodeBuddy, Codex, and Cursor are built into the connector. Other Agents use their external plugins.
+Claude, CodeBuddy, Codex, Cursor, and Kiro are built into the connector. Other Agents use their external plugins.
 
 ## Bootstrap
 
@@ -78,6 +78,7 @@ Qoder is skipped until either `~/.qoder` or `~/.qoder-cn` has been created by th
 OpenCode is also detected when `~/.config/opencode` already exists, even if `opencode` is not currently in `PATH`.
 CodeBuddy is detected when the `codebuddy` command is in `PATH` or `~/.codebuddy` exists.
 Cursor is detected when `~/.cursor` already exists, or when the Cursor CLI family is available in `PATH`. `cursor-agent` is preferred when multiple compatible Cursor binaries are present.
+Kiro is detected when `kiro-cli` is available or `~/.kiro/sessions/cli` already exists. Telemetry collection requires the Kiro v3 Agent engine and its global Hook format.
 Missing or invalid connector defaults are reported as `discover failed` errors.
 
 ## Status
@@ -134,7 +135,7 @@ Supported edit parameters:
 Notes:
 
 - `edit` merges the supplied values into the existing config and rewrites the file atomically
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `kiro`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are excluded because they do not use the managed `gtrace.json` layout
 
 ## Install
@@ -144,6 +145,7 @@ Install one Agent with stored connector defaults:
 ```bash
 obs-agent-connector install codex
 obs-agent-connector install cursor
+obs-agent-connector install kiro
 ```
 
 Install the default built-in adapters:
@@ -153,6 +155,7 @@ obs-agent-connector install claude
 obs-agent-connector install codebuddy
 obs-agent-connector install codex
 obs-agent-connector install cursor
+obs-agent-connector install kiro
 ```
 
 Override stored defaults or identity values:
@@ -170,8 +173,8 @@ By default, `install` reuses the CLI download source recorded in `~/.obs-agent-c
 If that source is unavailable, `install` derives the installer base from `--endpoint`.
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com/agent_plugins`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com/agent_plugins`.
 Use `--static-base` when you need to override the installer base.
-On Windows, Claude, CodeBuddy, Codex, and Cursor register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
-Claude, Cursor, CodeBuddy, Codex, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows.
+On Windows, Claude, CodeBuddy, Codex, Cursor, and Kiro register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
+Claude, Cursor, CodeBuddy, Codex, Kiro, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows.
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 
@@ -223,7 +226,7 @@ obs-agent-connector disable codex --dry-run
 
 `enable` and `disable` update the Agent runtime JSON config in place:
 
-- `claude`, `codebuddy`, `codex`, `dsh`, `opencode`, and `qoder` set top-level `enabled`
+- `claude`, `codebuddy`, `codex`, `kiro`, `dsh`, `opencode`, and `qoder` set top-level `enabled`
 - `openclaw` sets `plugins.entries.openclaw-otel-plugin.enabled`
 
 `hermes` is not currently supported because its runtime config is YAML rather than a supported JSON `enabled` switch.
@@ -248,7 +251,7 @@ Preview removal:
 obs-agent-connector remove codex --dry-run
 ```
 
-For Claude, CodeBuddy, Codex, and Cursor, `remove` preserves unrelated Hooks but always deletes `~/.obs-agent-connector/<agent>/`, including `gtrace.json` and `gtrace-hooks.json`. Add `--purge-config` to also delete legacy Agent-local configuration and upload state. External plugin configuration remains unchanged unless `--purge-config` is supplied.
+For built-in Agents, `remove` preserves unrelated Hooks but always deletes `~/.obs-agent-connector/<agent>/`, including `gtrace.json` and `gtrace-hooks.json`. Add `--purge-config` to also delete legacy Agent-local configuration and upload state. External plugin configuration remains unchanged unless `--purge-config` is supplied.
 
 ## Version
 
@@ -295,7 +298,7 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
-- removes the managed Claude, CodeBuddy, Codex, and Cursor adapters, including compatible legacy plugin residue
+- removes the managed Claude, CodeBuddy, Codex, Cursor, and Kiro adapters, including compatible legacy plugin residue where applicable
 - removes each built-in adapter's connector-managed config, Hook log, and upload state by default
 - removes `~/.obs-agent-connector/config.json` by default
 - keeps connector-managed global and per-Agent configuration when `--keep-config` is used; Hooks, logs, and upload state are still removed

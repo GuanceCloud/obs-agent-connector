@@ -87,6 +87,22 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 			Enabled:               input.Enabled,
 			NoConfig:              noConfig,
 		})
+	case "kiro":
+		_, err = telemetryinstall.InstallKiro(telemetryinstall.KiroOptions{
+			SourceExecutable:      executable,
+			DestinationExecutable: executable,
+			Endpoint:              input.Endpoint,
+			TracePath:             input.TracePath,
+			MetricsPath:           input.MetricsPath,
+			InstallType:           fixedType,
+			XToken:                input.XToken,
+			Headers:               append([]string{}, input.Headers...),
+			ResourceAttributes:    builtinResourceAttributes(input),
+			CaptureContent:        input.CaptureContent,
+			MaxChars:              input.MaxChars,
+			Enabled:               input.Enabled,
+			NoConfig:              noConfig,
+		})
 	default:
 		return fmt.Errorf("%s does not have a built-in telemetry adapter", p.Name)
 	}

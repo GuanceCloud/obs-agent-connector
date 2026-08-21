@@ -39,6 +39,10 @@ func TestBuiltInInstallersUseManagedConfigPaths(t *testing.T) {
 			result, err := InstallCodeBuddy(CodeBuddyOptions{Home: home, SourceExecutable: source, Endpoint: "https://example.invalid", Enabled: &enabled})
 			return result.ConfigFile, err
 		}},
+		{name: "kiro", install: func() (string, error) {
+			result, err := InstallKiro(KiroOptions{Home: home, SourceExecutable: source, Endpoint: "https://example.invalid", Enabled: &enabled})
+			return result.ConfigFile, err
+		}},
 	}
 
 	for _, test := range tests {
@@ -64,6 +68,7 @@ func TestBuiltInPurgeRemovesManagedAndLegacyFiles(t *testing.T) {
 		"claude":    filepath.Join(".claude", "gtrace.json"),
 		"cursor":    filepath.Join(".cursor", "gtrace.json"),
 		"codebuddy": filepath.Join(".codebuddy", "gtrace.json"),
+		"kiro":      filepath.Join(".kiro", "gtrace.json"),
 	}
 	for agent, legacyRelativePath := range legacyConfig {
 		t.Run(agent, func(t *testing.T) {

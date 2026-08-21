@@ -12,6 +12,7 @@ Supported Agents:
 - `cursor`
 - `dsh`
 - `hermes`
+- `kiro`
 - `opencode`
 - `openclaw`
 - `qoder`
@@ -20,7 +21,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
+- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `kiro`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
 
 ## Install obs-agent-connector
 
@@ -187,7 +188,7 @@ The output includes:
 
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
 
-Claude, CodeBuddy, Codex, and Cursor use built-in runtimes. Other Agents use their external plugins.
+Claude, CodeBuddy, Codex, Cursor, and Kiro use built-in runtimes. Other Agents use their external plugins.
 
 ## `status`
 
@@ -244,7 +245,7 @@ Notes:
 - `list` prints the current managed `gtrace.json` values
 - `edit` merges the supplied values into the existing config and rewrites the file
 - built-in adapters write `~/.obs-agent-connector/<agent>/gtrace.json`; an existing Agent-local config is used as the migration source when necessary
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `kiro`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are not supported by this command
 
 ## `discover`
@@ -326,7 +327,7 @@ Parameters:
 Behavior:
 
 - removes the current connector binary
-- removes the managed Claude, CodeBuddy, Codex, and Cursor adapters and compatible legacy plugin residue
+- removes the managed Claude, CodeBuddy, Codex, Cursor, and Kiro adapters and compatible legacy plugin residue where applicable
 - removes connector-managed per-Agent config, Hook logs, and upload state by default
 - removes the global connector config by default
 - with `--keep-config`, preserves global and per-Agent config while still removing Hooks, logs, and upload state
@@ -339,6 +340,8 @@ Install a single Agent plugin:
 
 ```bash
 obs-agent-connector install codex
+obs-agent-connector install cursor
+obs-agent-connector install kiro
 ```
 
 Install a built-in adapter with the ordinary command:
@@ -347,6 +350,8 @@ Install a built-in adapter with the ordinary command:
 obs-agent-connector install claude
 obs-agent-connector install codebuddy
 obs-agent-connector install codex
+obs-agent-connector install cursor
+obs-agent-connector install kiro
 ```
 
 Parameters:
@@ -387,6 +392,7 @@ Notes:
 - Claude installation replaces legacy `claude-otel-plugin` Hook entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - CodeBuddy installation replaces legacy `codebuddy-hook` entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - Codex installation replaces legacy `codex-otel-plugin` Hook entries, updates managed Stop Hooks, and preserves unrelated Hook entries
+- Kiro installation manages `~/.kiro/hooks/obs-agent-connector.json` for the v3 Agent engine and preserves unrelated entries in that file
 - existing runtime configuration and upload state are preserved unless explicitly changed or purged
 
 ## `update`
@@ -409,7 +415,7 @@ Notes:
 
 - `update` accepts a single Agent target only
 - the command preserves the existing runtime config
-- the built-in Claude, CodeBuddy, Codex, and Cursor adapters reconcile their Hooks without modifying `~/.obs-agent-connector/<agent>/gtrace.json`
+- the built-in Claude, CodeBuddy, Codex, Cursor, and Kiro adapters reconcile their Hooks without modifying `~/.obs-agent-connector/<agent>/gtrace.json`
 - external plugin installers receive `--no-config`
 
 ## `enable` / `disable`
@@ -471,6 +477,7 @@ Notes:
 - legacy Agent-local and external plugin configuration is kept unless `--purge-config` is supplied
 - `remove` accepts a single Agent target only
 - `remove claude` and `remove codebuddy` preserve unrelated entries in their settings files
+- `remove kiro` removes connector-owned entries from `~/.kiro/hooks/obs-agent-connector.json` and preserves unrelated entries
 - `remove codex` removes connector-owned Codex Hooks and trust state and also attempts to clean legacy `codex-otel-plugin` residue without blocking removal on legacy cleanup failures
 
 ## `version`

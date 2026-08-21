@@ -49,6 +49,8 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 		result, err = removeCodex(home, options)
 	case "cursor":
 		result, err = removeCursor(home, options)
+	case "kiro":
+		result, err = removeKiro(home, options)
 	default:
 		return RemoveResult{}, errors.New("unsupported adapter " + adapter)
 	}
@@ -62,6 +64,57 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 		}
 		result.ConfigRemoved = true
 		result.ManagedFilesRemoved = true
+	}
+	return result, nil
+}
+
+func removeKiro(home string, options RemoveOptions) (RemoveResult, error) {
+	result := RemoveResult{
+		Adapter:    "kiro",
+		HookFile:   filepath.Join(home, ".kiro", "hooks", "obs-agent-connector.json"),
+		ConfigFile: agentfiles.ConfigPath(home, "kiro"),
+	}
+	value, exists, err := readJSONObjectIfExists(result.HookFile)
+	if err != nil {
+		return result, err
+	}
+	if exists {
+		entries, _ := value["hooks"].([]any)
+		next := make([]any, 0, len(entries))
+		for _, entry := range entries {
+			if managedKiroHook(entry) {
+				result.HookRemoved = true
+				continue
+			}
+			next = append(next, entry)
+		}
+		if result.HookRemoved {
+			if len(next) == 0 {
+				if err := removeFileIfExists(result.HookFile); err != nil {
+					return result, err
+				}
+			} else {
+				value["hooks"] = next
+				if err := writeJSONAtomic(result.HookFile, value); err != nil {
+					return result, err
+				}
+			}
+		}
+	}
+	if options.PurgeConfig {
+		if err := removeConfigFiles(result.ConfigFile, filepath.Join(home, ".kiro", "gtrace.json")); err != nil {
+			return result, err
+		}
+		result.ConfigRemoved = true
+	}
+	if options.PurgeState {
+		if err := os.RemoveAll(filepath.Join(home, ".kiro", "gtrace")); err != nil {
+			return result, err
+		}
+		if err := removeFileIfExists(agentfiles.HookLogPath(home, "kiro")); err != nil {
+			return result, err
+		}
+		result.StatePurged = true
 	}
 	return result, nil
 }

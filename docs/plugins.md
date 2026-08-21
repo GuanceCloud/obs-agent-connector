@@ -1,6 +1,6 @@
 # Plugin Matrix
 
-`obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, Codex, and Cursor. Other Agents delegate installation and configuration generation to external plugin installers.
+`obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, Codex, Cursor, and Kiro CLI. Other Agents delegate installation and configuration generation to external plugin installers.
 
 ## Supported Agents
 
@@ -10,6 +10,7 @@
 | `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector | `~/.obs-agent-connector/codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
 | `codex` | Codex | Current connector | `~/.obs-agent-connector/codex/gtrace.json` | Managed Hook and trust state in `~/.codex/hooks.json` / `~/.codex/config.toml` |
 | `cursor` | Cursor with automatic `~/.cursor` or Cursor CLI-family detection, preferring `cursor-agent` | Current connector | `~/.obs-agent-connector/cursor/gtrace.json` | Managed Hooks in `~/.cursor/hooks.json` |
+| `kiro` | Kiro CLI v3 Agent engine | Current connector | `~/.obs-agent-connector/kiro/gtrace.json` | Managed v3 Hooks in `~/.kiro/hooks/obs-agent-connector.json` |
 | `dsh` | DeepSeek Harness | Unix: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install.sh` Windows: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install-release.ps1` | `$DSH_HOME/gtrace.json` (default `~/.dsh/gtrace.json`) | `$DSH_HOME/profiles/<profile>/node_modules/dsh-otel-plugin` |
 | `hermes` | Hermes | `https://static.guance.com/agent_plugins/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/agent_plugins/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://static.guance.com/agent_plugins/opencode-otel-plugin/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
@@ -37,6 +38,7 @@ Windows installation and update are currently supported only for:
 - `claude`
 - `codex`
 - `cursor`
+- `kiro`
 - `codebuddy`
 - `dsh`
 - `opencode`
@@ -44,7 +46,7 @@ Windows installation and update are currently supported only for:
 - `qoder`
 - `workbuddy`
 
-Claude, CodeBuddy, Codex, and Cursor register the current connector executable directly. External plugins download their PowerShell installer from the configured OSS or GitHub source.
+Claude, CodeBuddy, Codex, Cursor, and Kiro register the current connector executable directly. External plugins download their PowerShell installer from the configured OSS or GitHub source.
 If a user tries `install` or `update` with an unsupported Agent, the CLI returns a friendly error with the supported Windows Agent list.
 
 ## Install Parameters
@@ -59,7 +61,7 @@ At plugin install time, the CLI uses:
 | `Agent ID` | auto-generated `agid_<uuidv4-without-dashes>` or `--agent-id` override | `--tag agent_id=<value>` |
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
-The built-in Claude, CodeBuddy, Codex, and Cursor adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
+The built-in Claude, CodeBuddy, Codex, Cursor, and Kiro adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
 
 Each built-in adapter writes structured Hook logs to `~/.obs-agent-connector/<agent>/gtrace-hooks.json`. Existing Agent-local configs are read as a compatibility fallback and are migrated into the managed directory when an install or config edit writes new values.
 
@@ -90,6 +92,7 @@ contract and add a regression test for the generated command.
 | `codebuddy` | `enabled` |
 | `codex` | `enabled` |
 | `cursor` | `enabled` |
+| `kiro` | `enabled` |
 | `dsh` | `enabled` |
 | `opencode` | `enabled` |
 | `openclaw` | `plugins.entries.openclaw-otel-plugin.enabled` |

@@ -342,6 +342,30 @@ func TestCodeBuddyInstallUsesBuiltin(t *testing.T) {
 	}
 }
 
+func TestKiroInstallUsesBuiltin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".kiro", "sessions", "cli"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", configPath)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"endpoint":"https://example.com","x_token":"synthetic-secret"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := captureStdout(t, func() {
+		if err := install([]string{"kiro", "--dry-run", "--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(output, "kiro (built into obs-agent-connector)") || strings.Contains(output, "kiro-otel-plugin") {
+		t.Fatalf("unexpected Kiro install plan: %s", output)
+	}
+}
+
 func TestLifecycleCommandsRejectRemovedNewRuntimeFlag(t *testing.T) {
 	tests := map[string]func([]string) error{
 		"install": install,
