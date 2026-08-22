@@ -60,16 +60,31 @@ func TestBuildProducesCanonicalTreeAndNoAssistantTokens(t *testing.T) {
 			}
 		}
 	}
+	if root.Attributes["status"] != "ok" {
+		t.Fatalf("invoke_agent status = %#v, want ok", root.Attributes["status"])
+	}
 	if findSpan(t, spans, "skill:demo").ParentID != ids["tool:exec"] {
 		t.Fatal("skill must be a tool child")
 	}
+	if llm := findSpan(t, spans, "llm"); llm.Attributes["status"] != "ok" {
+		t.Fatalf("llm status = %#v, want ok", llm.Attributes["status"])
+	}
 	skill := findSpan(t, spans, "skill:demo")
+	if skill.Attributes["status"] != "completed" {
+		t.Fatalf("skill status = %#v, want explicit completed passthrough", skill.Attributes["status"])
+	}
 	if skill.Attributes["input_preview"] != "skill/demo" || skill.Attributes["output_preview"] != "done" {
 		t.Fatalf("unexpected skill previews: %#v", skill.Attributes)
 	}
 	tool := findSpan(t, spans, "tool:exec")
+	if tool.Attributes["status"] != "ok" {
+		t.Fatalf("tool status = %#v, want ok", tool.Attributes["status"])
+	}
 	if tool.Attributes["triggered_by.llm_span_id"] != ids["llm"] {
 		t.Fatal("tool must reference the triggering llm")
+	}
+	if assistant := findSpan(t, spans, "assistant"); assistant.Attributes["status"] != "ok" {
+		t.Fatalf("assistant status = %#v, want ok", assistant.Attributes["status"])
 	}
 }
 
@@ -85,6 +100,32 @@ func TestBuildSkipsUnsetAndBlankTurns(t *testing.T) {
 		FinalStatus:   model.FinalStatusCompleted,
 	}); len(spans) != 0 {
 		t.Fatal("blank turn must be skipped")
+	}
+}
+
+func TestBuildMarksInvokeAgentErrorWhenTurnCancelled(t *testing.T) {
+	now := time.Now().UnixNano()
+	spans := (Builder{}).Build(model.Turn{
+		SessionID:      "session-cancelled",
+		AgentRuntime:   "test-agent",
+		AgentName:      "test-agent",
+		StartUnixNano:  now,
+		EndUnixNano:    now + int64(time.Second),
+		FinalStatus:    model.FinalStatusCancelled,
+		InputPreview:   "hello",
+		OutputPreview:  "cancelled",
+		AssistantOutputs: []model.AssistantOutput{{
+			StartUnixNano: now,
+			EndUnixNano:   now + int64(time.Millisecond),
+			OutputPreview: "cancelled",
+			Status:        "ok",
+		}},
+	})
+	if len(spans) == 0 {
+		t.Fatal("expected spans for cancelled turn")
+	}
+	if spans[0].Attributes["status"] != "error" {
+		t.Fatalf("cancelled invoke_agent status = %#v, want error", spans[0].Attributes["status"])
 	}
 }
 

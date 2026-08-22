@@ -47,7 +47,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 	rootAttrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 	rootAttrs["gen_ai.operation.name"] = "invoke_agent"
 	rootAttrs["final_status"] = string(turn.FinalStatus)
-	rootAttrs["status"] = statusValue(turn.ErrorType)
+	rootAttrs["status"] = rootStatusValue(turn.FinalStatus, turn.ErrorType)
 	setAttr(rootAttrs, "error.type", turn.ErrorType)
 	setAttr(rootAttrs, "reason", turn.Reason)
 	setAttr(rootAttrs, "gen_ai.input.messages", turn.InputMessages)
@@ -71,7 +71,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 		spanID := randomHex(8)
 		attrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 		attrs["gen_ai.operation.name"] = "chat"
-		attrs["status"] = firstNonEmpty(call.Status, statusValue(call.ErrorType))
+		attrs["status"] = firstNonEmpty(call.Status, operationStatusValue(call.ErrorType))
 		setAttr(attrs, "gen_ai.provider.name", call.Provider)
 		setAttr(attrs, "gen_ai.request.model", call.RequestModel)
 		setAttr(attrs, "gen_ai.response.model", call.ResponseModel)
@@ -101,7 +101,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 		toolName := firstNonEmpty(tool.Name, "unknown")
 		attrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 		attrs["gen_ai.operation.name"] = "execute_tool"
-		attrs["status"] = firstNonEmpty(tool.Status, statusValue(tool.ErrorType))
+		attrs["status"] = firstNonEmpty(tool.Status, operationStatusValue(tool.ErrorType))
 		setAttr(attrs, "gen_ai.tool.name", toolName)
 		setAttr(attrs, "gen_ai.tool.call.id", tool.CallID)
 		setAttr(attrs, "gen_ai.tool.call.arguments", tool.Arguments)
@@ -126,7 +126,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 			skill := *tool.Skill
 			skillAttrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 			skillAttrs["gen_ai.operation.name"] = "skill"
-			skillAttrs["status"] = firstNonEmpty(skill.Status, statusValue(skill.ErrorType))
+			skillAttrs["status"] = firstNonEmpty(skill.Status, operationStatusValue(skill.ErrorType))
 			setAttr(skillAttrs, "error.type", skill.ErrorType)
 			setAttr(skillAttrs, "reason", skill.Reason)
 			addSkillAttrs(skillAttrs, skill)
@@ -140,7 +140,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 	for _, output := range turn.AssistantOutputs {
 		outputStart, outputEnd := normalizeWindow(output.StartUnixNano, output.EndUnixNano, start, end)
 		attrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
-		attrs["status"] = firstNonEmpty(output.Status, statusValue(output.ErrorType))
+		attrs["status"] = firstNonEmpty(output.Status, operationStatusValue(output.ErrorType))
 		setAttr(attrs, "role", "assistant")
 		setAttr(attrs, "gen_ai.output.messages", output.OutputMessages)
 		setAttr(attrs, "output_preview", output.OutputPreview)
@@ -269,7 +269,14 @@ func addSkillAttrs(attrs map[string]any, skill model.SkillUse) {
 	setAttr(attrs, "skill_call_id", skill.CallID)
 }
 
-func statusValue(errorType string) string {
+func rootStatusValue(finalStatus model.FinalStatus, errorType string) string {
+	if errorType != "" || finalStatus != model.FinalStatusCompleted {
+		return "error"
+	}
+	return "ok"
+}
+
+func operationStatusValue(errorType string) string {
 	if errorType != "" {
 		return "error"
 	}
