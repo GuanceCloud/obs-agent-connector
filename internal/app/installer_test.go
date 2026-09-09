@@ -453,8 +453,6 @@ func TestOSSDownloadURLsUseAgentPluginsDirectory(t *testing.T) {
 		{agent: "openclaw", goos: "windows", path: "openclaw-otel-plugin/install-release.ps1"},
 		{agent: "qoder", goos: "linux", path: "qoder-otel-plugin/qoder-otel-plugin.tar.gz"},
 		{agent: "qoder", goos: "windows", path: "qoder-otel-plugin/install-release.ps1"},
-		{agent: "workbuddy", goos: "darwin", path: "workbuddy-otel-plugin/workbuddy-otel-plugin.tar.gz"},
-		{agent: "workbuddy", goos: "windows", path: "workbuddy-otel-plugin/install-release.ps1"},
 	} {
 		t.Run(tc.agent+"_"+tc.goos, func(t *testing.T) {
 			got, err := downloadSourceURL(

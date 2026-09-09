@@ -480,7 +480,10 @@ func TestUsageDoesNotAdvertiseNewRuntimeMode(t *testing.T) {
 	if strings.Contains(output, "[-n]") || strings.Contains(output, "new-runtime") || strings.Contains(output, "codex -n") {
 		t.Fatalf("usage must not advertise the removed runtime mode:\n%s", output)
 	}
-	for _, expected := range []string{"install codebuddy", "install codex", "config codex list", "remove codex"} {
+	if strings.Contains(output, "Examples:") {
+		t.Fatalf("main help must not include examples: %s", output)
+	}
+	for _, expected := range []string{"agents", "install <agent>", "config <agent>", "remove <agent>"} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected usage to contain %q, got:\n%s", expected, output)
 		}

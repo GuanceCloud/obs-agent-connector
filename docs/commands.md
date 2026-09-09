@@ -10,6 +10,7 @@ obs-agent-connector <command> [arguments]
 
 | Command | Purpose |
 | --- | --- |
+| `agents` | List supported Agents and platforms, regardless of local installation state. No configuration or network access is required. |
 | `list` | List installed Agent plugins detected on the local machine, including best-effort plugin version detection. |
 | `status <agent>` | Show one Agent plugin status, including install state, config path, plugin path, version, and runtime `enabled` state when supported. |
 | `discover` | Detect supported local Agents and install any missing plugins by using connector defaults from `config.json`. Use `discover -u` to update installed plugins and install any missing plugins in one run. |
@@ -22,7 +23,7 @@ obs-agent-connector <command> [arguments]
 | `uninstall` | Uninstall all managed built-in adapters and then remove `obs-agent-connector`, its config, and its managed PATH entry. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print or run a matching self-update action when a newer release is available. |
 
-Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, and Kiro are built into the connector. Other Agents use their external plugins.
+Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Kiro, and WorkBuddy are built into the connector. Other Agents use their external plugins.
 
 ## Bootstrap
 
@@ -176,7 +177,7 @@ By default, `install` reuses the CLI download source recorded in `~/.obs-agent-c
 If that source is unavailable, `install` derives the installer base from `--endpoint`.
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com/agent_plugins`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com/agent_plugins`.
 Use `--static-base` when you need to override the installer base.
-On Windows, Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, and Kiro register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
+On Windows, Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Kiro, and WorkBuddy register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
 Claude, Cursor, CodeBuddy, Codex, Deep Agents Code, Kiro, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows.
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
@@ -301,7 +302,7 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
-- removes the managed Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, and Kiro adapters, including compatible legacy plugin residue where applicable
+- removes the managed Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Kiro, and WorkBuddy adapters, including compatible legacy plugin residue where applicable
 - removes each built-in adapter's connector-managed config, Hook log, and upload state by default
 - removes `~/.obs-agent-connector/config.json` by default
 - keeps connector-managed global and per-Agent configuration when `--keep-config` is used; Hooks, logs, and upload state are still removed

@@ -171,19 +171,19 @@ func SupportsPlatform(p Definition, goos string) bool {
 	if goos == "" {
 		return true
 	}
-	if p.IsBuiltin() {
-		return goos == "linux" || goos == "darwin" || goos == "windows"
-	}
 	if len(p.SupportedPlatforms) > 0 {
 		for _, platform := range p.SupportedPlatforms {
 			if strings.EqualFold(strings.TrimSpace(platform), goos) {
 				if goos != "windows" {
 					return true
 				}
-				return strings.TrimSpace(p.WindowsInstaller) != ""
+				return p.IsBuiltin() || strings.TrimSpace(p.WindowsInstaller) != ""
 			}
 		}
 		return false
+	}
+	if p.IsBuiltin() {
+		return goos == "linux" || goos == "darwin" || goos == "windows"
 	}
 	if goos == "windows" {
 		return strings.TrimSpace(p.WindowsInstaller) != ""

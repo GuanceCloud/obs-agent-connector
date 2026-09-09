@@ -21,7 +21,7 @@ func TestRegisteredPluginNames(t *testing.T) {
 		"openclaw":  "openclaw-otel-plugin",
 		"qoder":     "qoder-otel-plugin",
 		"qoder-cn":  "qoder-otel-plugin",
-		"workbuddy": "workbuddy-otel-plugin",
+		"workbuddy": "obs-agent-connector",
 	}
 
 	for name, pluginName := range expected {

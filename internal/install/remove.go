@@ -41,6 +41,8 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 	var result RemoveResult
 	var err error
 	switch adapter {
+	case "workbuddy":
+		result, err = removeWorkBuddy(home, options)
 	case "claude":
 		result, err = removeClaude(home, options)
 	case "codebuddy":

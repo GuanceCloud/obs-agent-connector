@@ -10,12 +10,15 @@ import (
 	cursorhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/cursor/hook"
 	dcodehook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/dcode/hook"
 	kirohook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/kiro/hook"
+	workbuddyhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/workbuddy/hook"
 	"github.com/GuanceCloud/obs-agent-connector/internal/app"
 )
 
 func main() {
 	if len(os.Args) >= 3 && os.Args[1] == "hook" {
 		switch os.Args[2] {
+		case "workbuddy":
+			os.Exit(workbuddyhook.RunCLI(os.Args[3:]))
 		case "claude":
 			os.Exit(claudehook.RunCLI())
 		case "codebuddy":

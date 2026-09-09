@@ -55,6 +55,12 @@ func pluginDownloadSettings(overrideBase string, cfg connectorConfig, endpoint s
 	switch source {
 	case "", pluginSourceOSS:
 		source = pluginSourceOSS
+		if githubReleaseDownloadBase(baseURL) {
+			baseURL = ""
+		}
+		if baseURL == "" {
+			baseURL = staticBaseFromDownloadBase(cfg.DownloadBaseURL)
+		}
 		if baseURL == "" {
 			baseURL = staticBaseURL("", endpoint)
 		}
@@ -303,6 +309,9 @@ func staticBaseFromDownloadBase(downloadBase string) string {
 	if downloadBase == "" {
 		return ""
 	}
+	if githubReleaseDownloadBase(downloadBase) {
+		return ""
+	}
 
 	parsed, err := url.Parse(downloadBase)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
@@ -326,6 +335,11 @@ func staticBaseFromDownloadBase(downloadBase string) string {
 
 	parsed.Path = cleanedPath[:lastSlash]
 	return strings.TrimRight(parsed.String(), "/")
+}
+
+func githubReleaseDownloadBase(value string) bool {
+	_, ok := githubReleaseRepo(value)
+	return ok
 }
 
 func derivedStaticBaseFromEndpoint(endpoint string) string {

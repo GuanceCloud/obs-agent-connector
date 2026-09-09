@@ -54,6 +54,9 @@ function Get-PluginBaseFromDownloadBase {
     return ""
   }
   $Trimmed = $Value.TrimEnd("/")
+  if ($Trimmed -match '^https?://github\.com/[^/]+/[^/]+/releases/download/[^/]+$') {
+    return ""
+  }
   $SlashIndex = $Trimmed.LastIndexOf("/")
   if ($SlashIndex -lt 0) {
     return $Trimmed
@@ -84,6 +87,12 @@ if (-not $PluginSource) {
 }
 if ((-not $PluginBaseUrl) -and ($PluginSource -eq "oss")) {
   $PluginBaseUrl = Get-PluginBaseFromDownloadBase -Value $DownloadBaseUrl
+  if (-not $PluginBaseUrl) {
+    $PluginBaseUrl = Get-PluginBaseFromDownloadBase -Value (Get-DownloadBaseFromEndpoint -Value $Endpoint)
+  }
+  if (-not $PluginBaseUrl) {
+    $PluginBaseUrl = "https://static.guance.com/agent_plugins"
+  }
 }
 if (-not $DownloadBaseUrl) {
   throw "download_base_url is required; pass -DownloadBaseUrl <url> or set DOWNLOAD_BASE_URL / OBS_AGENT_CONNECTOR_OSS_ENDPOINT"

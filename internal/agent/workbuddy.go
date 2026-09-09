@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,21 +11,17 @@ import (
 func workBuddyPlugin() Definition {
 	return Definition{
 		Name:                     "workbuddy",
-		PluginName:               "workbuddy-otel-plugin",
+		Backend:                  BackendBuiltin,
+		BuiltinHookFile:          "~/.workbuddy/settings.json",
+		PluginName:               "obs-agent-connector",
 		AgentCommand:             "workbuddy",
 		SupportedPlatforms:       []string{"darwin", "windows"},
-		WindowsInstaller:         "install-release.ps1",
-		PackageScript:            "scripts/install.sh",
-		PackageArgs:              []string{"--refresh"},
 		DiscoveryCommandOptional: true,
 		Markers: []string{
-			"~/.workbuddy/plugins/marketplaces/guance/plugins/workbuddy-otel-plugin",
+			"~/.workbuddy/settings.json",
 		},
-		ConfigFiles:     []string{"~/.workbuddy/gtrace.json"},
-		EnabledJSONPath: []string{"enabled"},
-		RemovePaths: []string{
-			"~/.workbuddy/plugins/marketplaces/guance/plugins/workbuddy-otel-plugin",
-		},
+		ConfigFiles:      []string{"~/.obs-agent-connector/workbuddy/gtrace.json", "~/.workbuddy/gtrace.json"},
+		EnabledJSONPath:  []string{"enabled"},
 		Resolve:          resolveWorkBuddyPlugin,
 		ResolveInstall:   resolveWorkBuddyForInstall,
 		ResolveDiscovery: resolveWorkBuddyForDiscovery,
@@ -61,14 +58,17 @@ func withWorkBuddyProfile(p Definition, profileDir string) Definition {
 		profileDir = "~/.workbuddy"
 	}
 	resolved.Env = []string{"WORKBUDDY_CONFIG_DIR=" + profileDir}
-	resolved.Markers = []string{
-		profileDir + "/plugins/marketplaces/guance/plugins/workbuddy-otel-plugin",
+	resolved.BuiltinHookFile = profileDir + "/settings.json"
+	resolved.Markers = []string{resolved.BuiltinHookFile}
+	// Retain migration evidence only while the legacy plugin is registered.
+	var settings struct {
+		EnabledPlugins map[string]bool `json:"enabledPlugins"`
 	}
-	resolved.ConfigFiles = []string{profileDir + "/gtrace.json"}
+	if body, err := os.ReadFile(ExpandHome(resolved.BuiltinHookFile)); err == nil && json.Unmarshal(body, &settings) == nil && settings.EnabledPlugins["workbuddy-otel-plugin@guance"] {
+		resolved.Markers = append(resolved.Markers, profileDir+"/plugins/marketplaces/guance/plugins/workbuddy-otel-plugin")
+	}
+	resolved.ConfigFiles = []string{"~/.obs-agent-connector/workbuddy/gtrace.json", profileDir + "/gtrace.json"}
 	resolved.EnabledJSONPath = []string{"enabled"}
-	resolved.RemovePaths = []string{
-		profileDir + "/plugins/marketplaces/guance/plugins/workbuddy-otel-plugin",
-	}
 	return resolved
 }
 

@@ -19,6 +19,20 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 	}
 	printSingleDetail("Runtime", executable)
 	switch p.Name {
+	case "workbuddy":
+		_, err = telemetryinstall.InstallWorkBuddy(telemetryinstall.WorkBuddyOptions{
+			ProfileDir: agent.ExpandHome(strings.TrimSuffix(p.BuiltinHookFile, "/settings.json")),
+			CodeBuddyOptions: telemetryinstall.CodeBuddyOptions{
+				SourceExecutable: executable, DestinationExecutable: executable,
+				Endpoint: input.Endpoint, TracePath: input.TracePath, MetricsPath: input.MetricsPath,
+				InstallType: fixedType, XToken: input.XToken, Headers: append([]string{}, input.Headers...),
+				ResourceAttributes: builtinResourceAttributes(input), CaptureContent: input.CaptureContent,
+				MaxChars: input.MaxChars, Enabled: input.Enabled, NoConfig: noConfig,
+			},
+		})
+		if err == nil {
+			printSingleDetail("Note", "Restart WorkBuddy before the next conversation to load the built-in Hooks and unload the previous plugin. If settings are overwritten on exit, rerun installation after quitting WorkBuddy.")
+		}
 	case "claude":
 		_, err = telemetryinstall.InstallClaude(telemetryinstall.ClaudeOptions{
 			SourceExecutable:      executable,

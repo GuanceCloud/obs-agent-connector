@@ -206,6 +206,30 @@ func TestPluginDownloadSettingsRejectsGitHubWithoutBaseURL(t *testing.T) {
 	}
 }
 
+func TestPluginDownloadSettingsFallsBackFromGitHubReleasePathForOSS(t *testing.T) {
+	cfg := connectorConfig{
+		DownloadBaseURL: "https://github.com/GuanceCloud/obs-agent-connector/releases/download/v0.1.23-rc2",
+		PluginSource:    "oss",
+		PluginBaseURL:   "https://github.com/GuanceCloud/obs-agent-connector/releases/download/agent_plugins",
+	}
+	download, err := pluginDownloadSettings("", cfg, "https://llm-openway.guance.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if download.Source != pluginSourceOSS {
+		t.Fatalf("expected source %q, got %q", pluginSourceOSS, download.Source)
+	}
+	if download.BaseURL != "https://static.guance.com/agent_plugins" {
+		t.Fatalf("unexpected plugin base URL %q", download.BaseURL)
+	}
+}
+
+func TestStaticBaseFromDownloadBaseRejectsGitHubReleaseDownloadPath(t *testing.T) {
+	if got := staticBaseFromDownloadBase("https://github.com/GuanceCloud/obs-agent-connector/releases/download/v0.1.23-rc2"); got != "" {
+		t.Fatalf("expected empty static base for GitHub release download path, got %q", got)
+	}
+}
+
 func encodeUTF16WithBOM(value string, order binary.ByteOrder, bom []byte) []byte {
 	words := utf16.Encode([]rune(value))
 	data := make([]byte, len(bom)+len(words)*2)
