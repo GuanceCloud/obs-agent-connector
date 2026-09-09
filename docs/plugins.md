@@ -1,6 +1,6 @@
 # Plugin Matrix
 
-`obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Kiro CLI, and WorkBuddy. Other Agents delegate installation and configuration generation to external plugin installers.
+`obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, and WorkBuddy. Other Agents delegate installation and configuration generation to external plugin installers.
 
 ## Supported Agents
 
@@ -11,6 +11,7 @@
 | `codex` | Codex | Current connector | `~/.obs-agent-connector/codex/gtrace.json` | Managed Hook and trust state in `~/.codex/hooks.json` / `~/.codex/config.toml` |
 | `cursor` | Cursor with automatic `~/.cursor` or Cursor CLI-family detection, preferring `cursor-agent` | Current connector | `~/.obs-agent-connector/cursor/gtrace.json` | Managed Hooks in `~/.cursor/hooks.json` |
 | `dcode` | Deep Agents Code with Hooks v2 (`dcode` 0.1.46 or later); normal `Stop` plus failed `SessionEnd` terminal telemetry | Current connector | `~/.obs-agent-connector/dcode/gtrace.json` | Managed Hooks in `~/.deepagents/hooks.json` |
+| `grok` | Grok Build CLI 1.0.5+ TUI/headless | Current connector | `~/.obs-agent-connector/grok/gtrace.json` | Managed global Hook in `~/.grok/hooks/obs-agent-connector.json` |
 | `kiro` | Kiro CLI V3 interactive TTY (`kiro-cli chat --v3`); default V2 and non-interactive modes are unsupported | Current connector | `~/.obs-agent-connector/kiro/gtrace.json` | Managed V3 global Hooks in `~/.kiro/hooks/obs-agent-connector.json` |
 | `dsh` | DeepSeek Harness | Unix: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install.sh` Windows: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install-release.ps1` | `$DSH_HOME/gtrace.json` (default `~/.dsh/gtrace.json`) | `$DSH_HOME/profiles/<profile>/node_modules/dsh-otel-plugin` |
 | `hermes` | Hermes | `https://static.guance.com/agent_plugins/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
@@ -23,6 +24,20 @@
 
 For WorkBuddy registration, legacy-plugin migration, and runtime limitations, see
 [the built-in WorkBuddy adapter](product-research/workbuddy.md).
+
+## Grok Build
+
+The Grok adapter uses a hybrid journal and transcript-replay design. Hook handlers return quickly after recording bounded evidence. A detached worker uses the matching `updates.jsonl` terminal record to normalize and upload a completed turn.
+
+- `Stop` is a blocking gate and may fire repeatedly. The connector requires a matching durable `TurnCompleted` record, so a blocked or repeated `Stop` does not upload a partial turn.
+- `StopFailure` and `StopCancelled` preserve explicit failure or cancellation evidence. A later `UserPromptSubmit`, `idle_prompt` notification, or `SessionEnd` also recovers terminal turns that did not receive a final observable Stop event.
+- Exact per-call model and token fields are emitted when `ResponseStarted` and `ResponseCompleted` provide stable call evidence. When Grok exposes only a complete multi-call turn aggregate, the connector conservatively apportions it across the validated LLM calls, preserves the exact total, and marks each allocation with `gtrace.usage.estimated=true`.
+- Skill and subagent spans require stable IDs or a high-confidence `SKILL.md` path. The connector does not infer relationships from timing alone.
+- Grok's native External OpenTelemetry stream may run at the same time. It exports logs and metrics, while the connector provides GTrace traces and derived metrics; enabling both can produce overlapping telemetry volume.
+
+The connector owns `~/.grok/hooks/obs-agent-connector.json` and `~/.obs-agent-connector/grok/`. It preserves other global and project Hook files. Restart Grok after installation, or run `/hooks`, select the Hooks tab, and press `l` to reload.
+
+See [Grok Build telemetry product research](product-research/grok.md) for schema and validation details.
 
 ## Qoder Variants
 
@@ -45,6 +60,7 @@ Windows installation and update are currently supported only for:
 - `codex`
 - `cursor`
 - `dcode`
+- `grok`
 - `kiro`
 - `codebuddy`
 - `dsh`
@@ -53,7 +69,7 @@ Windows installation and update are currently supported only for:
 - `qoder`
 - `workbuddy`
 
-Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Kiro, and WorkBuddy register the current connector executable directly. External plugins download their PowerShell installer from the configured OSS or GitHub source.
+Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, and WorkBuddy register the current connector executable directly. External plugins download their PowerShell installer from the configured OSS or GitHub source.
 If a user tries `install` or `update` with an unsupported Agent, the CLI returns a friendly error with the supported Windows Agent list.
 
 ## Install Parameters
@@ -68,7 +84,7 @@ At plugin install time, the CLI uses:
 | `Agent ID` | auto-generated `agid_<uuidv4-without-dashes>` or `--agent-id` override | `--tag agent_id=<value>` |
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
-The built-in Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Kiro, and WorkBuddy adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
+The built-in Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, and WorkBuddy adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
 
 Each built-in adapter writes structured Hook logs to `~/.obs-agent-connector/<agent>/gtrace-hooks.json`. Existing Agent-local configs are read as a compatibility fallback and are migrated into the managed directory when an install or config edit writes new values.
 
@@ -100,6 +116,7 @@ contract and add a regression test for the generated command.
 | `codex` | `enabled` |
 | `cursor` | `enabled` |
 | `dcode` | `enabled` |
+| `grok` | `enabled` |
 | `kiro` | `enabled` |
 | `dsh` | `enabled` |
 | `opencode` | `enabled` |
