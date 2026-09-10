@@ -125,3 +125,5 @@ contract and add a regression test for the generated command.
 | `workbuddy` | `enabled` |
 
 `hermes` is not included because its runtime config is `~/.hermes/config.yaml`.
+
+CodeBuddy accepts both legacy IDE `index.json` plus `messages/` transcripts and CodeBuddy Code CLI JSONL sessions through the same managed Hooks. No conversion script or version-specific configuration is required. See [CodeBuddy transcript semantics](product-research/codebuddy.md) for terminal states, token deduplication, and timing limits.

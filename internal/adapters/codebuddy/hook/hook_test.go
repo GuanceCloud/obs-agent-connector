@@ -207,3 +207,73 @@ func TestReadInputRejectsUnsupportedHook(t *testing.T) {
 		t.Fatal("expected unsupported Hook error")
 	}
 }
+
+func TestJSONLWorkerStopAndSessionEndUploadOnce(t *testing.T) {
+	var traces, metricRequests atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		reader, err := gzip.NewReader(r.Body)
+		if err != nil {
+			t.Error(err)
+			w.WriteHeader(http.StatusBadRequest)
+			return
+		}
+		defer reader.Close()
+		body, err := io.ReadAll(reader)
+		if err != nil {
+			t.Error(err)
+			return
+		}
+		switch r.URL.Path {
+		case "/traces":
+			traces.Add(1)
+			decoded, err := proto.DecodeExportTraceServiceRequest(body)
+			if err != nil || len(decoded.ResourceSpans) != 1 || len(decoded.ResourceSpans[0].ScopeSpans[0].Spans) != 4 {
+				t.Errorf("invalid JSONL traces: %v", err)
+			}
+		case "/metrics":
+			metricRequests.Add(1)
+			if _, err := proto.DecodeExportMetricsServiceRequest(body); err != nil {
+				t.Error(err)
+			}
+		default:
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	cfg := telemetryConfig(server.URL, t.TempDir())
+	cfg.HookLogFile = filepath.Join(cfg.StateDir, "hook.log")
+	transcript, err := filepath.Abs(filepath.Join("..", "parse", "testdata", "normal.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, event := range []string{"Stop", "SessionEnd"} {
+		input := codebuddyparse.HookInput{Event: event, SessionID: "jsonl-worker", GenerationID: "generation-1", TranscriptPath: transcript}
+		body, err := json.Marshal(input)
+		if err != nil {
+			t.Fatal(err)
+		}
+		path := filepath.Join(cfg.StateDir, event+".json")
+		if err := os.WriteFile(path, body, 0600); err != nil {
+			t.Fatal(err)
+		}
+		if err := RunWorker(path, RunOptions{Config: &cfg, SkipWait: true}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("queue not removed: %v", err)
+		}
+	}
+	if traces.Load() != 1 || metricRequests.Load() != 1 {
+		t.Fatalf("duplicate upload: traces=%d metrics=%d", traces.Load(), metricRequests.Load())
+	}
+	log, err := os.ReadFile(cfg.HookLogFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, secret := range []string{"fixture-secret-value", "Inspect the synthetic project", "npm test"} {
+		if bytes.Contains(log, []byte(secret)) {
+			t.Fatal("hook log leaked transcript content")
+		}
+	}
+}

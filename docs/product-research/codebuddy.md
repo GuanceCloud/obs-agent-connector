@@ -5,7 +5,8 @@
 - Product: Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent.
 - Validated build: Linux x64 `4.10.4.33993995-1ba59196-cn`, based on VS Code `1.106.1`.
 - Product-level validation currently covers Linux x64. The connector exposes the built-in adapter on Linux, macOS, and Windows because the Hook, settings, transcript, and connector paths are platform-neutral; macOS and Windows still require package-level validation.
-- Evidence date: 2026-08-03. Committed fixtures are synthetic and contain no user transcript or credential.
+- Additional transcript evidence: CodeBuddy Code CLI `2.148.0` on Linux x64 (2026-09-10), using a native JSONL session and an OpenAI-compatible provider.
+- IDE evidence date: 2026-08-03. Committed fixtures are synthetic and contain no user transcript or credential.
 
 ## Hook and Data Sources
 
@@ -13,30 +14,34 @@ CodeBuddy supports command Hooks delivered as JSON on stdin. The adapter uses on
 
 - `Stop` for completed turns;
 - `SessionEnd` for cancellation and missed-Stop recovery;
-- the Hook `transcript_path`, which the validated product resolves to a conversation `index.json`;
-- `<conversation>/messages/<id>.json` records referenced by each request.
+- the Hook `transcript_path`, which resolves to either a legacy conversation `index.json` or a CodeBuddy Code CLI `.jsonl` session;
+- for `index.json`, `<conversation>/messages/<id>.json` records referenced by each request;
+- for JSONL, `message`, `function_call`, and `function_call_result` records. Other record types, such as file-history snapshots, are ignored.
 
-`session_id` is stable for a conversation. `generation_id` matches the request ID in `index.json` and is the turn identifier. Message and tool call IDs are stable within that request. Unknown transcript basenames, missing IDs, missing message files, and malformed records are rejected rather than inferred.
+`session_id` is stable for a conversation. `generation_id` matches the request ID in `index.json`, or `providerData.conversationRequestId` in JSONL, and is the turn identifier. Message and tool call IDs are stable within that request. Unsupported transcript paths, missing required identities or timestamps in JSONL, mismatched session IDs, missing legacy message files, and malformed records are rejected rather than inferred. JSONL is normalized in memory and never rewritten or converted into files beside the session.
 
 ## Terminal and Timing Semantics
 
 - `request.state=complete` is the authoritative normal terminal state. A final assistant message may still have `isComplete=false`, so that flag is diagnostic only.
+- For JSONL, a completed assistant message is the normal terminal signal. Function calls reset that signal, and every tool call must have a terminal result before export. Repeated message IDs replace earlier snapshots. A partial or malformed JSONL record causes the worker to retry the snapshot instead of exporting a partially parsed turn.
 - A `Stop` request that is still running is not uploaded. The Hook queues a background worker and returns immediately; the worker waits for the request to become terminal.
 - At `SessionEnd`, only the final non-terminal request may be mapped to `cancelled`; already completed requests can be replayed and are deduplicated.
 - Request and message timestamps provide inferred turn, LLM, tool, and assistant windows. Generated spans carry `timing.source=inferred`.
 
 ## LLM, Tool, Skill, and Subagent Limits
 
-CodeBuddy does not expose reliable per-LLM call IDs, provider boundaries, TTFT, or streaming timestamps through this collection surface. Each request therefore produces one aggregate `llm` span with request-level token usage. Request/response model fields use the Hook `model` value when present.
+The legacy IDE surface does not expose reliable per-LLM call IDs, provider boundaries, TTFT, or streaming timestamps. Both formats retain one aggregate `llm` span per user request with inferred timing; JSONL support does not introduce per-provider-call spans or TTFT. Request/response model fields use the Hook `model` value when present.
 
-Assistant `tool-call` and tool `tool-result` content is paired by `toolCallId`. Tool errors use `isError`. The collection surface does not provide reliable Skill metadata or subagent parent IDs, so the adapter does not create `skill:*` or subagent relationships.
+For JSONL, `providerData.rawUsage` on assistant messages and function calls supplies prompt, completion, cached prompt, and reasoning token counts. Usage is summed once per `providerData.messageId` within each request, including when parallel tool calls repeat the same provider response usage. Updated usage for the same provider message replaces the earlier snapshot. Missing provider message IDs on usage-bearing records are rejected to avoid guessing token totals. Only fields present in the source are counted.
+
+Legacy assistant `tool-call` and tool `tool-result` content is paired by `toolCallId`. JSONL `function_call` and `function_call_result` records are paired by `callId`; JSON object or JSON-encoded string arguments are supported, and terminal result status identifies tool failures. Tool errors use `isError`. The collection surface does not provide reliable Skill metadata or subagent parent IDs, so the adapter does not create `skill:*` or subagent relationships.
 
 ## Architecture and Reliability
 
 The selected architecture is terminal Hook plus transcript replay:
 
 ```text
-Stop / SessionEnd -> private queue -> background worker -> index/messages
+Stop / SessionEnd -> private queue -> background worker -> index/messages or JSONL
                   -> normalized Turn -> shared semantic builder
                   -> shared Metrics -> OTLP traces and metrics
 ```

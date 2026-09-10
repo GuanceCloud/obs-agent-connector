@@ -96,16 +96,9 @@ func Read(input HookInput, cfg codebuddyconfig.Config) ([]model.Turn, bool, Diag
 	if strings.TrimSpace(input.SessionID) == "" || strings.TrimSpace(input.TranscriptPath) == "" {
 		return nil, false, Diagnostics{}, errors.New("hook payload is missing session_id or transcript_path")
 	}
-	if filepath.Base(input.TranscriptPath) != "index.json" {
-		return nil, false, Diagnostics{}, fmt.Errorf("unsupported CodeBuddy transcript %q: expected index.json", filepath.Base(input.TranscriptPath))
-	}
-	body, err := os.ReadFile(input.TranscriptPath)
+	index, loadMessage, err := readTranscript(input)
 	if err != nil {
 		return nil, true, Diagnostics{}, err
-	}
-	var index conversationIndex
-	if err := json.Unmarshal(body, &index); err != nil {
-		return nil, true, Diagnostics{}, fmt.Errorf("parse CodeBuddy index.json: %w", err)
 	}
 	diagnostics := Diagnostics{TotalRequests: len(index.Requests), IndexedMessages: len(index.Messages), RequestStates: map[string]int{}}
 	messageSet := make(map[string]struct{}, len(index.Messages))
@@ -143,7 +136,7 @@ func Read(input HookInput, cfg codebuddyconfig.Config) ([]model.Turn, bool, Diag
 				continue
 			}
 		}
-		turn, complete, err := buildTurn(input, request, messageSet, cfg, status)
+		turn, complete, err := buildTurn(input, request, messageSet, loadMessage, cfg, status)
 		if err != nil {
 			return nil, true, diagnostics, err
 		}
@@ -157,20 +150,17 @@ func Read(input HookInput, cfg codebuddyconfig.Config) ([]model.Turn, bool, Diag
 	return turns, pending, diagnostics, nil
 }
 
-func buildTurn(input HookInput, request requestIndex, messageSet map[string]struct{}, cfg codebuddyconfig.Config, status string) (model.Turn, bool, error) {
+func buildTurn(input HookInput, request requestIndex, messageSet map[string]struct{}, loadMessage func(string) (storedMessage, error), cfg codebuddyconfig.Config, status string) (model.Turn, bool, error) {
 	start := parseTime(request.StartedAt)
 	end := int64(0)
 	var userText, assistantText string
 	tools := make([]rawTool, 0)
 	toolByID := map[string]int{}
-	baseDir := filepath.Dir(input.TranscriptPath)
-	messagesDir := filepath.Join(baseDir, "messages")
 	for _, messageID := range request.Messages {
 		if _, ok := messageSet[messageID]; !ok || !safeID(messageID) {
 			return model.Turn{}, false, nil
 		}
-		path := filepath.Join(messagesDir, messageID+".json")
-		stored, err := readMessage(path)
+		stored, err := loadMessage(messageID)
 		if err != nil {
 			if os.IsNotExist(err) {
 				return model.Turn{}, false, nil
