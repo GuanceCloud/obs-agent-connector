@@ -225,6 +225,13 @@ func removeOpenClaw(home string, options RemoveOptions) (RemoveResult, error) {
 			delete(entries, bridge.PluginID)
 			result.HookRemoved = true
 		}
+		// Keep legacy settings and files, but stop the old plugin from collecting.
+		if legacy, ok := entries["openclaw-otel-plugin"].(map[string]any); ok {
+			if enabled, explicit := legacy["enabled"].(bool); !explicit || enabled {
+				legacy["enabled"] = false
+				result.HookRemoved = true
+			}
+		}
 		dir := filepath.Join(agentfiles.Directory(home, "openclaw"), "plugin")
 		if load, ok := plugins["load"].(map[string]any); ok {
 			if err = removeOpenClawItem(load, "paths", dir); err != nil {

@@ -54,3 +54,48 @@ func TestOpenClawBuiltinInstallUpdateAndDiscovery(t *testing.T) {
 		t.Fatal("update changed managed config")
 	}
 }
+
+func TestOpenClawRemoveDoesNotListRetainedLegacyDirectories(t *testing.T) {
+	home := t.TempDir()
+	setTestHome(t, home)
+	t.Setenv("OPENCLAW_STATE_DIR", filepath.Join(home, "custom-openclaw"))
+	t.Setenv("OPENCLAW_CONFIG_PATH", "")
+	for _, directory := range []string{"extensions", "plugins"} {
+		path := filepath.Join(os.Getenv("OPENCLAW_STATE_DIR"), directory, "openclaw-otel-plugin")
+		if err := os.MkdirAll(path, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	p := agent.Resolve(agent.Get("openclaw"))
+	if _, installed := agent.InstalledMarker(p); installed {
+		t.Fatal("legacy files incorrectly identify a built-in installation")
+	}
+	runtime := filepath.Join(home, ".obs-agent-connector", "openclaw", "plugin", "runtime.json")
+	if err := os.MkdirAll(filepath.Dir(runtime), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(runtime, []byte(`{"command":"obs-agent-connector","args":["hook","openclaw"]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if _, installed := agent.InstalledMarker(p); !installed {
+		t.Fatal("managed installation not detected")
+	}
+	captureStdout(t, func() {
+		if err := remove([]string{"openclaw", "--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	output := captureStdout(t, func() {
+		if err := listPlugins(nil); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if strings.Contains(output, "openclaw") {
+		t.Fatalf("removed adapter is still listed: %s", output)
+	}
+	for _, directory := range []string{"extensions", "plugins"} {
+		if _, err := os.Stat(filepath.Join(os.Getenv("OPENCLAW_STATE_DIR"), directory, "openclaw-otel-plugin")); err != nil {
+			t.Fatalf("legacy files were not preserved: %v", err)
+		}
+	}
+}

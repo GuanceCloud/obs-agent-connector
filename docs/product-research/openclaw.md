@@ -78,7 +78,9 @@ Restart the OpenClaw Gateway after installation or update to unload the previous
 plugin and load the embedded bridge. Install/update does not restart the Gateway.
 
 `remove openclaw` unregisters the bridge and deletes the connector-managed
-OpenClaw directory. `--purge-config` also removes the legacy plugin's nested config.
+OpenClaw directory and disables any legacy plugin entry while preserving its files
+and settings. Retained legacy directories do not count as a built-in installation
+in `list`. `--purge-config` also removes the legacy plugin's nested config.
 Old telemetry plugins are not automatically re-enabled. `uninstall --keep-config`
 removes the bridge and upload state while retaining managed telemetry settings.
 

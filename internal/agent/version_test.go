@@ -26,7 +26,7 @@ func TestInstalledVersionFromVersionDirectory(t *testing.T) {
 	}
 }
 
-func TestInstalledVersionFromPackageJSON(t *testing.T) {
+func TestOpenClawIgnoresLegacyPackageVersion(t *testing.T) {
 	home := t.TempDir()
 	previousHome := os.Getenv("HOME")
 	if err := os.Setenv("HOME", home); err != nil {
@@ -44,8 +44,8 @@ func TestInstalledVersionFromPackageJSON(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if got := InstalledVersion(openClawPlugin()); got != "1.4.2" {
-		t.Fatalf("expected openclaw version 1.4.2, got %q", got)
+	if got := InstalledVersion(openClawPlugin()); got != "" {
+		t.Fatalf("legacy package reported as built-in version: %q", got)
 	}
 }
 

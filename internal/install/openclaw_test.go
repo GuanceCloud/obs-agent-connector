@@ -119,3 +119,31 @@ func TestOpenClawNoConfigFreshDoesNotCreateRuntimeConfig(t *testing.T) {
 		t.Fatal("no-config wrote telemetry config")
 	}
 }
+
+func TestOpenClawRemoveDisablesLegacyRegistration(t *testing.T) {
+	for _, entry := range []string{`{"enabled":true,"config":{"captureContent":"none"}}`, `{"config":{"captureContent":"none"}}`} {
+		t.Run(entry, func(t *testing.T) {
+			o := openClawOptions(t)
+			host := OpenClawConfigPath(o.Home)
+			if err := os.MkdirAll(filepath.Dir(host), 0700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(host, []byte(`{"plugins":{"entries":{"openclaw-otel-plugin":`+entry+`,"other":{"enabled":true}}}}`), 0600); err != nil {
+				t.Fatal(err)
+			}
+			result, err := RemoveAdapter("openclaw", o.Home, RemoveOptions{PurgeManaged: true})
+			if err != nil || !result.HookRemoved {
+				t.Fatalf("legacy registration was not disabled: %+v, %v", result, err)
+			}
+			h, err := readJSONObject(host)
+			if err != nil {
+				t.Fatal(err)
+			}
+			entries := h["plugins"].(map[string]any)["entries"].(map[string]any)
+			legacy := entries["openclaw-otel-plugin"].(map[string]any)
+			if legacy["enabled"] != false || legacy["config"].(map[string]any)["captureContent"] != "none" || entries["other"].(map[string]any)["enabled"] != true {
+				t.Fatal("removal did not preserve unrelated and legacy settings")
+			}
+		})
+	}
+}

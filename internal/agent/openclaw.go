@@ -11,7 +11,7 @@ func openClawPlugin() Definition {
 		Name: "openclaw", Backend: BackendBuiltin, PluginName: "obs-agent-connector", AgentCommand: "openclaw",
 		SupportedPlatforms: []string{"darwin", "linux", "windows"}, DiscoveryCommandOptional: true,
 		ConfigFiles: []string{"~/.obs-agent-connector/openclaw/gtrace.json"}, EnabledJSONPath: []string{"enabled"},
-		Markers: []string{"~/.obs-agent-connector/openclaw/plugin/runtime.json", "~/.openclaw/extensions/openclaw-otel-plugin", "~/.openclaw/plugins/openclaw-otel-plugin"},
+		Markers: []string{"~/.obs-agent-connector/openclaw/plugin/runtime.json"},
 		Resolve: resolveOpenClaw,
 		ResolveDiscovery: func(d Definition) (Definition, bool) {
 			d = resolveOpenClaw(d)
@@ -33,6 +33,6 @@ func resolveOpenClaw(d Definition) Definition {
 		config = filepath.Join(root, "openclaw.json")
 	}
 	d.BuiltinHookFile = config
-	d.Markers = []string{ExpandHome("~/.obs-agent-connector/openclaw/plugin/runtime.json"), filepath.Join(root, "extensions", "openclaw-otel-plugin"), filepath.Join(root, "plugins", "openclaw-otel-plugin")}
+	d.Markers = []string{ExpandHome("~/.obs-agent-connector/openclaw/plugin/runtime.json")}
 	return d
 }
