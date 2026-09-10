@@ -85,6 +85,25 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 				printSingleDetail("Trust", "granted")
 			}
 		}
+	case "openclaw":
+		_, err = telemetryinstall.InstallOpenClaw(telemetryinstall.OpenClawOptions{
+			SourceExecutable:      executable,
+			DestinationExecutable: executable,
+			Endpoint:              input.Endpoint,
+			TracePath:             input.TracePath,
+			MetricsPath:           input.MetricsPath,
+			InstallType:           fixedType,
+			XToken:                input.XToken,
+			Headers:               append([]string{}, input.Headers...),
+			ResourceAttributes:    builtinResourceAttributes(input),
+			CaptureContent:        input.CaptureContent,
+			MaxChars:              input.MaxChars,
+			Enabled:               input.Enabled,
+			NoConfig:              noConfig,
+		})
+		if err == nil {
+			printSingleDetail("Note", "Restart the OpenClaw Gateway to load the built-in bridge and unload previous telemetry plugins.")
+		}
 	case "cursor":
 		_, err = telemetryinstall.InstallCursor(telemetryinstall.CursorOptions{
 			SourceExecutable:      executable,

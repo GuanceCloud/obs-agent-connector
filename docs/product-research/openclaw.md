@@ -1,0 +1,168 @@
+# Built-in OpenClaw Adapter
+
+## Architecture and source evidence
+
+The connector embeds `internal/adapters/openclaw/bridge/index.mjs` in the Go binary.
+The installer extracts this dependency-free native entry point under
+`~/.obs-agent-connector/openclaw/plugin/` and adds that directory to
+`plugins.load.paths` in `openclaw.json`. OpenClaw loads it using its own Node.js
+runtime; no external plugin download, npm installation, or telemetry SDK is needed.
+
+The bridge observes `llm_input`, `llm_output`, `after_tool_call`, `model_call_ended`, and `agent_end`
+using `api.on`. Only `agent_end` submits a terminal payload to
+`obs-agent-connector hook openclaw`, using argument arrays without a shell.
+
+Sources reviewed on 2026-09-10:
+
+- [Native plugin hooks and conversation access](https://docs.openclaw.ai/plugins/hooks)
+- [Prompt/session hooks and harness boundaries](https://docs.openclaw.ai/plugins/hooks/prompt-and-session)
+- [Native event type definitions](https://github.com/openclaw/openclaw/blob/main/src/plugins/hook-types.ts)
+- Local `openclaw-otel-plugin` configuration and snapshot-replay implementation.
+
+`agent_end` supplies success, optional error and duration, and final messages.
+Run IDs and session identity are optional in some host paths. The adapter skips
+an event without both stable identifiers instead of joining unrelated runs.
+The host may gate conversation hooks; installation sets
+`plugins.entries.obs-agent-connector.hooks.allowConversationAccess=true`.
+
+## Collection behavior
+
+- Terminal snapshots are restricted to the current user boundary and run window.
+  Old messages are not replayed as a new request.
+- Per-assistant-message usage is preferred. `llm_output.usage` may summarize an
+  entire attempt and is never assigned to a single LLM span. When the snapshot
+  is unavailable, the bridge can recover `lastAssistant` and its own usage.
+- Tools use native IDs, results, errors, and durations when emitted. Transcript
+  `toolCall` / `toolResult` records provide a fallback. Explicit reads of a
+  `SKILL.md` file can produce a child skill span.
+- Root, LLM, tool, skill, and assistant spans use the shared semantic builder;
+  the four standard metrics are derived from those same spans. Native first-chunk
+  observations add the optional first-chunk histogram described below.
+- Heartbeat, cron, system, internal, and title triggers are skipped when the host
+  identifies them. Text is not used to invent subagent relationships.
+- Content modes are `none`, `preview`, and `full`. Captured content and errors
+  pass through shared recursive redaction before being written to the retry spool.
+
+## Configuration and lifecycle
+
+```bash
+obs-agent-connector install openclaw --endpoint https://example.com --x-token TOKEN
+obs-agent-connector update openclaw
+obs-agent-connector config openclaw
+obs-agent-connector disable openclaw
+obs-agent-connector enable openclaw
+obs-agent-connector remove openclaw
+```
+
+The telemetry configuration lives in
+`~/.obs-agent-connector/openclaw/gtrace.json`. Registration defaults to
+`~/.openclaw/openclaw.json`; `OPENCLAW_STATE_DIR` and `OPENCLAW_CONFIG_PATH`
+override the host registration location. The installer currently requires strict
+JSON and returns an error without overwriting JSON5/commented host configuration.
+
+Runtime precedence is defaults, legacy `~/.openclaw/gtrace.json`, managed config,
+then `OPENCLAW_OTEL_*`, standard OTLP, and supported `GTRACE_*` environment values.
+The bridge passes its exact config path as `OPENCLAW_OTEL_CONFIG_FILE` to Go.
+The managed enable switch is reread for every observed event.
+
+Installation copies compatible transport, privacy, and identity settings from
+`plugins.entries.openclaw-otel-plugin.config` when no managed config exists.
+Explicit install options override the corresponding fields. Updating uses
+`--no-config`: an existing managed config remains byte-for-byte unchanged;
+first-time migration can create a managed copy of legacy settings.
+The old plugin entry is disabled but its config and files remain. An explicitly
+configured `diagnostics-otel` entry is also disabled to avoid duplicate reporting.
+Unrelated registration entries, load paths, and allowlist entries are retained.
+
+Restart the OpenClaw Gateway after installation or update to unload the previous
+plugin and load the embedded bridge. Install/update does not restart the Gateway.
+
+`remove openclaw` unregisters the bridge and deletes the connector-managed
+OpenClaw directory. `--purge-config` also removes the legacy plugin's nested config.
+Old telemetry plugins are not automatically re-enabled. `uninstall --keep-config`
+removes the bridge and upload state while retaining managed telemetry settings.
+
+## Reliability and limits
+
+Go stores sanitized terminal turns in `state/pending/`, claims each
+`(session ID, run ID)`, and records successful signals independently. Trace success
+followed by Metrics failure retries only Metrics. The bridge retries pending work
+on service startup, shutdown, every minute, and subsequent terminal events.
+Disabling telemetry stops input processing and retry uploads.
+
+The bridge bounds each subprocess to 25 seconds, allows at most four concurrent
+subprocesses, and limits a payload to 8 MiB. In-memory observations are bounded to
+64 runs, 256 observations and 1 MiB of selected event data per run, with a one-hour
+TTL. Over-limit observations or submissions are dropped to protect the host.
+Terminal payloads not yet handed to Go do not survive a Gateway crash.
+
+This implementation does not claim parity with the external plugin's diagnostic
+stream, historical trajectory sweeps, logs export, or cross-run subagent linking.
+Harnesses expose different hooks; missing terminal events cannot be reconstructed.
+Native model-call completion events provide call IDs and durations. When present,
+they define the LLM spans and replace transcript-derived LLM spans, avoiding double
+counting. Transcript token usage is retained at the root and emitted once as turn
+aggregate token metrics (`gen_ai.operation.name=invoke_agent`), without assigning
+it to a particular provider/model call. Per-call token/model breakdown is unavailable
+when transcript messages cannot be reliably joined to native calls. Transcript-only
+tool-to-LLM links are omitted on this path.
+
+When native model-call events are absent, LLM spans retain minimal estimated message
+windows (`openclaw.timing_source=estimated_message_boundary`). Both paths retain
+`trace_completeness=partial`; missing call/content correlation is not reconstructed.
+Tool durations use native evidence when available.
+
+## Validation
+
+Automated checks cover native bridge registration and argv, interleaved runs,
+disabled and spawn-failure paths, terminal parsing, stale snapshots, per-message
+usage, tool/skill association, cancellation, privacy, duplicate terminal events,
+OTLP Protobuf decoding, partial signal failure and process restart, concurrent
+claims, install/update/remove, custom host roots, and malformed configuration.
+Node.js bridge tests are included in `go test ./...` when Node.js is available.
+
+A temporary-HOME end-to-end check also exercised the built executable installer,
+extracted JavaScript bridge, real Go subprocess, local GTrace Trace/Metrics
+receiver, and removal without touching user configuration.
+
+A real OpenClaw Gateway conversation and native Windows/macOS execution remain
+manual acceptance checks; cross-compilation alone does not prove host compatibility.
+
+## First response chunk latency
+
+When the host emits `model_call_ended.timeToFirstByteMs`, the adapter records
+`gen_ai.client.operation.time_to_first_chunk` as a histogram in seconds.
+Use **First response chunk latency** for the dashboard label, with P50/P95/P99
+aggregations. This is not strict TTFT and is not user-message-to-first-visible-text
+latency: the first observed response chunk may be empty or contain metadata.
+
+Each native LLM span carries the numeric standard attribute
+`gen_ai.response.time_to_first_chunk` in seconds (for example, `0.125` means
+125 ms). The first-chunk histogram is derived from that same span attribute.
+`openclaw.model_call_id` and `openclaw.first_chunk.source` retain call identity and
+source evidence on the span. The former root `model.first_chunks` JSON array is
+no longer emitted. A `ttft` alias is not added.
+
+Calls are deduplicated by native call ID within a run. Missing, nonnumeric,
+negative, nonfinite, or greater-than-duration latency values are omitted while
+valid native call durations remain observable. A measured zero is retained.
+Calls failing after the first chunk receive span error status and `error.type`.
+No latency or streaming-mode flag is inferred from transcript timing. Explicitly
+non-streaming spans are excluded from the histogram; native host timing semantics
+remain the source of truth when the hook does not expose streaming mode.
+
+Histogram dimensions use `gen_ai.operation.name=chat`, `gen_ai.provider.name`,
+and `gen_ai.request.model` when available. Optional `gen_ai.response.model`,
+`server.address`, `server.port`, and `error.type` are copied only when available.
+Session/run/call IDs and the old `operation_name`, `provider_name`, `request_model`,
+and `status` aliases are not metric dimensions. Agent identity remains in Resource.
+
+See the OpenTelemetry GenAI [Span conventions](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md)
+and [metric conventions](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-metrics.md).
+These conventions are currently in Development. The server-side
+`gen_ai.server.time_to_first_token` metric is not emitted by this client adapter.
+
+The observations are persisted with the terminal turn and follow the same
+independent Trace/Metrics retry path. Older hosts and harnesses that omit the
+native timing event produce no samples. Update the adapter and restart the
+OpenClaw Gateway to load the new bridge.

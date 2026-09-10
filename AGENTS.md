@@ -33,7 +33,7 @@ Do not add Agent-specific branches to `internal/agent/registry.go`. Use the reso
 
 Do not generate Agent runtime configuration in command handlers. Runtime configuration files such as `gtrace.json`, `config.yaml`, or `openclaw.json` are owned by the matching built-in or external Agent installer.
 
-Shared telemetry behavior belongs in `internal/core`. Product-specific collection behavior belongs in `internal/adapters/<product>`. CodeBuddy uses its built-in adapter. Claude, Codex, and other Agents use their external plugins.
+Shared telemetry behavior belongs in `internal/core`. Product-specific collection behavior belongs in `internal/adapters/<product>`. OpenClaw uses an embedded native JavaScript bridge with its built-in Go adapter. Keep its bridge under `internal/adapters/openclaw/bridge` and its configuration registration in `internal/install/openclaw.go`. External Agents continue to delegate to their plugin installers.
 
 ## Commands
 

@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"math"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -47,6 +48,9 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 
 	rootAttrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 	rootAttrs["gen_ai.operation.name"] = "invoke_agent"
+	if turn.AggregateUsageOnly {
+		rootAttrs["gtrace.usage.aggregate_only"] = true
+	}
 	rootAttrs["final_status"] = string(turn.FinalStatus)
 	rootAttrs["status"] = rootStatusValue(turn.FinalStatus, turn.ErrorType)
 	setAttr(rootAttrs, "error.type", turn.ErrorType)
@@ -88,6 +92,9 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 		setAttr(attrs, "output_preview", call.OutputPreview)
 		setAttr(attrs, "output_kind", call.OutputKind)
 		setAttr(attrs, "ttft", positiveFloat(call.TTFTMs))
+		if call.FirstChunkMs != nil && *call.FirstChunkMs >= 0 && !math.IsNaN(*call.FirstChunkMs) && !math.IsInf(*call.FirstChunkMs, 0) && *call.FirstChunkMs <= float64(callEnd-callStart)/1e6 {
+			attrs["gen_ai.response.time_to_first_chunk"] = *call.FirstChunkMs / 1000
+		}
 		setAttr(attrs, "error.type", call.ErrorType)
 		setAttr(attrs, "reason", call.Reason)
 		addUsage(attrs, call.Usage)

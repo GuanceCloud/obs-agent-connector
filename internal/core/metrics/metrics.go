@@ -1,6 +1,7 @@
 package metrics
 
 import (
+	"math"
 	"strings"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/model"
@@ -46,8 +47,10 @@ func Build(spans []model.Span) []model.Metric {
 		switch {
 		case span.Name == "invoke_agent":
 			metrics = append(metrics, requestMetrics(span)...)
+			metrics = append(metrics, aggregateTokenMetrics(span)...)
 		case span.Name == "llm":
 			metrics = append(metrics, llmMetrics(span)...)
+			metrics = append(metrics, firstChunkMetrics(span)...)
 		case strings.HasPrefix(span.Name, "tool:"):
 			metrics = append(metrics, toolMetrics(span)...)
 		case strings.HasPrefix(span.Name, "skill:"):
@@ -302,4 +305,31 @@ func asString(value any) string {
 		return text
 	}
 	return ""
+}
+
+// Standard first-chunk dimensions exclude conversation and call identities.
+func firstChunkMetrics(span model.Span) []model.Metric {
+	latency, ok := span.Attributes["gen_ai.response.time_to_first_chunk"].(float64)
+	if !ok || latency < 0 || math.IsNaN(latency) || math.IsInf(latency, 0) || span.Attributes["gen_ai.request.stream"] == false {
+		return nil
+	}
+	attrs := map[string]any{}
+	for _, key := range []string{"gen_ai.operation.name", "gen_ai.provider.name", "gen_ai.request.model", "gen_ai.response.model", "server.address", "server.port", "error.type"} {
+		setAttr(attrs, key, span.Attributes[key])
+	}
+	return []model.Metric{metric(metricMeta{Name: "gen_ai.client.operation.time_to_first_chunk", Type: "histogram", Unit: "s", Description: "Time from request issuance to the first streaming response chunk."}, span, latency, attrs)}
+}
+
+func aggregateTokenMetrics(span model.Span) []model.Metric {
+	if span.Attributes["gtrace.usage.aggregate_only"] != true {
+		return nil
+	}
+	out := []model.Metric{}
+	for _, kind := range []string{"input", "output"} {
+		value := valueFloat(span.Attributes["gen_ai.usage."+kind+"_tokens"])
+		if value > 0 {
+			out = append(out, metric(tokenUsage, span, value, map[string]any{"gen_ai.operation.name": "invoke_agent", "gen_ai.token.type": kind}))
+		}
+	}
+	return out
 }

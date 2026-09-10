@@ -38,42 +38,25 @@ func TestDisableCodexSetsEnabledFalse(t *testing.T) {
 	}
 }
 
-func TestEnableOpenClawSetsNestedEnabledTrue(t *testing.T) {
+func TestEnableOpenClawSetsManagedEnabledTrue(t *testing.T) {
 	home := t.TempDir()
 	setTestHome(t, home)
-
-	markerPath := filepath.Join(home, ".openclaw", "extensions", "openclaw-otel-plugin")
-	configPath := filepath.Join(home, ".openclaw", "openclaw.json")
-	if err := os.MkdirAll(markerPath, 0o755); err != nil {
+	markerPath := filepath.Join(home, ".obs-agent-connector", "openclaw", "plugin", "runtime.json")
+	configPath := filepath.Join(home, ".obs-agent-connector", "openclaw", "gtrace.json")
+	if err := os.MkdirAll(filepath.Dir(markerPath), 0700); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+	if err := os.WriteFile(markerPath, []byte(`{"command":"obs-agent-connector","args":["hook","openclaw"]}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-	content := `{
-  "plugins": {
-    "entries": {
-      "openclaw-otel-plugin": {
-        "enabled": false
-      }
-    }
-  }
-}
-`
-	if err := os.WriteFile(configPath, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(configPath, []byte(`{"enabled":false,"endpoint":"https://example.com"}`), 0600); err != nil {
 		t.Fatal(err)
 	}
-
 	if err := enable([]string{"openclaw"}); err != nil {
 		t.Fatal(err)
 	}
-
-	config := readJSONFile(t, configPath)
-	plugins := config["plugins"].(map[string]any)
-	entries := plugins["entries"].(map[string]any)
-	entry := entries["openclaw-otel-plugin"].(map[string]any)
-	if enabled, ok := entry["enabled"].(bool); !ok || !enabled {
-		t.Fatalf("expected nested enabled=true, got %#v", entry["enabled"])
+	if enabled, _ := readJSONFile(t, configPath)["enabled"].(bool); !enabled {
+		t.Fatal("expected enabled=true")
 	}
 }
 

@@ -19,7 +19,7 @@ func TestRegisteredPluginNames(t *testing.T) {
 		"hermes":    "hermes-otel-plugin",
 		"kiro":      "obs-agent-connector",
 		"opencode":  "opencode-otel-plugin",
-		"openclaw":  "openclaw-otel-plugin",
+		"openclaw":  "obs-agent-connector",
 		"qoder":     "qoder-otel-plugin",
 		"qoder-cn":  "qoder-otel-plugin",
 		"workbuddy": "obs-agent-connector",

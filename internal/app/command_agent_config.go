@@ -211,7 +211,7 @@ func resolveEditableRuntimeConfig(target string) (agent.Definition, string, erro
 
 func supportsEditableRuntimeConfig(p agent.Definition) bool {
 	switch p.Name {
-	case "hermes", "openclaw":
+	case "hermes":
 		return false
 	}
 	if len(p.ConfigFiles) == 0 {

@@ -227,24 +227,24 @@ func TestResolveInstallInputExplicitTransportOverridesExistingConfig(t *testing.
 }
 
 func TestInstallerURLForWindowsUsesOSSReleaseScript(t *testing.T) {
-	definition := agentDefinitionForTest("openclaw")
+	definition := agentDefinitionForTest("dsh")
 	url, err := installerURLForOS(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, definition, "windows")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://static.example.com/agent_plugins/openclaw-otel-plugin/install-release.ps1"
+	expected := "https://static.example.com/agent_plugins/dsh-otel-plugin/install-release.ps1"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
 }
 
 func TestInstallerURLForWindowsUsesGitHubReleaseScript(t *testing.T) {
-	definition := agentDefinitionForTest("openclaw")
+	definition := agentDefinitionForTest("dsh")
 	url, err := installerURLForOS(pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: "https://github.com/GuanceCloud"}, definition, "windows")
 	if err != nil {
 		t.Fatal(err)
 	}
-	expected := "https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.ps1"
+	expected := "https://github.com/GuanceCloud/dsh-otel-plugin/releases/latest/download/install-release.ps1"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
@@ -257,11 +257,13 @@ func TestRenderInstallCommandForWindowsUsesPowerShell(t *testing.T) {
 		currentGOOS = previous
 	})
 
-	command := renderInstallCommand(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("openclaw"), installInput{
+	definition := agentDefinitionForTest("dsh")
+	definition.WindowsArgs = []string{"-Type", "gtrace"}
+	command := renderInstallCommand(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, definition, installInput{
 		Endpoint:   "https://llm-openway.guance.com",
 		XToken:     "agent_test",
 		AgentID:    "agent_123",
-		AgentName:  "demo_openclaw_20260721",
+		AgentName:  "demo_dsh_20260721",
 		GlobalTags: []string{"team=platform"},
 	})
 
@@ -269,7 +271,7 @@ func TestRenderInstallCommandForWindowsUsesPowerShell(t *testing.T) {
 		t.Fatalf("expected PowerShell release installer in command %q", command)
 	}
 	if !strings.Contains(command, "-Type 'gtrace'") {
-		t.Fatalf("expected Windows openclaw command to include -Type gtrace, got %q", command)
+		t.Fatalf("expected Windows dsh command to include -Type gtrace, got %q", command)
 	}
 	if strings.Contains(command, "OSS_ENDPOINT=") {
 		t.Fatalf("expected Windows command to avoid OSS shell env, got %q", command)
@@ -286,14 +288,14 @@ func TestRenderInstallCommandUsesNormalizedOSSBase(t *testing.T) {
 		currentGOOS = previous
 	})
 
-	command := renderInstallCommand(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("openclaw"), installInput{
+	command := renderInstallCommand(pluginDownloadConfig{Source: pluginSourceOSS, BaseURL: "https://static.example.com"}, agentDefinitionForTest("dsh"), installInput{
 		Endpoint:  "https://llm-openway.guance.com",
 		XToken:    "agent_test",
 		AgentID:   "agid_123",
 		AgentName: "demo",
 	})
 	for _, want := range []string{
-		"https://static.example.com/agent_plugins/openclaw-otel-plugin/install.sh",
+		"https://static.example.com/agent_plugins/dsh-otel-plugin/install.sh",
 		"OSS_ENDPOINT=https://static.example.com/agent_plugins",
 	} {
 		if !strings.Contains(command, want) {
@@ -449,8 +451,6 @@ func TestOSSDownloadURLsUseAgentPluginsDirectory(t *testing.T) {
 		{agent: "hermes", goos: "linux", path: "hermes-otel-plugin/install.sh"},
 		{agent: "opencode", goos: "linux", path: "opencode-otel-plugin/opencode-otel-plugin.tar.gz"},
 		{agent: "opencode", goos: "windows", path: "opencode-otel-plugin/install-release.ps1"},
-		{agent: "openclaw", goos: "linux", path: "openclaw-otel-plugin/install.sh"},
-		{agent: "openclaw", goos: "windows", path: "openclaw-otel-plugin/install-release.ps1"},
 		{agent: "qoder", goos: "linux", path: "qoder-otel-plugin/qoder-otel-plugin.tar.gz"},
 		{agent: "qoder", goos: "windows", path: "qoder-otel-plugin/install-release.ps1"},
 	} {

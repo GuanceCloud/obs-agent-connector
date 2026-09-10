@@ -31,6 +31,7 @@ type LLMCall struct {
 	FinishReasons   []string
 	Usage           Usage
 	TTFTMs          float64
+	FirstChunkMs    *float64
 	Status          string
 	ErrorType       string
 	Reason          string
@@ -86,29 +87,30 @@ type AssistantOutput struct {
 }
 
 type Turn struct {
-	SessionID        string
-	TurnID           string
-	AgentRuntime     string
-	AgentName        string
-	AgentVersion     string
-	StartUnixNano    int64
-	EndUnixNano      int64
-	FinalStatus      FinalStatus
-	InputMessages    any
-	OutputMessages   any
-	InputPreview     string
-	OutputPreview    string
-	InputLength      int
-	OutputLength     int
-	Usage            Usage
-	CreditUsage      float64
-	LLMCalls         []LLMCall
-	ToolCalls        []ToolCall
-	AssistantOutputs []AssistantOutput
-	Resource         map[string]any
-	ExtraAttributes  map[string]any
-	ErrorType        string
-	Reason           string
+	AggregateUsageOnly bool
+	SessionID          string
+	TurnID             string
+	AgentRuntime       string
+	AgentName          string
+	AgentVersion       string
+	StartUnixNano      int64
+	EndUnixNano        int64
+	FinalStatus        FinalStatus
+	InputMessages      any
+	OutputMessages     any
+	InputPreview       string
+	OutputPreview      string
+	InputLength        int
+	OutputLength       int
+	Usage              Usage
+	CreditUsage        float64
+	LLMCalls           []LLMCall
+	ToolCalls          []ToolCall
+	AssistantOutputs   []AssistantOutput
+	Resource           map[string]any
+	ExtraAttributes    map[string]any
+	ErrorType          string
+	Reason             string
 }
 
 type SpanStatus struct {

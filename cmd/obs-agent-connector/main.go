@@ -11,6 +11,7 @@ import (
 	dcodehook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/dcode/hook"
 	grokhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/grok/hook"
 	kirohook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/kiro/hook"
+	openclawhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/openclaw/hook"
 	workbuddyhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/workbuddy/hook"
 	"github.com/GuanceCloud/obs-agent-connector/internal/app"
 )
@@ -32,6 +33,8 @@ func main() {
 			os.Exit(dcodehook.RunCLI(os.Args[3:]))
 		case "grok":
 			os.Exit(grokhook.RunCLI(os.Args[3:]))
+		case "openclaw":
+			os.Exit(openclawhook.RunCLI())
 		case "kiro":
 			os.Exit(kirohook.RunCLI(os.Args[3:]))
 		}
