@@ -16,15 +16,19 @@ import (
 
 func RunCLI() int {
 	cfg := config.Resolve(config.ResolveOptions{})
-	if err := Run(cfg, os.Stdin, nil); err != nil {
-		_ = hooklog.Append(cfg.LogFile, "OpenClaw telemetry failed", map[string]any{"error": err.Error()})
-	}
+	_ = Run(cfg, os.Stdin, nil)
 	return 0
 }
-func Run(cfg config.Config, input io.Reader, client *http.Client) error {
+func Run(cfg config.Config, input io.Reader, client *http.Client) (err error) {
 	if !cfg.Enabled {
 		return nil
 	}
+	defer func() {
+		if err != nil {
+			_ = hooklog.Append(cfg.LogFile, "hook failed", map[string]any{"error": err.Error()})
+		}
+	}()
+	_ = hooklog.Append(cfg.LogFile, hooklog.HookInvoked, nil)
 	body, err := io.ReadAll(io.LimitReader(input, 8*1024*1024+1))
 	if err != nil {
 		return fmt.Errorf("read OpenClaw event")
@@ -36,11 +40,22 @@ func Run(cfg config.Config, input io.Reader, client *http.Client) error {
 	if err != nil {
 		return fmt.Errorf("invalid OpenClaw event JSON")
 	}
-	e := exporter.Exporter{Root: cfg.StateDir, Transport: cfg.Transport, HTTPClient: client, Builder: semantic.Builder{ScopeName: "gtrace-openclaw-collector", ScopeVersion: buildinfo.Version}}
-	if turn, ok := parse.Normalize(payload, cfg); ok {
+	e := exporter.Exporter{Root: cfg.StateDir, LogFile: cfg.LogFile, Transport: cfg.Transport, HTTPClient: client, Builder: semantic.Builder{ScopeName: "gtrace-openclaw-collector", ScopeVersion: buildinfo.Version}}
+	if payload.Event == "flush" {
+		return e.Flush()
+	}
+	turn, ok := parse.Normalize(payload, cfg)
+	turns := 0
+	if ok {
+		turns = 1
+	}
+	_ = hooklog.Append(cfg.LogFile, hooklog.ParsedTranscript, map[string]any{"turns": turns})
+	if ok {
 		if err = e.Enqueue(turn); err != nil {
 			return err
 		}
+	} else {
+		_ = hooklog.Append(cfg.LogFile, "turn skipped", map[string]any{"reason": "no eligible terminal turn"})
 	}
 	return e.Flush()
 }

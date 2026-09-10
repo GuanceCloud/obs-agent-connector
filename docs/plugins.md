@@ -22,7 +22,7 @@
 
 ## OpenClaw
 
-The connector embeds a dependency-free native bridge and runs telemetry parsing, privacy filtering, and OTLP export in Go. It registers the bridge in `openclaw.json`, disables the previous `openclaw-otel-plugin` and explicitly configured `diagnostics-otel` entry, and preserves unrelated plugins. Restart the Gateway after installation or update. See [OpenClaw migration and limitations](product-research/openclaw.md).
+The connector embeds a dependency-free native bridge and runs telemetry parsing, privacy filtering, and OTLP export in Go. It registers the bridge in `openclaw.json`, disables the previous `openclaw-otel-plugin` and explicitly configured `diagnostics-otel` entry, and preserves unrelated plugins. Installation and update attempt to restart the Gateway; restart failures only produce a warning. See [OpenClaw migration and limitations](product-research/openclaw.md).
 
 ## WorkBuddy Migration
 

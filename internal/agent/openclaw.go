@@ -13,6 +13,16 @@ func openClawPlugin() Definition {
 		ConfigFiles: []string{"~/.obs-agent-connector/openclaw/gtrace.json"}, EnabledJSONPath: []string{"enabled"},
 		Markers: []string{"~/.obs-agent-connector/openclaw/plugin/runtime.json"},
 		Resolve: resolveOpenClaw,
+		ResolveRemove: func(d Definition) Definition {
+			d = resolveOpenClaw(d)
+			root := os.Getenv("OPENCLAW_STATE_DIR")
+			if root == "" {
+				root = ExpandHome("~/.openclaw")
+			}
+			d.RemovePaths = []string{filepath.Join(root, "extensions", "openclaw-otel-plugin"), filepath.Join(root, "plugins", "openclaw-otel-plugin")}
+			d.Markers = append(d.Markers, d.RemovePaths...)
+			return d
+		},
 		ResolveDiscovery: func(d Definition) (Definition, bool) {
 			d = resolveOpenClaw(d)
 			if PathExists(filepath.Dir(d.BuiltinHookFile)) {

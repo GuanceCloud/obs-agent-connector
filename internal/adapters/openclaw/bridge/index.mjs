@@ -1,9 +1,18 @@
 import { spawn } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, appendFileSync, mkdirSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 
 // No telemetry SDK or npm installation is required in the host process.
 export function registerBridge(api, launch = spawn, now = Date.now) {
   const runtime = JSON.parse(readFileSync(new URL('./runtime.json', import.meta.url), 'utf8'));
+  // Keep the same JSONL envelope as core/hooklog; never log payloads or raw errors.
+  const log = (message, extra) => {
+    try {
+      const file = runtime.logFile || join(dirname(runtime.configFile), 'gtrace-hooks.json');
+      mkdirSync(dirname(file), { recursive: true, mode: 0o755 });
+      appendFileSync(file, JSON.stringify({ ts: new Date(now()).toISOString(), message, extra }) + '\n', { mode: 0o644 });
+    } catch { /* Logging must not fail the host run. */ }
+  };
   const runs = new Map();
   let active = 0;
   let interval;
@@ -30,12 +39,12 @@ export function registerBridge(api, launch = spawn, now = Date.now) {
           env: { ...process.env, OPENCLAW_OTEL_CONFIG_FILE: runtime.configFile },
           shell: false, windowsHide: true, stdio: ['pipe', 'ignore', 'ignore'],
         });
-        child.on('error', finish);
-        child.on('close', finish);
-        child.stdin.on('error', () => {});
-        timer = setTimeout(() => { child.kill(); finish(); }, 25000);
+        child.on('error', () => { if (!done) log('bridge failed', { reason: 'spawn failed' }); finish(); });
+        child.on('close', (code) => { if (!done && code !== 0) log('bridge failed', { reason: 'child exited', code }); finish(); });
+        child.stdin.on('error', () => { if (!done) log('bridge failed', { reason: 'stdin failed' }); });
+        timer = setTimeout(() => { log('bridge failed', { reason: 'timeout', timeout_ms: 25000 }); finish(); try { child.kill(); } catch { /* Child may already be gone. */ } }, 25000);
         child.stdin.end(body);
-      } catch { finish(); }
+      } catch { log('bridge failed', { reason: 'spawn failed' }); finish(); }
     });
   };
   const keyFor = (event, ctx) => {

@@ -121,7 +121,7 @@ func InstallOpenClaw(options OpenClawOptions) (CodexResult, error) {
 		return CodexResult{}, err
 	}
 	for name, value := range map[string]any{
-		"runtime.json":         map[string]any{"command": executable, "args": []string{"hook", "openclaw"}, "configFile": cfgFile},
+		"runtime.json":         map[string]any{"command": executable, "args": []string{"hook", "openclaw"}, "configFile": cfgFile, "logFile": agentfiles.HookLogPath(home, "openclaw")},
 		"package.json":         map[string]any{"name": "obs-agent-connector-openclaw", "version": "0.0.0", "type": "module", "openclaw": map[string]any{"extensions": []string{"./index.mjs"}}},
 		"openclaw.plugin.json": map[string]any{"id": bridge.PluginID, "name": "OBS Agent Connector", "version": buildinfo.Version, "configSchema": map[string]any{"type": "object", "properties": map[string]any{}, "additionalProperties": false}},
 	} {
@@ -208,6 +208,11 @@ func openClawArray(parent map[string]any, key string) ([]any, error) {
 
 func removeOpenClaw(home string, options RemoveOptions) (RemoveResult, error) {
 	result := RemoveResult{Adapter: "openclaw", HookFile: OpenClawConfigPath(home), ConfigFile: agentfiles.ConfigPath(home, "openclaw")}
+	root := os.Getenv("OPENCLAW_STATE_DIR")
+	if root == "" {
+		root = filepath.Join(home, ".openclaw")
+	}
+	legacyDirs := []string{filepath.Join(root, "extensions", "openclaw-otel-plugin"), filepath.Join(root, "plugins", "openclaw-otel-plugin")}
 	host, exists, err := readJSONObjectIfExists(result.HookFile)
 	if err != nil {
 		return result, err
@@ -225,7 +230,7 @@ func removeOpenClaw(home string, options RemoveOptions) (RemoveResult, error) {
 			delete(entries, bridge.PluginID)
 			result.HookRemoved = true
 		}
-		// Keep legacy settings and files, but stop the old plugin from collecting.
+		// Preserve legacy settings while removing its registration and installed files.
 		if legacy, ok := entries["openclaw-otel-plugin"].(map[string]any); ok {
 			if enabled, explicit := legacy["enabled"].(bool); !explicit || enabled {
 				legacy["enabled"] = false
@@ -241,6 +246,19 @@ func removeOpenClaw(home string, options RemoveOptions) (RemoveResult, error) {
 		if err = removeOpenClawItem(plugins, "allow", bridge.PluginID); err != nil {
 			return result, err
 		}
+		if err = removeOpenClawItem(plugins, "allow", "openclaw-otel-plugin"); err != nil {
+			return result, err
+		}
+		if installs, ok := plugins["installs"].(map[string]any); ok {
+			delete(installs, "openclaw-otel-plugin")
+		}
+		if load, ok := plugins["load"].(map[string]any); ok {
+			for _, legacyDir := range legacyDirs {
+				if err = removeOpenClawItem(load, "paths", legacyDir); err != nil {
+					return result, err
+				}
+			}
+		}
 		if options.PurgeConfig {
 			if entry, ok := entries["openclaw-otel-plugin"].(map[string]any); ok {
 				delete(entry, "config")
@@ -250,11 +268,16 @@ func removeOpenClaw(home string, options RemoveOptions) (RemoveResult, error) {
 			return result, err
 		}
 	}
+	for _, legacyDir := range legacyDirs {
+		if err = os.RemoveAll(legacyDir); err != nil {
+			return result, err
+		}
+	}
 	if err = os.RemoveAll(filepath.Join(agentfiles.Directory(home, "openclaw"), "plugin")); err != nil {
 		return result, err
 	}
 	if options.PurgeConfig {
-		if err = removeConfigFiles(result.ConfigFile, filepath.Join(home, ".openclaw", "gtrace.json")); err != nil {
+		if err = removeConfigFiles(result.ConfigFile, filepath.Join(root, "gtrace.json")); err != nil {
 			return result, err
 		}
 		result.ConfigRemoved = true

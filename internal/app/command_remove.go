@@ -31,11 +31,16 @@ func remove(args []string) error {
 		return fmt.Errorf("unrecognized remove arguments: %s", strings.Join(fs.Args(), " "))
 	}
 
-	selected, err := agent.SelectInstalled(target)
+	selected, err := agent.Select(target)
 	if err != nil {
 		return err
 	}
 	selected = agent.ResolveForRemove(selected)
+	for _, p := range selected {
+		if _, installed := agent.InstalledMarker(p); !installed {
+			return fmt.Errorf("%s plugin is not installed", p.Name)
+		}
+	}
 	if len(selected) == 0 {
 		fmt.Println("No installed plugin found to remove.")
 		return nil

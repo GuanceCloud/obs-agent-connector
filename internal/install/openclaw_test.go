@@ -147,3 +147,50 @@ func TestOpenClawRemoveDisablesLegacyRegistration(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenClawLegacyCleanupPreservesOtherPlugins(t *testing.T) {
+	o := openClawOptions(t)
+	root := filepath.Join(o.Home, "custom-root")
+	t.Setenv("OPENCLAW_STATE_DIR", root)
+	legacy := filepath.Join(root, "extensions", "openclaw-otel-plugin")
+	other := filepath.Join(root, "extensions", "other")
+	for _, dir := range []string{legacy, other} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+	}
+	host := map[string]any{"plugins": map[string]any{
+		"allow":    []any{"openclaw-otel-plugin", "other"},
+		"load":     map[string]any{"paths": []any{legacy, other}},
+		"installs": map[string]any{"openclaw-otel-plugin": map[string]any{"installPath": legacy}, "other": map[string]any{"installPath": other}},
+		"entries":  map[string]any{"openclaw-otel-plugin": map[string]any{"enabled": true, "config": map[string]any{"captureContent": "none"}}, "other": map[string]any{"enabled": true}},
+	}}
+	if err := writeJSONAtomic(OpenClawConfigPath(o.Home), host); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RemoveAdapter("openclaw", o.Home, RemoveOptions{PurgeManaged: true}); err != nil {
+		t.Fatal(err)
+	}
+	result, err := readJSONObject(OpenClawConfigPath(o.Home))
+	if err != nil {
+		t.Fatal(err)
+	}
+	plugins := result["plugins"].(map[string]any)
+	if len(plugins["allow"].([]any)) != 1 || plugins["allow"].([]any)[0] != "other" {
+		t.Fatal("incorrect allowlist cleanup")
+	}
+	paths := plugins["load"].(map[string]any)["paths"].([]any)
+	if len(paths) != 1 || paths[0] != other {
+		t.Fatal("incorrect load path cleanup")
+	}
+	installs := plugins["installs"].(map[string]any)
+	if len(installs) != 1 || installs["other"] == nil {
+		t.Fatal("incorrect installation record cleanup")
+	}
+	if _, err := os.Stat(other); err != nil {
+		t.Fatal("unrelated plugin removed")
+	}
+	if _, err := os.Stat(legacy); !os.IsNotExist(err) {
+		t.Fatal("legacy plugin remains")
+	}
+}

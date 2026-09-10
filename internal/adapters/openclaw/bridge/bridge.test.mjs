@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, copyFileSync, writeFileSync, rmSync } from 'node:fs';
+import { readFileSync, mkdtempSync, copyFileSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -46,7 +46,17 @@ test('native bridge isolates runs, passes argv without a shell, and respects dis
     assert.equal(sent.length, 2);
     await service.stop();
     writeFileSync(configFile, '{"enabled":true}');
-    registerBridge({ on: (name, cb) => hooks.set(name, cb), registerService: () => {} }, () => { throw new Error('spawn failed'); });
+    registerBridge({ on: (name, cb) => hooks.set(name, cb), registerService: () => {} }, () => { throw new Error('secret-command-argument'); });
     await hooks.get('agent_end')({ runId: 'd', success: true }, { sessionId: 's' });
+    const logs = readFileSync(join(dir, 'gtrace-hooks.json'), 'utf8');
+    const event = JSON.parse(logs.trim());
+    assert.equal(event.message, 'bridge failed');
+    assert.equal(event.extra.reason, 'spawn failed');
+    assert.ok(Number.isFinite(Date.parse(event.ts)));
+    assert.ok(!logs.includes('secret-command-argument'));
+    // An unwritable logging destination remains fail-open.
+    writeFileSync(join(dir, 'runtime.json'), JSON.stringify({ command, configFile, logFile: dir }));
+    registerBridge({ on: (name, cb) => hooks.set(name, cb), registerService: () => {} }, () => { throw new Error('private'); });
+    await hooks.get('agent_end')({ runId: 'e', success: true }, { sessionId: 's' });
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

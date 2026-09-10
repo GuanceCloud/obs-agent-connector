@@ -102,7 +102,7 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 			NoConfig:              noConfig,
 		})
 		if err == nil {
-			printSingleDetail("Note", "Restart the OpenClaw Gateway to load the built-in bridge and unload previous telemetry plugins.")
+			restartOpenClawAfterInstall()
 		}
 	case "cursor":
 		_, err = telemetryinstall.InstallCursor(telemetryinstall.CursorOptions{

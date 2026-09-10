@@ -62,7 +62,7 @@ func TestRetryOnlyFailedSignalAndConcurrentDuplicate(t *testing.T) {
 	}))
 	defer server.Close()
 	root := t.TempDir()
-	e := Exporter{Root: root, Transport: transport.Config{Endpoint: server.URL, TracePath: "v1/traces", MetricsPath: "v1/metrics", Timeout: time.Second}, Builder: semantic.Builder{ScopeName: "test"}}
+	e := Exporter{Root: root, LogFile: filepath.Join(root, "hooks.json"), Transport: transport.Config{Endpoint: server.URL, TracePath: "v1/traces", MetricsPath: "v1/metrics", Timeout: time.Second}, Builder: semantic.Builder{ScopeName: "test"}}
 	turn := model.Turn{SessionID: "session", TurnID: "run", AgentRuntime: "openclaw", FinalStatus: model.FinalStatusCompleted, StartUnixNano: 1000000000, EndUnixNano: 2000000000, InputPreview: "hello", OutputPreview: "done"}
 	latency := 125.0
 	turn.LLMCalls = []model.LLMCall{{CallID: "call", Provider: "test", RequestModel: "small", Status: "ok", StartUnixNano: 1000000000, EndUnixNano: 2000000000, FirstChunkMs: &latency}}
@@ -107,5 +107,17 @@ func TestRetryOnlyFailedSignalAndConcurrentDuplicate(t *testing.T) {
 	}
 	if traces.Load() != 1 || metrics.Load() != 2 {
 		t.Fatal("completed turn uploaded again")
+	}
+	logs, err := os.ReadFile(e.LogFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for message, want := range map[string]int{"uploaded spans": 1, "uploaded metrics": 1, "upload failed": 1} {
+		if got := strings.Count(string(logs), `"message":"`+message+`"`); got != want {
+			t.Fatalf("%s logged %d times, want %d", message, got, want)
+		}
+	}
+	if !strings.Contains(string(logs), `"status":503`) {
+		t.Fatal("missing failure status")
 	}
 }

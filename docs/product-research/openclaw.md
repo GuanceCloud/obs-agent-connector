@@ -74,13 +74,17 @@ The old plugin entry is disabled but its config and files remain. An explicitly
 configured `diagnostics-otel` entry is also disabled to avoid duplicate reporting.
 Unrelated registration entries, load paths, and allowlist entries are retained.
 
-Restart the OpenClaw Gateway after installation or update to unload the previous
-plugin and load the embedded bridge. Install/update does not restart the Gateway.
+After a successful installation or update, the connector attempts `openclaw gateway restart`
+to unload the previous plugin and load the embedded bridge. The restart has a
+20-second timeout. Failure does not roll back or fail installation; a warning
+provides the manual restart command.
 
 `remove openclaw` unregisters the bridge and deletes the connector-managed
-OpenClaw directory and disables any legacy plugin entry while preserving its files
-and settings. Retained legacy directories do not count as a built-in installation
-in `list`. `--purge-config` also removes the legacy plugin's nested config.
+OpenClaw directory, removes legacy plugin directories under `extensions/` and
+`plugins/`, and disables the legacy plugin entry while preserving its settings.
+Legacy load paths, allowlist entries, and installation records are also removed.
+Legacy-only installations can be removed even though `list` only reports the
+built-in installation. `--purge-config` also removes the legacy plugin's nested config.
 Old telemetry plugins are not automatically re-enabled. `uninstall --keep-config`
 removes the bridge and upload state while retaining managed telemetry settings.
 
@@ -168,3 +172,17 @@ The observations are persisted with the terminal turn and follow the same
 independent Trace/Metrics retry path. Older hosts and harnesses that omit the
 native timing event produce no samples. Update the adapter and restart the
 OpenClaw Gateway to load the new bridge.
+
+## Hook diagnostics
+
+OpenClaw writes structured JSONL to `~/.obs-agent-connector/openclaw/gtrace-hooks.json`,
+using the shared `ts`, `message`, and optional `extra` envelope. Standard lifecycle
+messages are `hook invoked`, `parsed transcript`, `uploaded spans`, and
+`uploaded metrics`. Upload records include HTTP status and item counts; successful
+signals are not logged again when a duplicate event or retry skips their upload.
+
+Additional diagnostics include `hook failed`, `turn skipped`, `upload failed`, and
+`bridge failed`. Bridge failures report a fixed reason for spawn, stdin, child exit,
+or timeout errors, without recording raw errors or conversation payloads. Logging
+failures do not fail the host conversation. Periodic flushes may upload pending
+signals without a new transcript parsing record.

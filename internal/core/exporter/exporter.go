@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/metrics"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/model"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
@@ -23,6 +24,7 @@ import (
 
 type Exporter struct {
 	Root       string
+	LogFile    string
 	Transport  transport.Config
 	HTTPClient *http.Client
 	Builder    semantic.Builder
@@ -143,8 +145,14 @@ func (e Exporter) upload(turn model.Turn) error {
 		}
 		result, err := client.Upload(signal, body)
 		if err != nil {
+			_ = hooklog.Append(e.LogFile, "upload failed", map[string]any{"signal": signal, "status": result.StatusCode})
 			return fmt.Errorf("%s upload failed (status %d)", signal, result.StatusCode)
 		}
+		message, countKey, count := hooklog.UploadedSpans, "spans", len(spans)
+		if signal == "metrics" {
+			message, countKey, count = hooklog.UploadedMetrics, "metrics", len(ms)
+		}
+		_ = hooklog.Append(e.LogFile, message, map[string]any{"status": result.StatusCode, countKey: count})
 		if err = claim.MarkSignalUploaded(signal, nil); err != nil {
 			return err
 		}
