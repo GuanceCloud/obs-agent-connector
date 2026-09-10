@@ -73,6 +73,9 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 			}
 		}
 	}
+	if root.Attributes["status"] != "ok" {
+		t.Fatalf("invoke_agent status = %#v, want ok", root.Attributes["status"])
+	}
 	llm := findSpan(t, spans, "llm")
 	if llm.Attributes["gen_ai.usage.input_tokens"] != int64(13) || llm.Attributes["gen_ai.usage.output_tokens"] != int64(5) {
 		t.Fatalf("llm usage was not preserved: %#v", llm.Attributes)
@@ -90,7 +93,13 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 	if findSpan(t, spans, "skill:demo").ParentID != ids["tool:exec"] {
 		t.Fatal("skill must be a tool child")
 	}
+	if llm := findSpan(t, spans, "llm"); llm.Attributes["status"] != "ok" {
+		t.Fatalf("llm status = %#v, want ok", llm.Attributes["status"])
+	}
 	skill := findSpan(t, spans, "skill:demo")
+	if skill.Attributes["status"] != "completed" {
+		t.Fatalf("skill status = %#v, want explicit completed passthrough", skill.Attributes["status"])
+	}
 	if skill.Attributes["input_preview"] != "skill/demo" || skill.Attributes["output_preview"] != "done" {
 		t.Fatalf("unexpected skill previews: %#v", skill.Attributes)
 	}
@@ -101,8 +110,14 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 		t.Fatal("skill must not carry GTrace usage")
 	}
 	tool := findSpan(t, spans, "tool:exec")
+	if tool.Attributes["status"] != "ok" {
+		t.Fatalf("tool status = %#v, want ok", tool.Attributes["status"])
+	}
 	if tool.Attributes["triggered_by.llm_span_id"] != ids["llm"] {
 		t.Fatal("tool must reference the triggering llm")
+	}
+	if assistant := findSpan(t, spans, "assistant"); assistant.Attributes["status"] != "ok" {
+		t.Fatalf("assistant status = %#v, want ok", assistant.Attributes["status"])
 	}
 	if tool.Attributes["gtrace.observation.type"] != "tool" {
 		t.Fatalf("tool GTrace observation type is missing: %#v", tool.Attributes)
@@ -210,6 +225,70 @@ func TestBuildKeepsTerminalTurnWhenContentCaptureIsDisabled(t *testing.T) {
 		if _, exists := spans[0].Attributes[key]; exists {
 			t.Fatalf("content attribute %q must stay absent: %#v", key, spans[0].Attributes)
 		}
+	}
+}
+
+func TestBuildMarksInvokeAgentErrorWhenTurnCancelled(t *testing.T) {
+	now := time.Now().UnixNano()
+	spans := (Builder{}).Build(model.Turn{
+		SessionID:     "session-cancelled",
+		AgentRuntime:  "test-agent",
+		AgentName:     "test-agent",
+		StartUnixNano: now,
+		EndUnixNano:   now + int64(time.Second),
+		FinalStatus:   model.FinalStatusCancelled,
+		InputPreview:  "hello",
+		OutputPreview: "cancelled",
+		AssistantOutputs: []model.AssistantOutput{{
+			StartUnixNano: now,
+			EndUnixNano:   now + int64(time.Millisecond),
+			OutputPreview: "cancelled",
+			Status:        "ok",
+		}},
+	})
+	if len(spans) == 0 {
+		t.Fatal("expected spans for cancelled turn")
+	}
+	if spans[0].Attributes["status"] != "error" {
+		t.Fatalf("cancelled invoke_agent status = %#v, want error", spans[0].Attributes["status"])
+	}
+	if spans[0].Attributes["final_status"] != "cancelled" {
+		t.Fatalf("cancelled final_status was not preserved: %#v", spans[0].Attributes)
+	}
+	if _, exists := spans[0].Attributes["error.type"]; exists {
+		t.Fatal("cancellation must not invent an error type")
+	}
+	if assistant := findSpan(t, spans, "assistant"); assistant.Attributes["status"] != "ok" {
+		t.Fatalf("cancellation must not override child status: %#v", assistant.Attributes)
+	}
+}
+
+func TestBuildPreservesExplicitErrorsForTerminalTurns(t *testing.T) {
+	for _, finalStatus := range []model.FinalStatus{model.FinalStatusCompleted, model.FinalStatusCancelled} {
+		t.Run(string(finalStatus), func(t *testing.T) {
+			start := time.Date(2026, 8, 18, 0, 0, 0, 0, time.UTC).UnixNano()
+			spans := (Builder{}).Build(model.Turn{
+				StartUnixNano: start,
+				EndUnixNano:   start + int64(time.Second),
+				FinalStatus:   finalStatus,
+				InputPreview:  "hello",
+				ErrorType:     "test_error",
+				LLMCalls:      []model.LLMCall{{ErrorType: "test_error"}},
+				ToolCalls: []model.ToolCall{{
+					Name: "exec", ErrorType: "test_error",
+					Skill: &model.SkillUse{Name: "demo", ErrorType: "test_error"},
+				}},
+				AssistantOutputs: []model.AssistantOutput{{ErrorType: "test_error"}},
+			})
+			if len(spans) != 5 {
+				t.Fatalf("expected 5 spans, got %d", len(spans))
+			}
+			for _, span := range spans {
+				if span.Attributes["status"] != "error" || span.Status.Code != "STATUS_CODE_ERROR" || span.Attributes["error.type"] != "test_error" {
+					t.Fatalf("%s must preserve explicit error status: %#v", span.Name, span)
+				}
+			}
+		})
 	}
 }
 
