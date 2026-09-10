@@ -1,6 +1,6 @@
 # Plugin Matrix
 
-`obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, and WorkBuddy. Other Agents delegate installation and configuration generation to external plugin installers.
+`obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, and WorkBuddy. Other Agents delegate installation and configuration generation to external plugin installers.
 
 ## Supported Agents
 
@@ -13,6 +13,7 @@
 | `dcode` | Deep Agents Code with Hooks v2 (`dcode` 0.1.46 or later); normal `Stop` plus failed `SessionEnd` terminal telemetry | Current connector | `~/.obs-agent-connector/dcode/gtrace.json` | Managed Hooks in `~/.deepagents/hooks.json` |
 | `grok` | Grok Build CLI 1.0.5+ TUI/headless | Current connector | `~/.obs-agent-connector/grok/gtrace.json` | Managed global Hook in `~/.grok/hooks/obs-agent-connector.json` |
 | `kiro` | Kiro CLI V3 interactive TTY (`kiro-cli chat --v3`); default V2 and non-interactive modes are unsupported | Current connector | `~/.obs-agent-connector/kiro/gtrace.json` | Managed V3 global Hooks in `~/.kiro/hooks/obs-agent-connector.json` |
+| `omp` | Oh My Pi 18.1.15+ | Current connector | `~/.obs-agent-connector/omp/gtrace.json` | `~/.omp/agent/extensions/obs-agent-connector.js` |
 | `dsh` | DeepSeek Harness | Unix: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install.sh` Windows: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install-release.ps1` | `$DSH_HOME/gtrace.json` (default `~/.dsh/gtrace.json`) | `$DSH_HOME/profiles/<profile>/node_modules/dsh-otel-plugin` |
 | `hermes` | Hermes | `https://static.guance.com/agent_plugins/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/agent_plugins/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://static.guance.com/agent_plugins/opencode-otel-plugin/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
@@ -39,6 +40,10 @@ The connector owns `~/.grok/hooks/obs-agent-connector.json` and `~/.obs-agent-co
 
 See [Grok Build telemetry product research](product-research/grok.md) for schema and validation details.
 
+## OMP
+
+OMP uses a bundled native extension and a built-in Go worker. Fully exit and restart the OMP process after installing or updating; `/reload-plugins` does not reload this JavaScript extension. See [OMP integration](product-research/omp.md) for profiles, event semantics, validation, and limitations.
+
 ## Qoder Variants
 
 Both `qoder` and `qoder-cn` use the same plugin installer:
@@ -62,6 +67,7 @@ Windows installation and update are currently supported only for:
 - `dcode`
 - `grok`
 - `kiro`
+- `omp`
 - `codebuddy`
 - `dsh`
 - `opencode`
@@ -69,7 +75,7 @@ Windows installation and update are currently supported only for:
 - `qoder`
 - `workbuddy`
 
-Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, and WorkBuddy register the current connector executable directly. External plugins download their PowerShell installer from the configured OSS or GitHub source.
+Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, and WorkBuddy register the current connector executable directly. External plugins download their PowerShell installer from the configured OSS or GitHub source.
 If a user tries `install` or `update` with an unsupported Agent, the CLI returns a friendly error with the supported Windows Agent list.
 
 ## Install Parameters
@@ -84,9 +90,9 @@ At plugin install time, the CLI uses:
 | `Agent ID` | auto-generated `agid_<uuidv4-without-dashes>` or `--agent-id` override | `--tag agent_id=<value>` |
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
-The built-in Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, and WorkBuddy adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
+The built-in Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, and WorkBuddy adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
 
-Each built-in adapter writes structured Hook logs to `~/.obs-agent-connector/<agent>/gtrace-hooks.json`. Existing Agent-local configs are read as a compatibility fallback and are migrated into the managed directory when an install or config edit writes new values.
+Each built-in adapter writes structured Hook logs to `~/.obs-agent-connector/<agent>/gtrace-hooks.json`. For adapters with a legacy configuration layout, Agent-local configs are read as a compatibility fallback and are migrated into the managed directory when an install or config edit writes new values.
 
 The CLI always uses `--type gtrace`.
 
@@ -118,6 +124,7 @@ contract and add a regression test for the generated command.
 | `dcode` | `enabled` |
 | `grok` | `enabled` |
 | `kiro` | `enabled` |
+| `omp` | `enabled` |
 | `dsh` | `enabled` |
 | `opencode` | `enabled` |
 | `openclaw` | `plugins.entries.openclaw-otel-plugin.enabled` |

@@ -1,0 +1,60 @@
+// Exercise native lifecycle collection, including nested and late children.
+import assert from "node:assert/strict";
+import {mkdtempSync,writeFileSync,readFileSync,readdirSync,rmSync} from "node:fs";
+import {tmpdir} from "node:os";
+import {join} from "node:path";
+import {pathToFileURL} from "node:url";
+const root=mkdtempSync(join(tmpdir(),"omp-subagents-"));
+try {
+ const cfg=join(root,"gtrace.json");
+ writeFileSync(cfg,JSON.stringify({enabled:true,captureContent:"none"}));
+ const file=join(root,"extension.mjs");
+ writeFileSync(file,readFileSync(new URL("../internal/adapters/omp/bridge/extension.js",import.meta.url),"utf8").replaceAll("__CONNECTOR_EXECUTABLE__",JSON.stringify(process.execPath)).replaceAll("__CONNECTOR_CONFIG__",JSON.stringify(cfg)));
+ const {default:register}=await import(pathToFileURL(file));
+ function session(id) {
+  const path=join(root,id+".jsonl");writeFileSync(path,JSON.stringify({type:"title",v:1,title:""})+"\n"+JSON.stringify({type:"session",id,cwd:root})+"\n");
+  const hooks=new Map(),bus=new Map();
+  register({on:(n,f)=>hooks.set(n,f),events:{on:(n,f)=>{bus.set(n,f);return ()=>bus.delete(n);}}});
+  const ctx={cwd:root,sessionManager:{getSessionId:()=>id,getSessionFile:()=>path}};
+  const emit=(name,value={})=>hooks.get(name)?.(value,ctx);
+  emit("session_start");return {path,emit,frame:(name,value)=>bus.get("task:subagent:"+name)?.(value)};
+ }
+ const parent=session("parent"), child=session("child"), grand=session("grand");
+ const user={role:"user",content:"private input",timestamp:Date.now()};
+ const assistant={role:"assistant",content:[{type:"text",text:"private output"}],timestamp:Date.now(),stopReason:"stop",usage:{input:5,output:2}};
+ parent.emit("agent_start");parent.emit("message_start",{message:user});
+ parent.emit("tool_execution_start",{toolCallId:"delegate",toolName:"task",args:{task:"private"}});
+ const start={id:"child-agent",status:"started",sessionFile:child.path,parentToolCallId:"delegate"};
+ parent.frame("lifecycle",start);parent.frame("lifecycle",start);
+ child.emit("agent_start");child.emit("message_start",{message:user});
+ child.emit("context",{messages:[user]});
+ const event=e=>parent.frame("event",{id:"child-agent",event:e});
+ event({type:"message_start",message:user});
+ event({type:"tool_execution_start",toolCallId:"nested",toolName:"task",args:{task:"private"}});
+ child.frame("lifecycle",{id:"grand-agent",status:"started",sessionFile:grand.path,parentToolCallId:"nested"});
+ child.frame("event",{id:"grand-agent",event:{type:"message_start",message:user}});
+ child.frame("event",{id:"grand-agent",event:{type:"message_end",message:assistant}});
+ child.frame("lifecycle",{id:"grand-agent",status:"completed"});
+ event({type:"tool_execution_end",toolCallId:"nested",toolName:"task",result:{content:[]}});
+ parent.emit("tool_execution_end",{toolCallId:"delegate",toolName:"task",result:{content:[]}});
+ parent.emit("message_end",{message:assistant});parent.emit("agent_end");
+ event({type:"message_end",message:assistant});
+ child.emit("message_end",{message:assistant});child.emit("agent_end");
+ parent.frame("lifecycle",{id:"child-agent",status:"aborted"});
+ parent.frame("lifecycle",{id:"child-agent",status:"aborted"});
+ const queue=join(root,"state","queue");
+ const snapshots=readdirSync(queue).map(p=>JSON.parse(readFileSync(join(queue,p),"utf8")));
+ assert.equal(snapshots.length,3,"duplicate child hooks or missing lifecycle");
+ const byID=Object.fromEntries(snapshots.map(s=>[s.session_id,s]));
+ assert.equal(byID.child.parent.turn_id,byID.parent.turn_id);
+ assert.equal(byID.grand.parent.turn_id,byID.child.turn_id);
+ assert.equal(byID.child.trace_id,byID.parent.trace_id);
+ assert.equal(byID.grand.trace_id,byID.parent.trace_id);
+ assert.equal(byID.child.terminal_status,"aborted");
+ assert(byID.child.events.some(e=>e.type==="context"),"child context missing");
+ parent.frame("lifecycle",{id:"unknown",status:"started",sessionFile:child.path,parentToolCallId:"not-observed"});
+ parent.frame("lifecycle",{id:"unknown",status:"completed"});
+ assert.equal(readdirSync(queue).length,3,"guessed an unobserved parent");
+ assert(!JSON.stringify(snapshots).includes("private"));
+ console.log("OMP subagent tests passed: native IDs, nested/late completion, duplicates, privacy.");
+} finally {rmSync(root,{recursive:true,force:true});}

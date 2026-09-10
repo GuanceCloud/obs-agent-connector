@@ -35,6 +35,7 @@ type Definition struct {
 	ResolveInstall           func(Definition) (Definition, error)
 	ResolveRemove            func(Definition) Definition
 	ResolveDiscovery         func(Definition) (Definition, bool)
+	ResolveInstalled         func(Definition) (string, bool)
 }
 
 func (d Definition) IsBuiltin() bool {

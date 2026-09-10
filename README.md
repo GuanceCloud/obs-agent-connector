@@ -2,12 +2,12 @@
 
 `obs-agent-connector` is the single command-line runtime for installing, managing, and collecting OBS/GTrace telemetry across multiple AI coding agents.
 
-The tool provides one binary and one version for connector lifecycle operations and built-in telemetry adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, and WorkBuddy. Other Agents continue to use their external plugins.
+The tool provides one binary and one version for connector lifecycle operations and built-in telemetry adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, and WorkBuddy. Other Agents continue to use their external plugins.
 
 ## Features
 
 - Bootstrap the CLI and OBS defaults with one installer command.
-- Collect Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, and WorkBuddy turns through built-in adapters without separate repositories.
+- Collect Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, and WorkBuddy turns through built-in adapters without separate repositories.
 - Install external Agent plugins through their standard release installers.
 - Auto-discover local Agents, install missing plugins, and sync all plugins with `discover -u`.
 - Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
@@ -34,6 +34,7 @@ The tool provides one binary and one version for connector lifecycle operations 
 | `dcode` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Hooks v2 plus transcript replay; `Stop` completes normal turns and failed sessions fall back to `SessionEnd(reason=other)` |
 | `grok` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Grok Build CLI 1.0.5+; TUI/headless Hooks plus terminal `updates.jsonl` replay |
 | `kiro` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | V3 interactive TTY only (`kiro-cli chat --v3`); default V2 and `--no-interactive` do not load global Hooks |
+| `omp` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | OMP 18.1.15+; macOS ARM64 product-tested; Linux/Windows build-only validation |
 | `dsh` | `dsh-otel-plugin` | `✅` | `✅` | `✅` | DeepSeek Harness profile bundle |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
@@ -56,6 +57,7 @@ obs-agent-connector install dcode
 obs-agent-connector install grok
 obs-agent-connector install kiro
 obs-agent-connector install dsh
+obs-agent-connector install omp
 obs-agent-connector config codex list
 obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
 obs-agent-connector install opencode
@@ -84,8 +86,8 @@ External plugins use one installer contract for OSS and GitHub Release sources. 
 Compatibility note:
 
 - `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
-- Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, and WorkBuddy register the connector directly; external plugins use the PowerShell installer from the configured OSS or GitHub source.
+- On Windows, `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `omp`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
+- Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, and WorkBuddy register the connector directly; external plugins use the PowerShell installer from the configured OSS or GitHub source.
 
 Bootstrap the CLI with shared defaults:
 
@@ -99,7 +101,7 @@ For example, `https://llm-openway.guance.com` maps to `https://static.guance.com
 The downloaded package is verified against `SHA256SUMS` before installation.
 
 After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
-Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, and WorkBuddy are managed as built-in adapters with ordinary commands such as `install <agent>`, `status <agent>`, and `remove <agent>`.
+Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, and WorkBuddy are managed as built-in adapters with ordinary commands such as `install <agent>`, `status <agent>`, and `remove <agent>`.
 `install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
 The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
@@ -145,8 +147,10 @@ WorkBuddy is discovered when its profile directory exists, for example `~/.workb
 Kiro is discovered from `kiro-cli`, the modern `~/.kiro/session-index` store, or the legacy `~/.kiro/sessions/cli` store. Telemetry requires an interactive V3 TTY session started with `kiro-cli chat --v3`. Default V2 and `--no-interactive` sessions do not load standalone global Hooks and are not observable by this adapter. The adapter reads modern workspace-bucketed sessions under `~/.kiro/sessions` and remains compatible with legacy V3 terminal storage.
 DSH is discovered when the `dsh` command is in `PATH` or when `~/.dsh` exists. The connector installs the bundle into the `web` profile by default and honors `DSH_HOME` and `DSH_PROFILE` when set. DSH runtime configuration is generated and merged by `dsh-otel-plugin`; the connector only supplies the standard installer arguments.
 `enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
-`config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
+`config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `omp`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
 Removing any built-in adapter removes its connector-managed Hooks and matching `~/.obs-agent-connector/<agent>/` directory. Legacy Agent-local configuration is preserved unless `--purge-config` is supplied. `uninstall` removes all managed built-in adapters before removing the connector binary, configuration, and PATH entry; use `--keep-config` to retain connector-managed configuration.
+
+OMP uses a bundled JavaScript extension to capture lifecycle events and a built-in Go worker to upload terminal requests. See [OMP setup, profiles, and limitations](docs/product-research/omp.md).
 
 ## Build
 
