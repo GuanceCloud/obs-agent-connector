@@ -251,7 +251,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			}
 			call := llm(m, fmt.Sprintf("message-%d", i), at-int64(time.Millisecond), at, cfg)
 			for _, window := range windows {
-				if (window.messageID != "" && window.messageID == str(m, "id")) || (assistantCount == 1 && len(windows) == 1) {
+				if assistantCount == 1 && ((window.messageID != "" && window.messageID == str(m, "id")) || len(windows) == 1) {
 					call.StartUnixNano, call.EndUnixNano = window.start, window.end
 					call.ExtraAttributes["openclaw.timing_source"] = "native_hook_boundary"
 					break
@@ -366,9 +366,32 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 		}
 	}
 	if t.OutputPreview != "" || t.OutputLength > 0 || t.OutputMessages != nil {
-		t.AssistantOutputs = []model.AssistantOutput{{StartUnixNano: end, EndUnixNano: end, OutputPreview: t.OutputPreview, OutputMessages: t.OutputMessages, ExtraAttributes: map[string]any{"openclaw.timing_source": "terminal_output_event"}}}
+		// Match the legacy collector's model-end -> run-completion output phase,
+		// but only when an observed boundary exists; never pad for visibility.
+		var outputStart, lastToolEnd int64
+		for _, call := range t.LLMCalls {
+			if call.EndUnixNano > outputStart {
+				outputStart = call.EndUnixNano
+			}
+		}
+		for _, o := range p.Observations {
+			at := o.At * int64(time.Millisecond)
+			if o.Kind == "llm_output" && at >= start && at <= end && at > outputStart {
+				outputStart = at
+			}
+		}
+		for _, call := range t.ToolCalls {
+			if call.EndUnixNano > lastToolEnd {
+				lastToolEnd = call.EndUnixNano
+			}
+		}
+		source := "model_end_to_run_end"
+		if outputStart <= 0 || outputStart > end || outputStart < lastToolEnd {
+			outputStart, source = end, "terminal_output_event"
+		}
+		t.AssistantOutputs = []model.AssistantOutput{{StartUnixNano: outputStart, EndUnixNano: end, OutputPreview: t.OutputPreview, OutputMessages: t.OutputMessages, ExtraAttributes: map[string]any{"openclaw.timing_source": source}}}
 	}
-	if *p.Success && len(t.LLMCalls) == 0 && t.OutputLength == 0 {
+	if *p.Success && len(t.LLMCalls) == 0 && t.OutputLength == 0 && len(t.ToolCalls) == 0 && t.Usage == (model.Usage{}) {
 		return model.Turn{}, false
 	}
 	return t, true

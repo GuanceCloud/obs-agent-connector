@@ -120,7 +120,10 @@ boundaries only through a matching message ID or a single-message/single-window 
 Calls with no reliable timing are omitted instead of emitting a fabricated 1 ms
 duration; token usage remains a turn aggregate and
 `openclaw.llm_timing_unavailable=true` marks the missing timing. Assistant output
-is a zero-duration terminal event, not a second model-generation measurement. Both paths retain
+uses the observed final model/output completion through `agent_end`, following
+the legacy collector's output-finalization phase (`model_end_to_run_end`). This
+is runtime finalization, not measured client delivery latency. Without that
+boundary, it is a zero-duration terminal event. No minimum visible duration is added. Both paths retain
 `trace_completeness=partial`; missing call/content correlation is not reconstructed.
 Tool durations use native evidence when available.
 

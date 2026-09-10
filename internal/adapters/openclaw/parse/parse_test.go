@@ -160,7 +160,7 @@ func TestFirstChunkNativeTiming(t *testing.T) {
 	}
 }
 
-func TestHookTimingAndPointOutput(t *testing.T) {
+func TestHookTimingAndOutputPhase(t *testing.T) {
 	p, _ := Decode([]byte(fixture))
 	turn, ok := Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
 	if !ok || len(turn.LLMCalls) != 2 {
@@ -173,8 +173,8 @@ func TestHookTimingAndPointOutput(t *testing.T) {
 	}
 	spans := (semantic.Builder{}).Build(turn)
 	for _, span := range spans {
-		if span.Name == "assistant" && (span.EndTimeUnixNano != span.StartTimeUnixNano || span.DurationMs != 0) {
-			t.Fatal("assistant event has fabricated duration")
+		if span.Name == "assistant" && span.DurationMs != 100 {
+			t.Fatal("assistant output phase does not use observed completion")
 		}
 	}
 }
@@ -195,5 +195,34 @@ func TestSnapshotUsesSingleObservedHookWindow(t *testing.T) {
 	turn, ok = Normalize(p, config.Config{})
 	if !ok || len(turn.LLMCalls) != 0 || !turn.AggregateUsageOnly {
 		t.Fatal("ambiguous hook timing fabricated")
+	}
+}
+
+func TestLongNativeCallAndOutputPhase(t *testing.T) {
+	p, _ := Decode([]byte(fixture))
+	p.At = 2040470
+	p.DurationMs = 41470
+	p.Observations = []Observation{{Kind: "model_call_ended", At: 2040000, Event: map[string]any{"runId": "r1", "callId": "call1", "provider": "test", "durationMs": float64(40000), "outcome": "completed"}}}
+	p.Messages = []map[string]any{{"role": "user", "timestamp": float64(1999000), "content": "hi"}, {"role": "assistant", "timestamp": float64(2040000), "content": "done", "usage": map[string]any{"input": float64(10)}}}
+	turn, ok := Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
+	if !ok || len(turn.LLMCalls) != 1 || len(turn.AssistantOutputs) != 1 {
+		t.Fatal("missing timed turn")
+	}
+	spans := (semantic.Builder{}).Build(turn)
+	for _, span := range spans {
+		want := map[string]int64{"invoke_agent": 41470, "llm": 40000, "assistant": 470}
+		if duration, found := want[span.Name]; found && span.DurationMs != duration {
+			t.Fatalf("%s duration %d, want %d", span.Name, span.DurationMs, duration)
+		}
+	}
+	p.Observations = nil
+	turn, ok = Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
+	if !ok || len(turn.LLMCalls) != 0 || turn.Usage.InputTokens != 10 {
+		t.Fatal("untimed snapshot lost or fabricated timing")
+	}
+	for _, span := range (semantic.Builder{}).Build(turn) {
+		if span.Name == "assistant" && (span.DurationMs != 0 || span.StartTimeUnixNano != span.EndTimeUnixNano) {
+			t.Fatal("unknown output phase was padded")
+		}
 	}
 }
