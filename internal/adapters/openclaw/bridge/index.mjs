@@ -65,9 +65,11 @@ export function registerBridge(api, launch = spawn, now = Date.now) {
       if (kind === 'llm_input' && run.prompt === undefined) run.prompt = event.prompt;
       if (run.observations.length < 256) {
         // Copy the selected fields; never retain mutable host event objects or headers.
-        const fields = kind === 'llm_input' ? ['provider', 'model', 'prompt'] :
-          kind === 'llm_output' ? ['provider', 'model', 'lastAssistant', 'assistantTexts', 'usage'] :
-          kind === 'model_call_ended' ? ['runId', 'callId', 'provider', 'model', 'durationMs', 'outcome', 'errorCategory', 'timeToFirstByteMs'] :
+        const fields = kind === 'llm_input' ? ['provider', 'model', 'systemPrompt', 'prompt', 'historyMessages', 'imagesCount', 'tools'] :
+          kind === 'llm_output' ? ['provider', 'model', 'resolvedRef', 'prompt', 'lastAssistant', 'assistantTexts', 'usage', 'reasoningEffort'] :
+          kind === 'model_call_started' ? ['runId', 'callId', 'provider', 'model', 'api', 'transport'] :
+          kind === 'model_call_ended' ? ['runId', 'callId', 'provider', 'model', 'api', 'transport', 'durationMs', 'outcome', 'errorCategory', 'failureKind', 'timeToFirstByteMs'] :
+          kind === 'before_tool_call' ? ['toolName', 'toolKind', 'toolInputKind', 'toolCallId', 'params'] :
           ['toolName', 'toolCallId', 'params', 'result', 'error', 'durationMs'];
         const value = Object.fromEntries(fields.filter(k => event[k] !== undefined).map(k => [k, event[k]]));
         const encoded = JSON.stringify(value);
@@ -78,7 +80,7 @@ export function registerBridge(api, launch = spawn, now = Date.now) {
       }
     } catch { /* Observers must never fail the host run. */ }
   };
-  for (const kind of ['llm_input', 'llm_output', 'after_tool_call', 'model_call_ended']) api.on(kind, observe(kind));
+  for (const kind of ['llm_input', 'llm_output', 'model_call_started', 'model_call_ended', 'before_tool_call', 'after_tool_call']) api.on(kind, observe(kind));
   api.on('agent_end', (event, ctx = {}) => {
     try {
       const key = keyFor(event, ctx);

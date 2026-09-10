@@ -17,25 +17,29 @@ type Usage struct {
 }
 
 type LLMCall struct {
-	CallID          string
-	StartUnixNano   int64
-	EndUnixNano     int64
-	Provider        string
-	RequestModel    string
-	ResponseModel   string
-	InputMessages   any
-	OutputMessages  any
-	InputPreview    string
-	OutputPreview   string
-	OutputKind      string
-	FinishReasons   []string
-	Usage           Usage
-	TTFTMs          float64
-	FirstChunkMs    *float64
-	Status          string
-	ErrorType       string
-	Reason          string
-	ExtraAttributes map[string]any
+	CallID             string
+	StartUnixNano      int64
+	EndUnixNano        int64
+	Provider           string
+	RequestModel       string
+	ResponseModel      string
+	InputMessages      any
+	OutputMessages     any
+	SystemInstructions any
+	ToolDefinitions    any
+	InputPreview       string
+	OutputPreview      string
+	InputLength        int
+	OutputLength       int
+	OutputKind         string
+	FinishReasons      []string
+	Usage              Usage
+	TTFTMs             float64
+	FirstChunkMs       *float64
+	Status             string
+	ErrorType          string
+	Reason             string
+	ExtraAttributes    map[string]any
 }
 
 type SkillUse struct {
@@ -76,6 +80,7 @@ type AssistantOutput struct {
 	EndUnixNano     int64
 	OutputMessages  any
 	OutputPreview   string
+	OutputLength    int
 	OutputKind      string
 	Provider        string
 	RequestModel    string
@@ -98,6 +103,11 @@ type Turn struct {
 	FinalStatus        FinalStatus
 	InputMessages      any
 	OutputMessages     any
+	OutputKind         string
+	Provider           string
+	RequestModel       string
+	ResponseModel      string
+	FinishReasons      []string
 	InputPreview       string
 	OutputPreview      string
 	InputLength        int

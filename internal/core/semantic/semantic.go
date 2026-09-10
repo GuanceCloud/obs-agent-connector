@@ -45,6 +45,20 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 	setDefault(resource, "agent_runtime", turn.AgentRuntime)
 	setDefault(resource, "agent_name", turn.AgentName)
 	setDefault(resource, "agent_version", turn.AgentVersion)
+	setDefault(resource, "gen_ai.agent.name", turn.AgentName)
+	setDefault(resource, "gen_ai.agent.version", turn.AgentVersion)
+	rootOutputKind := firstNonEmpty(turn.OutputKind, messageOutputKind(turn.OutputMessages))
+	rootProvider, rootRequestModel, rootResponseModel := turn.Provider, turn.RequestModel, turn.ResponseModel
+	rootFinishReasons := turn.FinishReasons
+	if len(turn.LLMCalls) > 0 {
+		last := turn.LLMCalls[len(turn.LLMCalls)-1]
+		rootProvider = firstNonEmpty(rootProvider, last.Provider)
+		rootRequestModel = firstNonEmpty(rootRequestModel, last.RequestModel)
+		rootResponseModel = firstNonEmpty(rootResponseModel, last.ResponseModel)
+		if len(rootFinishReasons) == 0 {
+			rootFinishReasons = last.FinishReasons
+		}
+	}
 
 	rootAttrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 	rootAttrs["gen_ai.operation.name"] = "invoke_agent"
@@ -57,6 +71,12 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 	setAttr(rootAttrs, "reason", turn.Reason)
 	setAttr(rootAttrs, "gen_ai.input.messages", turn.InputMessages)
 	setAttr(rootAttrs, "gen_ai.output.messages", turn.OutputMessages)
+	setAttr(rootAttrs, "gen_ai.output.type", outputType(rootOutputKind))
+	setAttr(rootAttrs, "gen_ai.provider.name", rootProvider)
+	setAttr(rootAttrs, "gen_ai.request.model", rootRequestModel)
+	setAttr(rootAttrs, "gen_ai.response.model", rootResponseModel)
+	setAttr(rootAttrs, "gen_ai.response.finish_reasons", rootFinishReasons)
+	setAttr(rootAttrs, "output_kind", rootOutputKind)
 	setAttr(rootAttrs, "input_preview", turn.InputPreview)
 	setAttr(rootAttrs, "output_preview", turn.OutputPreview)
 	setAttr(rootAttrs, "input_length", positiveInt(turn.InputLength))
@@ -78,6 +98,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 
 	for _, call := range turn.LLMCalls {
 		callStart, callEnd := normalizeWindow(call.StartUnixNano, call.EndUnixNano, start, end)
+		callOutputKind := firstNonEmpty(call.OutputKind, messageOutputKind(call.OutputMessages))
 		spanID := randomHex(8)
 		attrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 		attrs["gen_ai.operation.name"] = "chat"
@@ -87,10 +108,15 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 		setAttr(attrs, "gen_ai.response.model", call.ResponseModel)
 		setAttr(attrs, "gen_ai.input.messages", call.InputMessages)
 		setAttr(attrs, "gen_ai.output.messages", call.OutputMessages)
+		setAttr(attrs, "gen_ai.output.type", outputType(callOutputKind))
+		setAttr(attrs, "gen_ai.system_instructions", call.SystemInstructions)
+		setAttr(attrs, "gen_ai.tool.definitions", call.ToolDefinitions)
 		setAttr(attrs, "gen_ai.response.finish_reasons", call.FinishReasons)
 		setAttr(attrs, "input_preview", call.InputPreview)
 		setAttr(attrs, "output_preview", call.OutputPreview)
-		setAttr(attrs, "output_kind", call.OutputKind)
+		setAttr(attrs, "input_length", positiveInt(call.InputLength))
+		setAttr(attrs, "output_length", positiveInt(call.OutputLength))
+		setAttr(attrs, "output_kind", callOutputKind)
 		setAttr(attrs, "ttft", positiveFloat(call.TTFTMs))
 		if call.FirstChunkMs != nil && *call.FirstChunkMs >= 0 && !math.IsNaN(*call.FirstChunkMs) && !math.IsInf(*call.FirstChunkMs, 0) && *call.FirstChunkMs <= float64(callEnd-callStart)/1e6 {
 			attrs["gen_ai.response.time_to_first_chunk"] = *call.FirstChunkMs / 1000
@@ -157,6 +183,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 
 	for _, output := range turn.AssistantOutputs {
 		outputStart, outputEnd := normalizeWindow(output.StartUnixNano, output.EndUnixNano, start, end)
+		outputKind := firstNonEmpty(output.OutputKind, messageOutputKind(output.OutputMessages))
 		// Explicit in-range point events have no measured duration.
 		if output.StartUnixNano > 0 && output.StartUnixNano == output.EndUnixNano && output.StartUnixNano >= start && output.EndUnixNano <= end {
 			outputStart, outputEnd = output.StartUnixNano, output.EndUnixNano
@@ -165,8 +192,10 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 		attrs["status"] = firstNonEmpty(output.Status, operationStatusValue(output.ErrorType))
 		setAttr(attrs, "role", "assistant")
 		setAttr(attrs, "gen_ai.output.messages", output.OutputMessages)
+		setAttr(attrs, "gen_ai.output.type", outputType(outputKind))
 		setAttr(attrs, "output_preview", output.OutputPreview)
-		setAttr(attrs, "output_kind", output.OutputKind)
+		setAttr(attrs, "output_length", positiveInt(output.OutputLength))
+		setAttr(attrs, "output_kind", outputKind)
 		setAttr(attrs, "gen_ai.provider.name", output.Provider)
 		setAttr(attrs, "gen_ai.request.model", output.RequestModel)
 		setAttr(attrs, "gen_ai.response.model", output.ResponseModel)
@@ -183,6 +212,48 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 		}
 	}
 	return spans
+}
+
+func outputType(kind string) string {
+	switch strings.ToLower(strings.TrimSpace(kind)) {
+	case "text", "json", "image", "speech":
+		return strings.ToLower(strings.TrimSpace(kind))
+	default:
+		return ""
+	}
+}
+
+func messageOutputKind(value any) string {
+	if encoded, ok := value.(string); ok {
+		var decoded any
+		if json.Unmarshal([]byte(encoded), &decoded) != nil {
+			return ""
+		}
+		value = decoded
+	}
+	messages, ok := value.([]any)
+	if !ok {
+		return ""
+	}
+	kind := ""
+	for _, rawMessage := range messages {
+		message, _ := rawMessage.(map[string]any)
+		parts, _ := message["parts"].([]any)
+		for _, rawPart := range parts {
+			part, _ := rawPart.(map[string]any)
+			switch strings.ToLower(strings.TrimSpace(stringValue(part["type"]))) {
+			case "tool_call":
+				return "tool_call"
+			case "text":
+				kind = "text"
+			case "reasoning":
+				if kind == "" {
+					kind = "reasoning"
+				}
+			}
+		}
+	}
+	return kind
 }
 
 func observable(turn model.Turn) bool {

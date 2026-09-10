@@ -19,6 +19,25 @@ type Observation struct {
 	At    int64          `json:"at"`
 	Event map[string]any `json:"event"`
 }
+
+type hookWindow struct {
+	start, end         int64
+	messageID          string
+	provider           string
+	model              string
+	inputMessages      any
+	outputMessages     any
+	systemInstructions any
+	toolDefinitions    any
+	inputPreview       string
+	outputPreview      string
+	inputLength        int
+	outputLength       int
+	outputKind         string
+	finishReasons      []string
+	reasoningEffort    string
+}
+
 type Payload struct {
 	Event        string           `json:"event"`
 	At           int64            `json:"at"`
@@ -87,21 +106,11 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 	if strings.TrimSpace(input) == "" {
 		return model.Turn{}, false
 	}
-	t.InputLength = len(input)
+	t.InputLength = len([]rune(input))
 	t.InputPreview = preview(input, cfg)
 	t.InputMessages = textMessages("user", input, cfg)
 	// Per-message usage is authoritative. llm_output may summarize an entire
 	// attempt, so its aggregate usage must never be assigned to one LLM call.
-	type hookWindow struct {
-		start, end     int64
-		messageID      string
-		provider       string
-		model          string
-		inputMessages  any
-		outputMessages any
-		inputPreview   string
-		outputPreview  string
-	}
 	windows := map[int]hookWindow{}
 	var inputAt int64
 	var inputEvent map[string]any
@@ -119,7 +128,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 				inputEvent = o.Event
 			}
 		}
-		if o.Kind == "after_tool_call" && inputAt != 0 {
+		if (o.Kind == "before_tool_call" || o.Kind == "after_tool_call") && inputAt != 0 {
 			ambiguous = true
 		}
 		if o.Kind == "llm_output" {
@@ -135,10 +144,14 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 				if modelName == "" {
 					modelName = str(inputEvent, "model")
 				}
+				normalizedOutput := normalizeMessages([]any{m}, cfg)
 				windows[i] = hookWindow{
 					start: inputAt, end: at, messageID: str(m, "id"), provider: provider, model: modelName,
-					inputMessages: textMessages("user", inputText, cfg), outputMessages: textMessages("assistant", outputText, cfg),
+					inputMessages: inputMessages(inputEvent, cfg), outputMessages: normalizedOutput,
+					systemInstructions: systemInstructions(str(inputEvent, "systemPrompt"), cfg), toolDefinitions: toolDefinitions(inputEvent["tools"], cfg),
 					inputPreview: preview(inputText, cfg), outputPreview: preview(outputText, cfg),
+					inputLength: len([]rune(inputText)), outputLength: len([]rune(outputText)),
+					outputKind: messagesOutputKind(normalizedOutput), finishReasons: finishReasons(m), reasoningEffort: str(o.Event, "reasoningEffort"),
 				}
 			}
 			inputAt, inputEvent, ambiguous = 0, nil, false
@@ -157,6 +170,22 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 	var modelCalls []model.LLMCall
 	seenTools := map[string]bool{}
 	seenLLM := map[string]bool{}
+	modelStarts := map[string]int64{}
+	toolStarts := map[string]int64{}
+	for _, o := range p.Observations {
+		at := o.At * int64(time.Millisecond)
+		if at < start || at > end {
+			continue
+		}
+		id := str(o.Event, "callId")
+		if o.Kind == "model_call_started" && id != "" && str(o.Event, "runId") == p.RunID {
+			modelStarts[id] = at
+		}
+		id = str(o.Event, "toolCallId")
+		if o.Kind == "before_tool_call" && id != "" {
+			toolStarts[id] = at
+		}
+	}
 	for i, o := range p.Observations {
 		at := o.At * int64(time.Millisecond)
 		if at < start || at > end {
@@ -168,16 +197,28 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			id := str(ev, "callId")
 			duration, validDuration := ev["durationMs"].(float64)
 			outcome := str(ev, "outcome")
-			if id == "" || str(ev, "provider") == "" || seenCalls[id] || str(ev, "runId") != p.RunID || !validDuration || math.IsNaN(duration) || math.IsInf(duration, 0) || duration < 0 || duration > 86400000 || (outcome != "completed" && outcome != "error") {
+			observedStart := modelStarts[id]
+			hasObservedWindow := observedStart > 0 && observedStart < at
+			if id == "" || str(ev, "provider") == "" || seenCalls[id] || str(ev, "runId") != p.RunID || !validDuration || math.IsNaN(duration) || math.IsInf(duration, 0) || duration < 0 || duration > 86400000 || (duration == 0 && !hasObservedWindow) || (outcome != "completed" && outcome != "error") {
 				continue
 			}
 			seenCalls[id] = true
-			call := model.LLMCall{CallID: id, Provider: str(ev, "provider"), RequestModel: str(ev, "model"), StartUnixNano: at - int64(duration*float64(time.Millisecond)), EndUnixNano: at, Status: "ok", ExtraAttributes: map[string]any{"openclaw.model_call_id": id, "openclaw.timing_source": "native_model_call"}}
+			callStart := at - int64(duration*float64(time.Millisecond))
+			if hasObservedWindow {
+				callStart = observedStart
+			}
+			call := model.LLMCall{CallID: id, Provider: str(ev, "provider"), RequestModel: str(ev, "model"), ResponseModel: str(ev, "model"), StartUnixNano: callStart, EndUnixNano: at, Status: "ok", ExtraAttributes: map[string]any{"openclaw.model_call_id": id, "openclaw.timing_source": "native_model_call"}}
 			if outcome == "error" {
 				call.Status = "error"
 				call.ErrorType = str(ev, "errorCategory")
 				if call.ErrorType == "" {
+					call.ErrorType = str(ev, "failureKind")
+				}
+				if call.ErrorType == "" {
 					call.ErrorType = "_OTHER"
+				}
+				if str(ev, "failureKind") == "aborted" {
+					call.FinishReasons = []string{"cancelled"}
 				}
 			}
 			if latency, ok := ev["timeToFirstByteMs"].(float64); ok && !math.IsNaN(latency) && !math.IsInf(latency, 0) && latency >= 0 && latency <= duration {
@@ -187,11 +228,8 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			modelCalls = append(modelCalls, call)
 
 		case "llm_output":
-			if snapshotLLM {
-				continue
-			}
 			m := assistantMessage(o.Event)
-			if contentText(m["content"]) == "" {
+			if contentText(m["content"]) == "" && rawOutputKind(m) == "" {
 				continue
 			}
 			id := str(m, "id")
@@ -204,19 +242,17 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			seenLLM[id] = true
 			call := llm(m, id, at-int64(time.Millisecond), at, cfg)
 			if window, ok := windows[i]; ok {
-				call.StartUnixNano, call.EndUnixNano = window.start, window.end
-				call.InputMessages, call.OutputMessages = window.inputMessages, window.outputMessages
-				call.InputPreview, call.OutputPreview = window.inputPreview, window.outputPreview
+				applyWindow(&call, window)
 				call.ExtraAttributes["openclaw.timing_source"] = "native_hook_boundary"
 			}
 			call.Provider = str(o.Event, "provider")
 			call.RequestModel = str(o.Event, "model")
 			call.ResponseModel = call.RequestModel
 			t.LLMCalls = append(t.LLMCalls, call)
-			t.OutputLength = len(contentText(m["content"]))
+			t.OutputLength = len([]rune(contentText(m["content"])))
 			t.OutputPreview = call.OutputPreview
 			t.OutputMessages = call.OutputMessages
-			if len(call.FinishReasons) > 0 && call.FinishReasons[0] == "aborted" {
+			if len(call.FinishReasons) > 0 && call.FinishReasons[0] == "cancelled" {
 				t.FinalStatus = model.FinalStatusCancelled
 				t.ErrorType = "cancelled"
 			}
@@ -227,12 +263,17 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 				continue
 			}
 			seenTools[id] = true
-			duration := number(ev["durationMs"])
-			toolStart := at - int64(duration*float64(time.Millisecond))
-			if toolStart < start || toolStart >= at {
-				toolStart = at - int64(time.Millisecond)
+			duration, validDuration := ev["durationMs"].(float64)
+			toolStart := int64(0)
+			if validDuration && !math.IsNaN(duration) && !math.IsInf(duration, 0) && duration > 0 && duration <= 86400000 {
+				toolStart = at - int64(duration*float64(time.Millisecond))
+			} else {
+				toolStart = toolStarts[id]
 			}
-			call := model.ToolCall{CallID: id, Name: str(ev, "toolName"), StartUnixNano: toolStart, EndUnixNano: at, Status: "ok", ResultStatus: "success"}
+			if toolStart < start || toolStart >= at {
+				continue
+			}
+			call := model.ToolCall{CallID: id, Name: str(ev, "toolName"), StartUnixNano: toolStart, EndUnixNano: at, Command: commandValue(ev["params"], cfg), Status: "ok", ResultStatus: "completed"}
 			if str(ev, "error") != "" {
 				call.Status = "error"
 				call.ErrorType = "tool_error"
@@ -256,11 +297,14 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 		if at > 0 && (at < start-int64(time.Second) || at > end+int64(time.Second)) {
 			continue
 		}
+		if normalized := normalizeMessages([]any{m}, cfg); normalized != nil {
+			t.OutputMessages = normalized
+			t.OutputKind = messagesOutputKind(normalized)
+		}
 		output := contentText(m["content"])
 		if output != "" {
 			t.OutputPreview = preview(output, cfg)
-			t.OutputLength = len(output)
-			t.OutputMessages = textMessages("assistant", output, cfg)
+			t.OutputLength = len([]rune(output))
 		}
 		if !nativeLLM {
 			if at <= 0 || at > end {
@@ -269,9 +313,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			call := llm(m, fmt.Sprintf("message-%d", i), at-int64(time.Millisecond), at, cfg)
 			for _, window := range windows {
 				if assistantCount == 1 && ((window.messageID != "" && window.messageID == str(m, "id")) || len(windows) == 1) {
-					call.StartUnixNano, call.EndUnixNano = window.start, window.end
-					call.InputMessages, call.OutputMessages = window.inputMessages, window.outputMessages
-					call.InputPreview, call.OutputPreview = window.inputPreview, window.outputPreview
+					applyWindow(&call, window)
 					call.ExtraAttributes["openclaw.timing_source"] = "native_hook_boundary"
 					break
 				}
@@ -304,15 +346,16 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 					continue
 				}
 				seenTools[id] = true
-				tool := model.ToolCall{CallID: id, TriggeringLLMCall: fmt.Sprintf("message-%d", i), Name: str(block, "name"), StartUnixNano: at, EndUnixNano: at + int64(time.Millisecond), Status: "unset", ExtraAttributes: map[string]any{"openclaw.timing_source": "estimated_message_boundary"}}
+				tool := model.ToolCall{CallID: id, TriggeringLLMCall: fmt.Sprintf("message-%d", i), Name: str(block, "name"), StartUnixNano: at, Command: commandValue(block["arguments"], cfg), Status: "unset", ExtraAttributes: map[string]any{"openclaw.timing_source": "transcript_result_boundary"}}
 				if cfg.CaptureContent != "none" {
 					tool.Arguments = privacy.Sanitize(block["arguments"], cfg.MaxChars)
 				}
 				attachSkill(&tool, block["arguments"], cfg)
+				resolved := false
 				for _, result := range messages {
 					if str(result, "role") == "toolResult" && str(result, "toolCallId") == id {
 						tool.Status = "ok"
-						tool.ResultStatus = "success"
+						tool.ResultStatus = "completed"
 						if failed, _ := result["isError"].(bool); failed {
 							tool.Status = "error"
 							tool.ErrorType = "tool_error"
@@ -323,13 +366,13 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 						}
 						if ts := timestamp(result["timestamp"]); ts > at && ts <= end {
 							tool.EndUnixNano = ts
+							resolved = true
 						}
 						break
 					}
 				}
-				if tool.EndUnixNano > end {
-					tool.EndUnixNano = end
-					tool.StartUnixNano = end - int64(time.Millisecond)
+				if !resolved {
+					continue
 				}
 				if tool.Skill != nil {
 					tool.Skill.Status = tool.Status
@@ -345,11 +388,17 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 		t.OutputPreview = last.OutputPreview
 		t.OutputMessages = last.OutputMessages
 	}
-	for _, call := range t.LLMCalls {
-		t.Usage.InputTokens += call.Usage.InputTokens
-		t.Usage.OutputTokens += call.Usage.OutputTokens
-		t.Usage.CacheReadTokens += call.Usage.CacheReadTokens
-		t.Usage.CacheCreateTokens += call.Usage.CacheCreateTokens
+	if snapshotLLM {
+		for _, message := range messages {
+			at := timestamp(message["timestamp"])
+			if str(message, "role") == "assistant" && at >= start && at <= end {
+				addUsage(&t.Usage, usageMap(message["usage"]))
+			}
+		}
+	} else {
+		for _, call := range t.LLMCalls {
+			addUsage(&t.Usage, call.Usage)
+		}
 	}
 	if len(modelCalls) == 0 {
 		measured := make([]model.LLMCall, 0, len(t.LLMCalls))
@@ -395,8 +444,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 				continue
 			}
 			window := windows[windowKeys[matches[0]]]
-			modelCalls[callIndex].InputMessages, modelCalls[callIndex].OutputMessages = window.inputMessages, window.outputMessages
-			modelCalls[callIndex].InputPreview, modelCalls[callIndex].OutputPreview = window.inputPreview, window.outputPreview
+			applyWindowContent(&modelCalls[callIndex], window)
 			modelCalls[callIndex].ExtraAttributes["openclaw.content_source"] = "unique_hook_window"
 		}
 		// Transcript usage is a turn aggregate. Do not join it to native calls by
@@ -412,6 +460,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			}
 		}
 	}
+	applyTurnSummary(&t)
 	if t.OutputPreview != "" || t.OutputLength > 0 || t.OutputMessages != nil {
 		// Match the legacy collector's model-end -> run-completion output phase,
 		// but only when an observed boundary exists; never pad for visibility.
@@ -436,7 +485,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 		if outputStart <= 0 || outputStart > end || outputStart < lastToolEnd {
 			outputStart, source = end, "terminal_output_event"
 		}
-		t.AssistantOutputs = []model.AssistantOutput{{StartUnixNano: outputStart, EndUnixNano: end, OutputPreview: t.OutputPreview, OutputMessages: t.OutputMessages, ExtraAttributes: map[string]any{"openclaw.timing_source": source}}}
+		t.AssistantOutputs = []model.AssistantOutput{{StartUnixNano: outputStart, EndUnixNano: end, OutputPreview: t.OutputPreview, OutputMessages: t.OutputMessages, OutputLength: t.OutputLength, OutputKind: t.OutputKind, Provider: t.Provider, RequestModel: t.RequestModel, ResponseModel: t.ResponseModel, Status: statusValue(t.ErrorType), ErrorType: t.ErrorType, Reason: t.Reason, ExtraAttributes: map[string]any{"openclaw.timing_source": source}}}
 	}
 	if *p.Success && len(t.LLMCalls) == 0 && t.OutputLength == 0 && len(t.ToolCalls) == 0 && t.Usage == (model.Usage{}) {
 		return model.Turn{}, false
@@ -449,27 +498,334 @@ func llm(m map[string]any, id string, start, end int64, cfg config.Config) model
 		start = end - int64(time.Millisecond)
 	}
 	output := contentText(m["content"])
-	c := model.LLMCall{CallID: id, StartUnixNano: start, EndUnixNano: end, Provider: str(m, "provider"), RequestModel: str(m, "model"), ResponseModel: str(m, "model"), OutputPreview: preview(output, cfg), Status: "ok", ExtraAttributes: map[string]any{"openclaw.timing_source": "estimated_message_boundary"}}
+	c := model.LLMCall{CallID: id, StartUnixNano: start, EndUnixNano: end, Provider: str(m, "provider"), RequestModel: str(m, "model"), ResponseModel: str(m, "model"), OutputPreview: preview(output, cfg), OutputLength: len([]rune(output)), OutputKind: rawOutputKind(m), Status: "ok", ExtraAttributes: map[string]any{"openclaw.timing_source": "estimated_message_boundary"}}
 	if u, ok := m["usage"].(map[string]any); ok {
 		c.Usage = usage(u)
 	}
-	if finish := str(m, "stopReason"); finish != "" {
-		c.FinishReasons = []string{finish}
-		if finish == "error" || finish == "aborted" {
+	if reasons := finishReasons(m); len(reasons) > 0 {
+		c.FinishReasons = reasons
+		if reasons[0] == "error" || reasons[0] == "cancelled" {
 			c.Status = "error"
-			c.ErrorType = finish
+			c.ErrorType = reasons[0]
 			c.Reason = privacy.Text(m["errorMessage"], cfg.MaxChars)
 		}
 	}
-	c.OutputMessages = textMessages("assistant", output, cfg)
+	c.OutputMessages = normalizeMessages([]any{m}, cfg)
 	return c
 }
 
 func assistantMessage(event map[string]any) map[string]any {
 	if message, _ := event["lastAssistant"].(map[string]any); message != nil {
-		return message
+		copy := make(map[string]any, len(message)+1)
+		for key, value := range message {
+			copy[key] = value
+		}
+		if str(copy, "role") == "" {
+			copy["role"] = "assistant"
+		}
+		return copy
 	}
-	return map[string]any{"content": event["assistantTexts"]}
+	return map[string]any{"role": "assistant", "content": event["assistantTexts"]}
+}
+
+func applyWindow(call *model.LLMCall, window hookWindow) {
+	call.StartUnixNano, call.EndUnixNano = window.start, window.end
+	applyWindowContent(call, window)
+}
+
+func applyWindowContent(call *model.LLMCall, window hookWindow) {
+	call.InputMessages, call.OutputMessages = window.inputMessages, window.outputMessages
+	call.SystemInstructions, call.ToolDefinitions = window.systemInstructions, window.toolDefinitions
+	call.InputPreview, call.OutputPreview = window.inputPreview, window.outputPreview
+	call.InputLength, call.OutputLength = window.inputLength, window.outputLength
+	call.OutputKind = window.outputKind
+	if window.reasoningEffort != "" {
+		call.ExtraAttributes["openclaw.reasoning_effort"] = window.reasoningEffort
+	}
+	if len(call.FinishReasons) == 0 {
+		call.FinishReasons = window.finishReasons
+	}
+}
+
+func applyTurnSummary(turn *model.Turn) {
+	turn.OutputKind = messagesOutputKind(turn.OutputMessages)
+	if len(turn.LLMCalls) == 0 {
+		return
+	}
+	last := turn.LLMCalls[len(turn.LLMCalls)-1]
+	turn.Provider = last.Provider
+	turn.RequestModel = last.RequestModel
+	turn.ResponseModel = last.ResponseModel
+	turn.FinishReasons = append([]string(nil), last.FinishReasons...)
+	if last.OutputKind != "" {
+		turn.OutputKind = last.OutputKind
+	}
+}
+
+func inputMessages(event map[string]any, cfg config.Config) any {
+	if cfg.CaptureContent == "none" {
+		return nil
+	}
+	messages, _ := normalizeMessages(event["historyMessages"], cfg).([]any)
+	if prompt := str(event, "prompt"); strings.TrimSpace(prompt) != "" {
+		if current, ok := textMessages("user", prompt, cfg).([]any); ok {
+			messages = append(messages, current...)
+		}
+	}
+	if len(messages) == 0 {
+		return nil
+	}
+	return messages
+}
+
+func systemInstructions(text string, cfg config.Config) any {
+	if cfg.CaptureContent == "none" || strings.TrimSpace(text) == "" {
+		return nil
+	}
+	return []any{map[string]any{"type": "text", "content": privacy.Text(text, cfg.MaxChars)}}
+}
+
+func toolDefinitions(value any, cfg config.Config) any {
+	if cfg.CaptureContent == "none" || value == nil {
+		return nil
+	}
+	raw, _ := value.([]any)
+	out := make([]any, 0, len(raw))
+	for _, item := range raw {
+		tool, _ := item.(map[string]any)
+		name := firstString(tool, "name")
+		if name == "" {
+			continue
+		}
+		definition := map[string]any{"type": "function", "name": name}
+		if description := firstString(tool, "description"); description != "" {
+			definition["description"] = privacy.Text(description, cfg.MaxChars)
+		}
+		if parameters := firstNonNil(tool["parameters"], tool["inputSchema"], tool["input_schema"]); parameters != nil {
+			definition["parameters"] = privacy.Sanitize(parameters, cfg.MaxChars)
+		}
+		out = append(out, definition)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeMessages(value any, cfg config.Config) any {
+	if cfg.CaptureContent == "none" || value == nil {
+		return nil
+	}
+	var raw []any
+	switch typed := value.(type) {
+	case []any:
+		raw = typed
+	case []map[string]any:
+		for _, message := range typed {
+			raw = append(raw, message)
+		}
+	case map[string]any:
+		raw = []any{typed}
+	default:
+		return nil
+	}
+	out := make([]any, 0, len(raw))
+	for _, item := range raw {
+		message, _ := item.(map[string]any)
+		if normalized := normalizeMessage(message, cfg); normalized != nil {
+			out = append(out, normalized)
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func normalizeMessage(message map[string]any, cfg config.Config) any {
+	if message == nil {
+		return nil
+	}
+	role := str(message, "role")
+	if role == "toolResult" || role == "tool_result" || role == "tool" {
+		response := privacy.Sanitize(message["content"], cfg.MaxChars)
+		if response == nil {
+			return nil
+		}
+		part := map[string]any{"type": "tool_call_response", "response": response}
+		if id := firstString(message, "toolCallId", "tool_call_id", "id"); id != "" {
+			part["id"] = id
+		}
+		return map[string]any{"role": "tool", "parts": []any{part}}
+	}
+	if role != "user" && role != "assistant" && role != "system" && role != "tool" {
+		return nil
+	}
+	parts := normalizeParts(message["content"], cfg)
+	if len(parts) == 0 {
+		return nil
+	}
+	return map[string]any{"role": role, "parts": parts}
+}
+
+func normalizeParts(value any, cfg config.Config) []any {
+	if text, ok := value.(string); ok {
+		if strings.TrimSpace(text) == "" {
+			return nil
+		}
+		return []any{map[string]any{"type": "text", "content": privacy.Text(text, cfg.MaxChars)}}
+	}
+	raw, ok := value.([]any)
+	if !ok {
+		return nil
+	}
+	parts := make([]any, 0, len(raw))
+	for _, item := range raw {
+		if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
+			parts = append(parts, map[string]any{"type": "text", "content": privacy.Text(text, cfg.MaxChars)})
+			continue
+		}
+		block, _ := item.(map[string]any)
+		typ := strings.ToLower(firstString(block, "type"))
+		switch typ {
+		case "text", "input_text", "output_text":
+			if text := firstString(block, "text", "content"); strings.TrimSpace(text) != "" {
+				parts = append(parts, map[string]any{"type": "text", "content": privacy.Text(text, cfg.MaxChars)})
+			}
+		case "thinking", "reasoning":
+			if text := firstString(block, "thinking", "text", "content"); strings.TrimSpace(text) != "" {
+				parts = append(parts, map[string]any{"type": "reasoning", "content": privacy.Text(text, cfg.MaxChars)})
+			}
+		case "toolcall", "tool_call", "tool_use":
+			if name := firstString(block, "name"); name != "" {
+				part := map[string]any{"type": "tool_call", "name": name}
+				if id := firstString(block, "id", "toolCallId", "tool_call_id"); id != "" {
+					part["id"] = id
+				}
+				if arguments := firstNonNil(block["arguments"], block["input"]); arguments != nil {
+					part["arguments"] = privacy.Sanitize(arguments, cfg.MaxChars)
+				}
+				parts = append(parts, part)
+			}
+		case "toolresult", "tool_result", "tool_call_response":
+			if response := firstNonNil(block["response"], block["result"], block["content"]); response != nil {
+				part := map[string]any{"type": "tool_call_response", "response": privacy.Sanitize(response, cfg.MaxChars)}
+				if id := firstString(block, "id", "toolCallId", "tool_call_id"); id != "" {
+					part["id"] = id
+				}
+				parts = append(parts, part)
+			}
+		}
+	}
+	return parts
+}
+
+func rawOutputKind(message map[string]any) string {
+	content := message["content"]
+	if text, ok := content.(string); ok && strings.TrimSpace(text) != "" {
+		return "text"
+	}
+	raw, _ := content.([]any)
+	kind := ""
+	for _, item := range raw {
+		if text, ok := item.(string); ok && strings.TrimSpace(text) != "" {
+			kind = "text"
+			continue
+		}
+		block, _ := item.(map[string]any)
+		switch strings.ToLower(firstString(block, "type")) {
+		case "toolcall", "tool_call", "tool_use":
+			return "tool_call"
+		case "text", "input_text", "output_text":
+			kind = "text"
+		case "thinking", "reasoning":
+			if kind == "" {
+				kind = "reasoning"
+			}
+		}
+	}
+	return kind
+}
+
+func messagesOutputKind(value any) string {
+	messages, _ := value.([]any)
+	kind := ""
+	for _, item := range messages {
+		message, _ := item.(map[string]any)
+		parts, _ := message["parts"].([]any)
+		for _, raw := range parts {
+			part, _ := raw.(map[string]any)
+			switch str(part, "type") {
+			case "tool_call":
+				return "tool_call"
+			case "text":
+				kind = "text"
+			case "reasoning":
+				if kind == "" {
+					kind = "reasoning"
+				}
+			}
+		}
+	}
+	return kind
+}
+
+func finishReasons(message map[string]any) []string {
+	raw := strings.ToLower(strings.TrimSpace(firstString(message, "stopReason", "stop_reason")))
+	switch raw {
+	case "stop", "end_turn", "stop_sequence":
+		return []string{"stop"}
+	case "toolcall", "tool_call", "tool_use", "tooluse":
+		return []string{"tool_call"}
+	case "aborted", "cancelled", "canceled":
+		return []string{"cancelled"}
+	case "error":
+		return []string{"error"}
+	case "":
+		if rawOutputKind(message) == "tool_call" {
+			return []string{"tool_call"}
+		}
+		return nil
+	default:
+		return nil
+	}
+}
+
+func firstString(values map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := values[key].(string); ok && strings.TrimSpace(value) != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonNil(values ...any) any {
+	for _, value := range values {
+		if value != nil {
+			return value
+		}
+	}
+	return nil
+}
+
+func statusValue(errorType string) string {
+	if strings.TrimSpace(errorType) != "" {
+		return "error"
+	}
+	return "ok"
+}
+
+func commandValue(value any, cfg config.Config) string {
+	if cfg.CaptureContent == "none" {
+		return ""
+	}
+	arguments, _ := value.(map[string]any)
+	command := firstNonNil(arguments["cmd"], arguments["command"])
+	if command == nil {
+		return ""
+	}
+	return privacy.Text(command, cfg.MaxChars)
 }
 
 func textMessages(role, text string, cfg config.Config) any {
@@ -483,6 +839,17 @@ func textMessages(role, text string, cfg config.Config) any {
 }
 func usage(u map[string]any) model.Usage {
 	return model.Usage{InputTokens: int64(number(u["input"])), OutputTokens: int64(number(u["output"])), CacheReadTokens: int64(number(u["cacheRead"])), CacheCreateTokens: int64(number(u["cacheWrite"]))}
+}
+func usageMap(value any) model.Usage {
+	current, _ := value.(map[string]any)
+	return usage(current)
+}
+func addUsage(total *model.Usage, current model.Usage) {
+	total.InputTokens += current.InputTokens
+	total.OutputTokens += current.OutputTokens
+	total.CacheReadTokens += current.CacheReadTokens
+	total.CacheCreateTokens += current.CacheCreateTokens
+	total.ReasoningTokens += current.ReasoningTokens
 }
 func number(v any) float64 {
 	n, _ := v.(float64)

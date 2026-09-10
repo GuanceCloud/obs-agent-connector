@@ -5,6 +5,7 @@ import (
 	"math"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/openclaw/config"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/model"
@@ -14,7 +15,7 @@ import (
 const fixture = `{"event":"agent_end","at":2000000,"startedAt":1999000,"sessionId":"s1","runId":"r1","success":true,"durationMs":1000,"prompt":"Read the guide","observations":[
 {"kind":"llm_input","at":1999001,"event":{"prompt":"Read the guide"}},
 {"kind":"llm_output","at":1999200,"event":{"provider":"test","model":"small","lastAssistant":{"content":[{"type":"text","text":"Reading"}],"usage":{"input":11,"output":2,"cacheRead":3}},"usage":{"input":11,"output":2,"cacheRead":3}}},
-{"kind":"after_tool_call","at":1999300,"event":{"toolCallId":"t1","toolName":"read","durationMs":100,"params":{"path":"/skills/demo/SKILL.md","token":"private-value"},"result":"password=secret-value"}},
+{"kind":"after_tool_call","at":1999300,"event":{"toolCallId":"t1","toolName":"read","durationMs":100,"params":{"path":"/skills/demo/SKILL.md","command":"cat /skills/demo/SKILL.md","token":"private-value"},"result":"password=secret-value"}},
 {"kind":"llm_input","at":1999400,"event":{"prompt":"Read the guide"}},
 {"kind":"llm_output","at":1999900,"event":{"provider":"test","model":"small","lastAssistant":{"content":[{"type":"text","text":"Done"}],"stopReason":"stop","usage":{"input":5,"output":4}},"usage":{"input":5,"output":4}}}],
 "messages":[{"role":"user","timestamp":1000,"content":"old user"},{"role":"assistant","timestamp":1001,"content":[{"type":"text","text":"stale output"}],"usage":{"input":999}}]}`
@@ -33,6 +34,9 @@ func TestNativeTurn(t *testing.T) {
 	}
 	if turn.ToolCalls[0].Skill == nil || turn.ToolCalls[0].Skill.Name != "demo" {
 		t.Fatal("missing explicit skill read")
+	}
+	if turn.ToolCalls[0].Command != "cat /skills/demo/SKILL.md" || turn.ToolCalls[0].ResultStatus != "completed" {
+		t.Fatalf("tool command or result status was not normalized: %#v", turn.ToolCalls[0])
 	}
 	body, _ := json.Marshal(turn)
 	for _, secret := range []string{"private-value", "secret-value", "stale output"} {
@@ -78,6 +82,87 @@ func TestStandardMessageAttributesInPreviewMode(t *testing.T) {
 		if span.Name == "assistant" && span.Attributes["gen_ai.output.messages"] == nil {
 			t.Fatalf("assistant is missing standard output messages: %#v", span.Attributes)
 		}
+		if (span.Name == "invoke_agent" || span.Name == "llm" || span.Name == "assistant") && span.Attributes["gen_ai.output.type"] != "text" {
+			t.Fatalf("%s is missing standard output type: %#v", span.Name, span.Attributes)
+		}
+	}
+}
+
+func TestStructuredModelMessagesAndRequestMetadata(t *testing.T) {
+	p, err := Decode([]byte(`{"event":"agent_end","at":2000000,"startedAt":1999000,"sessionId":"s1","runId":"r1","success":true,"prompt":"current","observations":[
+{"kind":"llm_input","at":1999100,"event":{"provider":"test","model":"small","systemPrompt":"be helpful","prompt":"current","historyMessages":[{"role":"user","content":"previous"},{"role":"toolResult","toolCallId":"tool-1","content":"result"}],"tools":[{"name":"read","description":"Read a file","parameters":{"type":"object"}}]}},
+{"kind":"llm_output","at":1999500,"event":{"provider":"test","model":"small","reasoningEffort":"high","lastAssistant":{"role":"assistant","stopReason":"toolUse","content":[{"type":"thinking","thinking":"checking"},{"type":"toolCall","id":"tool-2","name":"read","arguments":{"path":"README.md"}}]}}}],
+"messages":[]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn, ok := Normalize(p, config.Config{CaptureContent: "full", MaxChars: 1000})
+	if !ok || len(turn.LLMCalls) != 1 {
+		t.Fatalf("missing structured call: %#v", turn)
+	}
+	call := turn.LLMCalls[0]
+	inputs, _ := call.InputMessages.([]any)
+	outputs, _ := call.OutputMessages.([]any)
+	tools, _ := call.ToolDefinitions.([]any)
+	if len(inputs) != 3 || len(outputs) != 1 || len(tools) != 1 || call.SystemInstructions == nil {
+		t.Fatalf("request context was not preserved: %#v", call)
+	}
+	parts := outputs[0].(map[string]any)["parts"].([]any)
+	if len(parts) != 2 || parts[0].(map[string]any)["type"] != "reasoning" || parts[1].(map[string]any)["type"] != "tool_call" {
+		t.Fatalf("structured output was flattened: %#v", outputs)
+	}
+	if call.OutputKind != "tool_call" || len(call.FinishReasons) != 1 || call.FinishReasons[0] != "tool_call" || call.ExtraAttributes["openclaw.reasoning_effort"] != "high" {
+		t.Fatalf("model metadata was not normalized: %#v", call)
+	}
+}
+
+func TestSnapshotKeepsStructuredToolCallOutput(t *testing.T) {
+	p, err := Decode([]byte(`{"event":"agent_end","at":2000000,"startedAt":1999000,"sessionId":"s1","runId":"r1","success":true,"messages":[
+{"role":"user","timestamp":1999000,"content":"read"},
+{"role":"assistant","timestamp":1999100,"content":[{"type":"toolCall","id":"tool-1","name":"read","arguments":{"path":"README.md"}}],"usage":{"input":4,"output":1}},
+{"role":"toolResult","timestamp":1999200,"toolCallId":"tool-1","content":"done"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn, ok := Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
+	if !ok || turn.OutputKind != "tool_call" || turn.OutputMessages == nil || len(turn.LLMCalls) != 0 || len(turn.ToolCalls) != 1 {
+		t.Fatalf("structured snapshot output was lost or timing was fabricated: %#v", turn)
+	}
+	root := (semantic.Builder{}).Build(turn)[0]
+	if root.Attributes["output_kind"] != "tool_call" || root.Attributes["gen_ai.output.messages"] == nil {
+		t.Fatalf("root tool-call output is incomplete: %#v", root.Attributes)
+	}
+}
+
+func TestNativeStartBoundariesAndMissingToolTiming(t *testing.T) {
+	p, _ := Decode([]byte(fixture))
+	p.Observations = append(p.Observations,
+		Observation{Kind: "model_call_started", At: 1999410, Event: map[string]any{"runId": "r1", "callId": "call-1", "provider": "test", "model": "small"}},
+		Observation{Kind: "model_call_ended", At: 1999900, Event: map[string]any{"runId": "r1", "callId": "call-1", "provider": "test", "model": "small", "durationMs": float64(400), "outcome": "completed"}},
+	)
+	delete(p.Observations[2].Event, "durationMs")
+	turn, ok := Normalize(p, config.Config{CaptureContent: "none"})
+	if !ok || len(turn.LLMCalls) != 1 || turn.LLMCalls[0].EndUnixNano-turn.LLMCalls[0].StartUnixNano != 490*int64(time.Millisecond) {
+		t.Fatalf("native model boundaries were not used: %#v", turn.LLMCalls)
+	}
+	if len(turn.ToolCalls) != 0 {
+		t.Fatalf("tool duration was fabricated: %#v", turn.ToolCalls)
+	}
+
+	p, _ = Decode([]byte(fixture))
+	p.Observations = append(p.Observations, Observation{Kind: "before_tool_call", At: 1999210, Event: map[string]any{"toolCallId": "t1", "toolName": "read"}})
+	delete(p.Observations[2].Event, "durationMs")
+	turn, _ = Normalize(p, config.Config{CaptureContent: "none"})
+	if len(turn.ToolCalls) != 1 || turn.ToolCalls[0].EndUnixNano-turn.ToolCalls[0].StartUnixNano != 90*int64(time.Millisecond) {
+		t.Fatalf("native tool boundaries were not used: %#v", turn.ToolCalls)
+	}
+
+	p, _ = Decode([]byte(fixture))
+	p.Observations = []Observation{{Kind: "model_call_ended", At: 1999900, Event: map[string]any{"runId": "r1", "callId": "zero", "provider": "test", "model": "small", "durationMs": float64(0), "outcome": "completed"}}}
+	p.Messages = nil
+	turn, _ = Normalize(p, config.Config{CaptureContent: "none"})
+	if len(turn.LLMCalls) != 0 {
+		t.Fatalf("zero model duration was padded into a call: %#v", turn.LLMCalls)
 	}
 }
 
@@ -107,6 +192,19 @@ func TestNativeCallUsesOnlyUniqueContentWindow(t *testing.T) {
 		if call.InputMessages != nil || call.OutputMessages != nil {
 			t.Fatal("ambiguous content was assigned to a provider call")
 		}
+	}
+}
+
+func TestTimestampedSnapshotDoesNotSuppressHookCalls(t *testing.T) {
+	p, _ := Decode([]byte(fixture))
+	p.Messages[0]["timestamp"] = float64(1999000)
+	p.Messages[1]["timestamp"] = float64(1999900)
+	turn, ok := Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
+	if !ok || len(turn.LLMCalls) != 2 {
+		t.Fatalf("timestamped snapshot suppressed observed hook calls: %#v", turn.LLMCalls)
+	}
+	if turn.LLMCalls[0].ExtraAttributes["openclaw.timing_source"] != "native_hook_boundary" || turn.LLMCalls[1].ExtraAttributes["openclaw.timing_source"] != "native_hook_boundary" {
+		t.Fatalf("hook timing source was not retained: %#v", turn.LLMCalls)
 	}
 }
 
@@ -148,7 +246,7 @@ func TestTerminalFilteringAndPrivacy(t *testing.T) {
 		t.Fatal("metadata missing")
 	}
 	if turn.InputPreview != "" || turn.OutputPreview != "" || turn.InputMessages != nil || turn.OutputMessages != nil ||
-		turn.LLMCalls[0].InputMessages != nil || turn.LLMCalls[0].OutputMessages != nil || turn.AssistantOutputs[0].OutputMessages != nil || turn.ToolCalls[0].Arguments != nil {
+		turn.LLMCalls[0].InputMessages != nil || turn.LLMCalls[0].OutputMessages != nil || turn.AssistantOutputs[0].OutputMessages != nil || turn.ToolCalls[0].Arguments != nil || turn.ToolCalls[0].Command != "" {
 		t.Fatal("content-none retained content")
 	}
 	failed := false

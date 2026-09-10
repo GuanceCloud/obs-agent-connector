@@ -8,8 +8,9 @@ The installer extracts this dependency-free native entry point under
 `plugins.load.paths` in `openclaw.json`. OpenClaw loads it using its own Node.js
 runtime; no external plugin download, npm installation, or telemetry SDK is needed.
 
-The bridge observes `llm_input`, `llm_output`, `after_tool_call`, `model_call_ended`, and `agent_end`
-using `api.on`. Only `agent_end` submits a terminal payload to
+The bridge observes `llm_input`, `llm_output`, `model_call_started`,
+`model_call_ended`, `before_tool_call`, `after_tool_call`, and `agent_end` using
+`api.on`. Only `agent_end` submits a terminal payload to
 `obs-agent-connector hook openclaw`, using argument arrays without a shell.
 
 Sources reviewed on 2026-09-10:
@@ -32,12 +33,12 @@ The host may gate conversation hooks; installation sets
 - Per-assistant-message usage is preferred. `llm_output.usage` may summarize an
   entire attempt and is never assigned to a single LLM span. When the snapshot
   is unavailable, the bridge can recover `lastAssistant` and its own usage.
-- Tools use native IDs, results, errors, and durations when emitted. Transcript
-  `toolCall` / `toolResult` records provide a fallback. Explicit reads of a
+- Tools use native IDs, results, errors, and observed boundaries when emitted.
+  Transcript `toolCall` / `toolResult` records provide a fallback. Explicit reads of a
   `SKILL.md` file can produce a child skill span.
 - Root, LLM, tool, skill, and assistant spans use the shared semantic builder;
   the four standard metrics are derived from those same spans. Native first-chunk
-  observations add the optional first-chunk histogram described below.
+  observations remain Trace attributes and do not add another default metric.
 - Heartbeat, cron, system, internal, and title triggers are skipped when the host
   identifies them. Text is not used to invent subagent relationships.
 - Content modes are `none`, `preview`, and `full`. Captured content and errors
@@ -107,16 +108,16 @@ stream, historical trajectory sweeps, logs export, or cross-run subagent linking
 Harnesses expose different hooks; missing terminal events cannot be reconstructed.
 Native model-call completion events provide call IDs and durations. When present,
 they define the LLM spans and replace transcript-derived LLM spans, avoiding double
-counting. Transcript token usage is retained at the root and emitted once as turn
-aggregate token metrics (`gen_ai.operation.name=invoke_agent`), without assigning
-it to a particular provider/model call. Per-call token/model breakdown is unavailable
+counting. Transcript token usage is retained at the root only and does not produce
+`gen_ai.client.token.usage`, because that metric is derived only from attributable
+`llm` usage. Per-call token/model breakdown is unavailable
 when transcript messages cannot be reliably joined to native calls. Transcript-only
 tool-to-LLM links are omitted on this path.
 
 When native model-call events are absent, unambiguous paired `llm_input` and
 `llm_output` events provide observed Hook boundaries
-(`openclaw.timing_source=native_hook_boundary`). Snapshot messages can use these
-boundaries only through a matching message ID or a single-message/single-window run.
+(`openclaw.timing_source=native_hook_boundary`). Terminal snapshot messages
+supplement output, token usage, and tool results, but do not define model timing.
 Calls with no reliable timing are omitted instead of emitting a fabricated 1 ms
 duration; token usage remains a turn aggregate and
 `openclaw.llm_timing_unavailable=true` marks the missing timing. Assistant output
@@ -125,7 +126,8 @@ the legacy collector's output-finalization phase (`model_end_to_run_end`). This
 is runtime finalization, not measured client delivery latency. Without that
 boundary, it is a zero-duration terminal event. No minimum visible duration is added. Both paths retain
 `trace_completeness=partial`; missing call/content correlation is not reconstructed.
-Tool durations use native evidence when available.
+Tool durations use paired `before_tool_call` and `after_tool_call` boundaries, or
+the host-reported positive duration. Calls without either form of timing are omitted.
 
 ## Validation
 
@@ -145,15 +147,14 @@ manual acceptance checks; cross-compilation alone does not prove host compatibil
 
 ## First response chunk latency
 
-When the host emits `model_call_ended.timeToFirstByteMs`, the adapter records
-`gen_ai.client.operation.time_to_first_chunk` as a histogram in seconds.
-Use **First response chunk latency** for the dashboard label, with P50/P95/P99
-aggregations. This is not strict TTFT and is not user-message-to-first-visible-text
-latency: the first observed response chunk may be empty or contain metadata.
+When the host emits `model_call_ended.timeToFirstByteMs`, the adapter records the
+timing on the corresponding LLM span. This is not strict TTFT and is not
+user-message-to-first-visible-text latency: the first observed response chunk may
+be empty or contain metadata.
 
 Each native LLM span carries the numeric standard attribute
 `gen_ai.response.time_to_first_chunk` in seconds (for example, `0.125` means
-125 ms). The first-chunk histogram is derived from that same span attribute.
+125 ms). The default metric set does not include a first-chunk histogram.
 `openclaw.model_call_id` and `openclaw.first_chunk.source` retain call identity and
 source evidence on the span. The former root `model.first_chunks` JSON array is
 no longer emitted. A `ttft` alias is not added.
@@ -162,20 +163,12 @@ Calls are deduplicated by native call ID within a run. Missing, nonnumeric,
 negative, nonfinite, or greater-than-duration latency values are omitted while
 valid native call durations remain observable. A measured zero is retained.
 Calls failing after the first chunk receive span error status and `error.type`.
-No latency or streaming-mode flag is inferred from transcript timing. Explicitly
-non-streaming spans are excluded from the histogram; native host timing semantics
-remain the source of truth when the hook does not expose streaming mode.
+No latency or streaming-mode flag is inferred from transcript timing.
 
-Histogram dimensions use `gen_ai.operation.name=chat`, `gen_ai.provider.name`,
-and `gen_ai.request.model` when available. Optional `gen_ai.response.model`,
-`server.address`, `server.port`, and `error.type` are copied only when available.
-Session/run/call IDs and the old `operation_name`, `provider_name`, `request_model`,
-and `status` aliases are not metric dimensions. Agent identity remains in Resource.
-
-See the OpenTelemetry GenAI [Span conventions](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-spans.md)
-and [metric conventions](https://github.com/open-telemetry/semantic-conventions-genai/blob/main/docs/gen-ai/gen-ai-metrics.md).
-These conventions are currently in Development. The server-side
-`gen_ai.server.time_to_first_token` metric is not emitted by this client adapter.
+The connector follows the [GTrace AI semantic conventions](https://github.com/GuanceCloud/guance-gtrace-ai-semantic-conventions),
+which define the supported trace tree, attributes, and derived metric set.
+The server-side `gen_ai.server.time_to_first_token` metric is outside this client
+adapter's scope.
 
 The observations are persisted with the terminal turn and follow the same
 independent Trace/Metrics retry path. Older hosts and harnesses that omit the
@@ -203,6 +196,11 @@ When `captureContent` is `preview` or `full`, the root `invoke_agent` span recor
 records `gen_ai.output.messages`. Values use the GenAI `role` and `parts` schema;
 text parts are recursively sanitized and limited by `maxChars`. The `none` mode
 omits message and preview content.
+
+LLM spans also retain available `gen_ai.system_instructions`,
+`gen_ai.tool.definitions`, provider/model fields, finish reasons, lengths, and
+`output_kind`. Reasoning and tool calls remain structured message parts; tool
+results use `role=tool` with a `tool_call_response` part.
 
 An LLM span created from paired `llm_input` and `llm_output` hooks records both
 standard message attributes. Native `model_call_ended` deliberately contains no

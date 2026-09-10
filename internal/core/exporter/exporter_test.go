@@ -46,8 +46,11 @@ func TestRetryOnlyFailedSignalAndConcurrentDuplicate(t *testing.T) {
 			metrics.Add(1)
 			p, err := proto.DecodeExportMetricsServiceRequest(body)
 			decoded, _ := json.Marshal(p)
-			if !strings.Contains(string(decoded), "gen_ai.client.operation.time_to_first_chunk") {
-				t.Error("first-chunk metric lost during retry")
+			if !strings.Contains(string(decoded), "gen_ai.workflow.duration") {
+				t.Error("workflow metric lost during retry")
+			}
+			if strings.Contains(string(decoded), "gen_ai.client.operation.time_to_first_chunk") {
+				t.Error("non-default first-chunk metric was exported")
 			}
 			if err != nil || len(p.ResourceMetrics) == 0 {
 				t.Error("invalid metric protobuf")

@@ -15,23 +15,34 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 		TurnID:        "turn-test",
 		AgentRuntime:  "test-agent",
 		AgentName:     "test-agent",
+		AgentVersion:  "1.2.3",
 		StartUnixNano: start,
 		EndUnixNano:   start + int64(4*time.Second),
 		FinalStatus:   model.FinalStatusCompleted,
 		InputPreview:  "hello",
 		OutputPreview: "done",
+		OutputKind:    "text",
+		Provider:      "test-provider",
+		RequestModel:  "model-test",
+		ResponseModel: "model-test-v2",
+		FinishReasons: []string{"stop"},
 		Usage:         model.Usage{InputTokens: 13, OutputTokens: 5},
 		ExtraAttributes: map[string]any{
 			"gen_ai.usage.credit": 0.45,
 		},
 		LLMCalls: []model.LLMCall{{
-			CallID:        "llm-1",
-			StartUnixNano: start,
-			EndUnixNano:   start + int64(time.Second),
-			RequestModel:  "model-test",
-			InputPreview:  "model prompt",
-			OutputPreview: "model output",
-			Usage:         model.Usage{InputTokens: 13, OutputTokens: 5},
+			CallID:             "llm-1",
+			StartUnixNano:      start,
+			EndUnixNano:        start + int64(time.Second),
+			RequestModel:       "model-test",
+			InputPreview:       "model prompt",
+			OutputPreview:      "model output",
+			InputLength:        12,
+			OutputLength:       12,
+			OutputKind:         "text",
+			SystemInstructions: []any{map[string]any{"type": "text", "content": "be helpful"}},
+			ToolDefinitions:    []any{map[string]any{"type": "function", "name": "exec"}},
+			Usage:              model.Usage{InputTokens: 13, OutputTokens: 5},
 		}},
 		ToolCalls: []model.ToolCall{{
 			CallID:            "tool-1",
@@ -46,6 +57,8 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 			StartUnixNano: start + int64(3*time.Second),
 			EndUnixNano:   start + int64(4*time.Second),
 			OutputPreview: "done",
+			OutputLength:  4,
+			OutputKind:    "text",
 		}},
 	}
 
@@ -54,8 +67,14 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 		t.Fatalf("expected 5 spans, got %d", len(spans))
 	}
 	root := spans[0]
+	if root.Resource["gen_ai.agent.name"] != "test-agent" || root.Resource["gen_ai.agent.version"] != "1.2.3" {
+		t.Fatalf("standard Agent identity is missing from Resource: %#v", root.Resource)
+	}
 	if root.Attributes["gen_ai.usage.input_tokens"] != int64(13) || root.Attributes["gen_ai.usage.output_tokens"] != int64(5) {
 		t.Fatalf("invoke_agent aggregate usage was not preserved: %#v", root.Attributes)
+	}
+	if root.Attributes["gen_ai.output.type"] != "text" || root.Attributes["gen_ai.provider.name"] != "test-provider" || root.Attributes["gen_ai.response.model"] != "model-test-v2" {
+		t.Fatalf("invoke_agent standard summary fields are missing: %#v", root.Attributes)
 	}
 	assertGTraceUsage(t, root, map[string]int64{"input": 13, "output": 5, "total": 18})
 	if root.Attributes["gtrace.observation.type"] != "agent" || root.Attributes["gtrace.observation.input"] != "hello" || root.Attributes["gtrace.observation.output"] != "done" {
@@ -79,6 +98,9 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 	llm := findSpan(t, spans, "llm")
 	if llm.Attributes["gen_ai.usage.input_tokens"] != int64(13) || llm.Attributes["gen_ai.usage.output_tokens"] != int64(5) {
 		t.Fatalf("llm usage was not preserved: %#v", llm.Attributes)
+	}
+	if llm.Attributes["gen_ai.output.type"] != "text" || llm.Attributes["gen_ai.system_instructions"] == nil || llm.Attributes["gen_ai.tool.definitions"] == nil {
+		t.Fatalf("llm standard request/output fields are missing: %#v", llm.Attributes)
 	}
 	assertGTraceUsage(t, llm, map[string]int64{"input": 13, "output": 5, "total": 18})
 	if llm.Attributes["gtrace.observation.type"] != "llm" || llm.Attributes["gtrace.observation.input"] != "model prompt" || llm.Attributes["gtrace.observation.output"] != "model output" || llm.Attributes["gtrace.model.name"] != "model-test" {
@@ -118,6 +140,9 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 	}
 	if assistant := findSpan(t, spans, "assistant"); assistant.Attributes["status"] != "ok" {
 		t.Fatalf("assistant status = %#v, want ok", assistant.Attributes["status"])
+	}
+	if assistant := findSpan(t, spans, "assistant"); assistant.Attributes["gen_ai.output.type"] != "text" || assistant.Attributes["output_length"] != 4 {
+		t.Fatalf("assistant output fields are missing: %#v", assistant.Attributes)
 	}
 	if tool.Attributes["gtrace.observation.type"] != "tool" {
 		t.Fatalf("tool GTrace observation type is missing: %#v", tool.Attributes)
