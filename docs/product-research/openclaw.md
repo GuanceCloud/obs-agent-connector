@@ -113,8 +113,14 @@ it to a particular provider/model call. Per-call token/model breakdown is unavai
 when transcript messages cannot be reliably joined to native calls. Transcript-only
 tool-to-LLM links are omitted on this path.
 
-When native model-call events are absent, LLM spans retain minimal estimated message
-windows (`openclaw.timing_source=estimated_message_boundary`). Both paths retain
+When native model-call events are absent, unambiguous paired `llm_input` and
+`llm_output` events provide observed Hook boundaries
+(`openclaw.timing_source=native_hook_boundary`). Snapshot messages can use these
+boundaries only through a matching message ID or a single-message/single-window run.
+Calls with no reliable timing are omitted instead of emitting a fabricated 1 ms
+duration; token usage remains a turn aggregate and
+`openclaw.llm_timing_unavailable=true` marks the missing timing. Assistant output
+is a zero-duration terminal event, not a second model-generation measurement. Both paths retain
 `trace_completeness=partial`; missing call/content correlation is not reconstructed.
 Tool durations use native evidence when available.
 

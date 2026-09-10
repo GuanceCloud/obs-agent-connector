@@ -97,8 +97,8 @@ func TestSnapshotDoesNotReplayOldTurn(t *testing.T) {
 	}
 	p.Messages[0]["timestamp"] = float64(1999000)
 	p.Messages[1]["timestamp"] = float64(1999900)
-	if turn, ok := Normalize(p, config.Config{}); !ok || len(turn.LLMCalls) != 1 {
-		t.Fatal("terminal snapshot not replayed")
+	if turn, ok := Normalize(p, config.Config{}); !ok || len(turn.LLMCalls) != 0 || !turn.AggregateUsageOnly {
+		t.Fatal("snapshot should retain usage without inventing call timing")
 	}
 }
 
@@ -113,17 +113,13 @@ func TestSnapshotPerCallUsageWinsOverAttemptAggregate(t *testing.T) {
 		t.Fatal(err)
 	}
 	turn, ok := Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
-	if !ok || len(turn.LLMCalls) != 2 || turn.Usage.InputTokens != 15 || turn.Usage.OutputTokens != 3 {
+	if !ok || len(turn.LLMCalls) != 0 || !turn.AggregateUsageOnly || turn.Usage.InputTokens != 15 || turn.Usage.OutputTokens != 3 {
 		t.Fatalf("aggregate miscounted: %#v", turn)
 	}
 	if len(turn.ToolCalls) != 1 || turn.ToolCalls[0].ErrorType != "tool_error" || turn.ToolCalls[0].Skill == nil {
 		t.Fatal("tool fallback missing")
 	}
-	for _, call := range turn.LLMCalls {
-		if call.EndUnixNano-call.StartUnixNano != 1000000 {
-			t.Fatal("estimated LLM duration includes tool execution")
-		}
-	}
+
 }
 
 func TestFirstChunkNativeTiming(t *testing.T) {
@@ -161,5 +157,43 @@ func TestFirstChunkNativeTiming(t *testing.T) {
 		if c.FirstChunkMs != nil {
 			t.Fatal("cross-run timing accepted")
 		}
+	}
+}
+
+func TestHookTimingAndPointOutput(t *testing.T) {
+	p, _ := Decode([]byte(fixture))
+	turn, ok := Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
+	if !ok || len(turn.LLMCalls) != 2 {
+		t.Fatal("missing timed calls")
+	}
+	for i, want := range []int64{199000000, 500000000} {
+		if got := turn.LLMCalls[i].EndUnixNano - turn.LLMCalls[i].StartUnixNano; got != want {
+			t.Fatalf("call %d duration %d, want %d", i, got, want)
+		}
+	}
+	spans := (semantic.Builder{}).Build(turn)
+	for _, span := range spans {
+		if span.Name == "assistant" && (span.EndTimeUnixNano != span.StartTimeUnixNano || span.DurationMs != 0) {
+			t.Fatal("assistant event has fabricated duration")
+		}
+	}
+}
+
+func TestSnapshotUsesSingleObservedHookWindow(t *testing.T) {
+	p, _ := Decode([]byte(fixture))
+	p.Observations = p.Observations[3:]
+	p.Messages = []map[string]any{
+		{"role": "user", "timestamp": float64(1999000), "content": "hello"},
+		{"role": "assistant", "timestamp": float64(1999400), "content": "Done", "usage": map[string]any{"input": float64(5)}},
+	}
+	turn, ok := Normalize(p, config.Config{})
+	if !ok || len(turn.LLMCalls) != 1 || turn.LLMCalls[0].EndUnixNano-turn.LLMCalls[0].StartUnixNano != 500000000 {
+		t.Fatal("snapshot replaced observed timing")
+	}
+	// Multiple unmatched inputs do not provide a unique call boundary.
+	p.Observations = append([]Observation{p.Observations[0]}, p.Observations...)
+	turn, ok = Normalize(p, config.Config{})
+	if !ok || len(turn.LLMCalls) != 0 || !turn.AggregateUsageOnly {
+		t.Fatal("ambiguous hook timing fabricated")
 	}
 }

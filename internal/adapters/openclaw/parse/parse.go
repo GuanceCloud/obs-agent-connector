@@ -94,11 +94,43 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 	}
 	// Per-message usage is authoritative. llm_output may summarize an entire
 	// attempt, so its aggregate usage must never be assigned to one LLM call.
+	type hookWindow struct {
+		start, end int64
+		messageID  string
+	}
+	windows := map[int]hookWindow{}
+	var inputAt int64
+	ambiguous := false
+	for i, o := range p.Observations {
+		at := o.At * int64(time.Millisecond)
+		if at < start || at > end {
+			continue
+		}
+		if o.Kind == "llm_input" {
+			if inputAt != 0 {
+				ambiguous = true
+			} else {
+				inputAt = at
+			}
+		}
+		if o.Kind == "after_tool_call" && inputAt != 0 {
+			ambiguous = true
+		}
+		if o.Kind == "llm_output" {
+			if inputAt > 0 && at > inputAt && !ambiguous {
+				m, _ := o.Event["lastAssistant"].(map[string]any)
+				windows[i] = hookWindow{inputAt, at, str(m, "id")}
+			}
+			inputAt, ambiguous = 0, false
+		}
+	}
+	assistantCount := 0
 	snapshotLLM := false
 	for _, m := range messages {
 		at := timestamp(m["timestamp"])
 		if str(m, "role") == "assistant" && at >= start && at <= end {
 			snapshotLLM = true
+			assistantCount++
 		}
 	}
 	seenCalls := map[string]bool{}
@@ -154,6 +186,10 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			}
 			seenLLM[id] = true
 			call := llm(m, id, at-int64(time.Millisecond), at, cfg)
+			if window, ok := windows[i]; ok {
+				call.StartUnixNano, call.EndUnixNano = window.start, window.end
+				call.ExtraAttributes["openclaw.timing_source"] = "native_hook_boundary"
+			}
 			call.Provider = str(o.Event, "provider")
 			call.RequestModel = str(o.Event, "model")
 			call.ResponseModel = call.RequestModel
@@ -213,7 +249,15 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			if at <= 0 || at > end {
 				at = end
 			}
-			t.LLMCalls = append(t.LLMCalls, llm(m, fmt.Sprintf("message-%d", i), at-int64(time.Millisecond), at, cfg))
+			call := llm(m, fmt.Sprintf("message-%d", i), at-int64(time.Millisecond), at, cfg)
+			for _, window := range windows {
+				if (window.messageID != "" && window.messageID == str(m, "id")) || (assistantCount == 1 && len(windows) == 1) {
+					call.StartUnixNano, call.EndUnixNano = window.start, window.end
+					call.ExtraAttributes["openclaw.timing_source"] = "native_hook_boundary"
+					break
+				}
+			}
+			t.LLMCalls = append(t.LLMCalls, call)
 		}
 		if str(m, "stopReason") == "aborted" {
 			t.FinalStatus = model.FinalStatusCancelled
@@ -288,6 +332,25 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 		t.Usage.CacheReadTokens += call.Usage.CacheReadTokens
 		t.Usage.CacheCreateTokens += call.Usage.CacheCreateTokens
 	}
+	if len(modelCalls) == 0 {
+		measured := make([]model.LLMCall, 0, len(t.LLMCalls))
+		for _, call := range t.LLMCalls {
+			if call.ExtraAttributes["openclaw.timing_source"] == "native_hook_boundary" {
+				measured = append(measured, call)
+			}
+		}
+		if len(measured) != len(t.LLMCalls) {
+			t.AggregateUsageOnly = true
+			t.ExtraAttributes["openclaw.llm_timing_unavailable"] = true
+			for i := range measured {
+				measured[i].Usage = model.Usage{}
+			}
+			for i := range t.ToolCalls {
+				t.ToolCalls[i].TriggeringLLMCall = ""
+			}
+		}
+		t.LLMCalls = measured
+	}
 	if len(modelCalls) > 0 {
 		// Transcript usage is a turn aggregate. Do not join it to native calls by
 		// time proximity or array position, or count both sets as model calls.
@@ -303,7 +366,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 		}
 	}
 	if t.OutputPreview != "" || t.OutputLength > 0 || t.OutputMessages != nil {
-		t.AssistantOutputs = []model.AssistantOutput{{StartUnixNano: end - int64(time.Millisecond), EndUnixNano: end, OutputPreview: t.OutputPreview, OutputMessages: t.OutputMessages}}
+		t.AssistantOutputs = []model.AssistantOutput{{StartUnixNano: end, EndUnixNano: end, OutputPreview: t.OutputPreview, OutputMessages: t.OutputMessages, ExtraAttributes: map[string]any{"openclaw.timing_source": "terminal_output_event"}}}
 	}
 	if *p.Success && len(t.LLMCalls) == 0 && t.OutputLength == 0 {
 		return model.Turn{}, false

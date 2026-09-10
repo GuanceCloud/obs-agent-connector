@@ -157,6 +157,10 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 
 	for _, output := range turn.AssistantOutputs {
 		outputStart, outputEnd := normalizeWindow(output.StartUnixNano, output.EndUnixNano, start, end)
+		// Explicit in-range point events have no measured duration.
+		if output.StartUnixNano > 0 && output.StartUnixNano == output.EndUnixNano && output.StartUnixNano >= start && output.EndUnixNano <= end {
+			outputStart, outputEnd = output.StartUnixNano, output.EndUnixNano
+		}
 		attrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 		attrs["status"] = firstNonEmpty(output.Status, operationStatusValue(output.ErrorType))
 		setAttr(attrs, "role", "assistant")
@@ -174,6 +178,9 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 			traceID, randomHex(8), rootID, "assistant", outputStart, outputEnd,
 			attrs, resource, scope, output.ErrorType,
 		))
+		if outputStart == outputEnd {
+			spans[len(spans)-1].DurationMs = 0
+		}
 	}
 	return spans
 }
