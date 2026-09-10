@@ -89,17 +89,22 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 	}
 	t.InputLength = len(input)
 	t.InputPreview = preview(input, cfg)
-	if cfg.CaptureContent == "full" {
-		t.InputMessages = privacy.Sanitize([]any{map[string]any{"role": "user", "content": input}}, cfg.MaxChars)
-	}
+	t.InputMessages = textMessages("user", input, cfg)
 	// Per-message usage is authoritative. llm_output may summarize an entire
 	// attempt, so its aggregate usage must never be assigned to one LLM call.
 	type hookWindow struct {
-		start, end int64
-		messageID  string
+		start, end     int64
+		messageID      string
+		provider       string
+		model          string
+		inputMessages  any
+		outputMessages any
+		inputPreview   string
+		outputPreview  string
 	}
 	windows := map[int]hookWindow{}
 	var inputAt int64
+	var inputEvent map[string]any
 	ambiguous := false
 	for i, o := range p.Observations {
 		at := o.At * int64(time.Millisecond)
@@ -111,6 +116,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 				ambiguous = true
 			} else {
 				inputAt = at
+				inputEvent = o.Event
 			}
 		}
 		if o.Kind == "after_tool_call" && inputAt != 0 {
@@ -118,10 +124,24 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 		}
 		if o.Kind == "llm_output" {
 			if inputAt > 0 && at > inputAt && !ambiguous {
-				m, _ := o.Event["lastAssistant"].(map[string]any)
-				windows[i] = hookWindow{inputAt, at, str(m, "id")}
+				m := assistantMessage(o.Event)
+				inputText := str(inputEvent, "prompt")
+				outputText := contentText(m["content"])
+				provider := str(o.Event, "provider")
+				if provider == "" {
+					provider = str(inputEvent, "provider")
+				}
+				modelName := str(o.Event, "model")
+				if modelName == "" {
+					modelName = str(inputEvent, "model")
+				}
+				windows[i] = hookWindow{
+					start: inputAt, end: at, messageID: str(m, "id"), provider: provider, model: modelName,
+					inputMessages: textMessages("user", inputText, cfg), outputMessages: textMessages("assistant", outputText, cfg),
+					inputPreview: preview(inputText, cfg), outputPreview: preview(outputText, cfg),
+				}
 			}
-			inputAt, ambiguous = 0, false
+			inputAt, inputEvent, ambiguous = 0, nil, false
 		}
 	}
 	assistantCount := 0
@@ -170,12 +190,9 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			if snapshotLLM {
 				continue
 			}
-			m, _ := o.Event["lastAssistant"].(map[string]any)
-			if m == nil {
-				if contentText(o.Event["assistantTexts"]) == "" {
-					continue
-				}
-				m = map[string]any{"content": o.Event["assistantTexts"]}
+			m := assistantMessage(o.Event)
+			if contentText(m["content"]) == "" {
+				continue
 			}
 			id := str(m, "id")
 			if id == "" {
@@ -188,6 +205,8 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			call := llm(m, id, at-int64(time.Millisecond), at, cfg)
 			if window, ok := windows[i]; ok {
 				call.StartUnixNano, call.EndUnixNano = window.start, window.end
+				call.InputMessages, call.OutputMessages = window.inputMessages, window.outputMessages
+				call.InputPreview, call.OutputPreview = window.inputPreview, window.outputPreview
 				call.ExtraAttributes["openclaw.timing_source"] = "native_hook_boundary"
 			}
 			call.Provider = str(o.Event, "provider")
@@ -241,9 +260,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 		if output != "" {
 			t.OutputPreview = preview(output, cfg)
 			t.OutputLength = len(output)
-			if cfg.CaptureContent == "full" {
-				t.OutputMessages = privacy.Sanitize([]any{map[string]any{"role": "assistant", "content": output}}, cfg.MaxChars)
-			}
+			t.OutputMessages = textMessages("assistant", output, cfg)
 		}
 		if !nativeLLM {
 			if at <= 0 || at > end {
@@ -253,6 +270,8 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			for _, window := range windows {
 				if assistantCount == 1 && ((window.messageID != "" && window.messageID == str(m, "id")) || len(windows) == 1) {
 					call.StartUnixNano, call.EndUnixNano = window.start, window.end
+					call.InputMessages, call.OutputMessages = window.inputMessages, window.outputMessages
+					call.InputPreview, call.OutputPreview = window.inputPreview, window.outputPreview
 					call.ExtraAttributes["openclaw.timing_source"] = "native_hook_boundary"
 					break
 				}
@@ -352,6 +371,34 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 		t.LLMCalls = measured
 	}
 	if len(modelCalls) > 0 {
+		// Content hooks intentionally omit callId. Attach content only when one
+		// provider call is fully contained by one unique input/output window.
+		windowMatches := map[int][]int{}
+		callMatches := map[int][]int{}
+		windowKeys := make([]int, 0, len(windows))
+		for key := range windows {
+			windowKeys = append(windowKeys, key)
+		}
+		for callIndex, call := range modelCalls {
+			for windowIndex, key := range windowKeys {
+				window := windows[key]
+				providerMatches := window.provider == "" || call.Provider == "" || window.provider == call.Provider
+				modelMatches := window.model == "" || call.RequestModel == "" || window.model == call.RequestModel
+				if providerMatches && modelMatches && call.StartUnixNano >= window.start && call.EndUnixNano <= window.end {
+					callMatches[callIndex] = append(callMatches[callIndex], windowIndex)
+					windowMatches[windowIndex] = append(windowMatches[windowIndex], callIndex)
+				}
+			}
+		}
+		for callIndex, matches := range callMatches {
+			if len(matches) != 1 || len(windowMatches[matches[0]]) != 1 {
+				continue
+			}
+			window := windows[windowKeys[matches[0]]]
+			modelCalls[callIndex].InputMessages, modelCalls[callIndex].OutputMessages = window.inputMessages, window.outputMessages
+			modelCalls[callIndex].InputPreview, modelCalls[callIndex].OutputPreview = window.inputPreview, window.outputPreview
+			modelCalls[callIndex].ExtraAttributes["openclaw.content_source"] = "unique_hook_window"
+		}
 		// Transcript usage is a turn aggregate. Do not join it to native calls by
 		// time proximity or array position, or count both sets as model calls.
 		t.LLMCalls = modelCalls
@@ -414,10 +461,25 @@ func llm(m map[string]any, id string, start, end int64, cfg config.Config) model
 			c.Reason = privacy.Text(m["errorMessage"], cfg.MaxChars)
 		}
 	}
-	if cfg.CaptureContent == "full" {
-		c.OutputMessages = privacy.Sanitize([]any{map[string]any{"role": "assistant", "content": output}}, cfg.MaxChars)
-	}
+	c.OutputMessages = textMessages("assistant", output, cfg)
 	return c
+}
+
+func assistantMessage(event map[string]any) map[string]any {
+	if message, _ := event["lastAssistant"].(map[string]any); message != nil {
+		return message
+	}
+	return map[string]any{"content": event["assistantTexts"]}
+}
+
+func textMessages(role, text string, cfg config.Config) any {
+	if cfg.CaptureContent == "none" || strings.TrimSpace(text) == "" {
+		return nil
+	}
+	return []any{map[string]any{
+		"role":  role,
+		"parts": []any{map[string]any{"type": "text", "content": privacy.Text(text, cfg.MaxChars)}},
+	}}
 }
 func usage(u map[string]any) model.Usage {
 	return model.Usage{InputTokens: int64(number(u["input"])), OutputTokens: int64(number(u["output"])), CacheReadTokens: int64(number(u["cacheRead"])), CacheCreateTokens: int64(number(u["cacheWrite"]))}

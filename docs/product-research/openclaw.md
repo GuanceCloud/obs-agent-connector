@@ -195,3 +195,18 @@ Additional diagnostics include `hook failed`, `turn skipped`, `upload failed`, a
 or timeout errors, without recording raw errors or conversation payloads. Logging
 failures do not fail the host conversation. Periodic flushes may upload pending
 signals without a new transcript parsing record.
+
+## GenAI message content
+
+When `captureContent` is `preview` or `full`, the root `invoke_agent` span records
+`gen_ai.input.messages` and `gen_ai.output.messages`, and the `assistant` span
+records `gen_ai.output.messages`. Values use the GenAI `role` and `parts` schema;
+text parts are recursively sanitized and limited by `maxChars`. The `none` mode
+omits message and preview content.
+
+An LLM span created from paired `llm_input` and `llm_output` hooks records both
+standard message attributes. Native `model_call_ended` deliberately contains no
+content or prompt identifiers. Its span receives content only when provider,
+model, and containment within one input/output Hook window produce a unique
+match. Ambiguous multi-call windows retain content at the turn level and omit it
+from individual LLM spans instead of duplicating or guessing attribution.

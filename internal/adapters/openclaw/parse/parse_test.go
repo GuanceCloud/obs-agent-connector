@@ -50,6 +50,85 @@ func TestNativeTurn(t *testing.T) {
 		}
 	}
 }
+
+func TestStandardMessageAttributesInPreviewMode(t *testing.T) {
+	p, err := Decode([]byte(fixture))
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn, ok := Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
+	if !ok || len(turn.LLMCalls) != 2 || len(turn.AssistantOutputs) != 1 {
+		t.Fatalf("missing normalized content: %#v", turn)
+	}
+	assertTextMessages(t, turn.InputMessages, "user", "Read the guide")
+	assertTextMessages(t, turn.OutputMessages, "assistant", "Done")
+	assertTextMessages(t, turn.LLMCalls[0].InputMessages, "user", "Read the guide")
+	assertTextMessages(t, turn.LLMCalls[0].OutputMessages, "assistant", "Reading")
+	assertTextMessages(t, turn.LLMCalls[1].InputMessages, "user", "Read the guide")
+	assertTextMessages(t, turn.LLMCalls[1].OutputMessages, "assistant", "Done")
+	assertTextMessages(t, turn.AssistantOutputs[0].OutputMessages, "assistant", "Done")
+
+	spans := (semantic.Builder{}).Build(turn)
+	for _, span := range spans {
+		if span.Name == "invoke_agent" || span.Name == "llm" {
+			if span.Attributes["gen_ai.input.messages"] == nil || span.Attributes["gen_ai.output.messages"] == nil {
+				t.Fatalf("%s is missing standard content attributes: %#v", span.Name, span.Attributes)
+			}
+		}
+		if span.Name == "assistant" && span.Attributes["gen_ai.output.messages"] == nil {
+			t.Fatalf("assistant is missing standard output messages: %#v", span.Attributes)
+		}
+	}
+}
+
+func TestNativeCallUsesOnlyUniqueContentWindow(t *testing.T) {
+	p, _ := Decode([]byte(fixture))
+	event := map[string]any{"runId": "r1", "callId": "call-1", "provider": "test", "model": "small", "durationMs": float64(400), "outcome": "completed"}
+	p.Observations = append(p.Observations, Observation{Kind: "model_call_ended", At: 1999900, Event: event})
+	turn, ok := Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
+	if !ok || len(turn.LLMCalls) != 1 {
+		t.Fatalf("missing native call: %#v", turn.LLMCalls)
+	}
+	assertTextMessages(t, turn.LLMCalls[0].InputMessages, "user", "Read the guide")
+	assertTextMessages(t, turn.LLMCalls[0].OutputMessages, "assistant", "Done")
+	if turn.LLMCalls[0].ExtraAttributes["openclaw.content_source"] != "unique_hook_window" {
+		t.Fatal("native content was not joined through a unique window")
+	}
+
+	// A second native call inside the same content window makes attribution
+	// ambiguous, so neither call may inherit the shared input/output content.
+	second := map[string]any{"runId": "r1", "callId": "call-2", "provider": "test", "model": "small", "durationMs": float64(200), "outcome": "completed"}
+	p.Observations = append(p.Observations, Observation{Kind: "model_call_ended", At: 1999800, Event: second})
+	turn, _ = Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
+	if len(turn.LLMCalls) != 2 {
+		t.Fatalf("missing ambiguous native calls: %#v", turn.LLMCalls)
+	}
+	for _, call := range turn.LLMCalls {
+		if call.InputMessages != nil || call.OutputMessages != nil {
+			t.Fatal("ambiguous content was assigned to a provider call")
+		}
+	}
+}
+
+func assertTextMessages(t *testing.T, value any, role, content string) {
+	t.Helper()
+	messages, ok := value.([]any)
+	if !ok || len(messages) != 1 {
+		t.Fatalf("messages do not follow the GenAI schema: %#v", value)
+	}
+	message, ok := messages[0].(map[string]any)
+	if !ok || message["role"] != role {
+		t.Fatalf("invalid message role: %#v", value)
+	}
+	parts, ok := message["parts"].([]any)
+	if !ok || len(parts) != 1 {
+		t.Fatalf("invalid message parts: %#v", value)
+	}
+	part, ok := parts[0].(map[string]any)
+	if !ok || part["type"] != "text" || part["content"] != content {
+		t.Fatalf("invalid text part: %#v", value)
+	}
+}
 func TestTerminalFilteringAndPrivacy(t *testing.T) {
 	p, _ := Decode([]byte(fixture))
 	for _, trigger := range []string{"heartbeat", "cron", "internal", "title"} {
@@ -68,7 +147,8 @@ func TestTerminalFilteringAndPrivacy(t *testing.T) {
 	if !ok {
 		t.Fatal("metadata missing")
 	}
-	if turn.InputPreview != "" || turn.OutputPreview != "" || turn.LLMCalls[0].OutputMessages != nil || turn.ToolCalls[0].Arguments != nil {
+	if turn.InputPreview != "" || turn.OutputPreview != "" || turn.InputMessages != nil || turn.OutputMessages != nil ||
+		turn.LLMCalls[0].InputMessages != nil || turn.LLMCalls[0].OutputMessages != nil || turn.AssistantOutputs[0].OutputMessages != nil || turn.ToolCalls[0].Arguments != nil {
 		t.Fatal("content-none retained content")
 	}
 	failed := false
