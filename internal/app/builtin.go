@@ -200,17 +200,32 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 }
 
 func removeBuiltinAdapter(p agent.Definition, options telemetryinstall.RemoveOptions) error {
+	fmt.Println()
+	printSingleDetail("Agent", p.Name)
 	result, err := telemetryinstall.RemoveAdapter(p.Name, "", options)
 	if err != nil {
 		return err
 	}
-	printSingleDetail("Hook", removedOrKept(result.HookRemoved))
-	printSingleDetail("Config", removedOrKept(result.ConfigRemoved))
+	hookStatus := "no matching entry found"
+	if result.HookRemoved {
+		hookStatus = "removed"
+	}
+	printSingleDetail("Hook", hookStatus+" ("+agent.DisplayPath(result.HookFile)+")")
+	configStatus := "kept"
+	if result.ConfigRemoved {
+		configStatus = "removed or already absent"
+	}
+	printSingleDetail("Config", configStatus+" ("+agent.DisplayPath(result.ConfigFile)+")")
 	if options.PurgeManaged {
-		printSingleDetail("Managed Files", removedOrKept(result.ManagedFilesRemoved))
+		printSingleDetail("Managed Files", removalCleanupStatus(result.ManagedFilesRemoved)+" (~/.obs-agent-connector/"+p.Name+"/)")
 	}
 	if options.PurgeState {
-		printSingleDetail("State", removedOrKept(result.StatePurged))
+		printSingleDetail("State", removalCleanupStatus(result.StatePurged))
+	}
+	if p.Name == "openclaw" {
+		for _, path := range p.RemovePaths {
+			printSingleDetail("Legacy Plugin", "removed or already absent ("+agent.DisplayPath(agent.ExpandHome(path))+")")
+		}
 	}
 	if p.Name == "claude" || p.Name == "codex" || p.Name == "cursor" {
 		removeBuiltinLegacyResidue(p)
@@ -281,4 +296,11 @@ func installedPluginVersion(p agent.Definition) string {
 		return version
 	}
 	return agent.InstalledVersion(p)
+}
+
+func removalCleanupStatus(cleaned bool) string {
+	if cleaned {
+		return "removed or already absent"
+	}
+	return "kept"
 }

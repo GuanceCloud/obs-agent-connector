@@ -111,7 +111,7 @@ func TestUninstallRemovesAllBuiltInAdaptersAndManagedFiles(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(configRoot, "config.json"), []byte("{}\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	for _, adapter := range []string{"claude", "codebuddy", "codex", "cursor", "dcode", "grok", "kiro"} {
+	for _, adapter := range []string{"claude", "codebuddy", "codex", "cursor", "dcode", "grok", "kiro", "openclaw"} {
 		dir := filepath.Join(configRoot, adapter)
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
@@ -124,7 +124,14 @@ func TestUninstallRemovesAllBuiltInAdaptersAndManagedFiles(t *testing.T) {
 		}
 	}
 
+	t.Setenv("OPENCLAW_STATE_DIR", "")
+	t.Setenv("OPENCLAW_CONFIG_PATH", "")
+	legacyOpenClaw := filepath.Join(home, ".openclaw", "extensions", "openclaw-otel-plugin")
+	if err := os.MkdirAll(legacyOpenClaw, 0700); err != nil {
+		t.Fatal(err)
+	}
 	hookFiles := map[string]string{
+		filepath.Join(home, ".openclaw", "openclaw.json"):                 `{"plugins":{"entries":{"obs-agent-connector":{"enabled":true},"openclaw-otel-plugin":{"enabled":true,"config":{"captureContent":"none"}}}}}`,
 		filepath.Join(home, ".claude", "settings.json"):                   `{"hooks":{"Stop":[{"hooks":[{"command":"/tmp/obs-agent-connector hook claude"}]}],"SessionEnd":[]}}`,
 		filepath.Join(home, ".codebuddy", "settings.json"):                `{"hooks":{"Stop":[{"hooks":[{"command":"/tmp/obs-agent-connector hook codebuddy"}]}],"SessionEnd":[]}}`,
 		filepath.Join(home, ".codex", "hooks.json"):                       `{"hooks":{"Stop":[{"hooks":[{"command":"/tmp/obs-agent-connector hook codex"}]}]}}`,
@@ -154,8 +161,16 @@ func TestUninstallRemovesAllBuiltInAdaptersAndManagedFiles(t *testing.T) {
 		currentGOOS = previousGOOS
 	})
 
-	if err := uninstallConnector([]string{"--yes"}); err != nil {
-		t.Fatal(err)
+	output := captureStdout(t, func() {
+		if err := uninstallConnector([]string{"--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(output, "Agent: openclaw") || !strings.Contains(output, "Hook: removed (~/.openclaw/openclaw.json)") || strings.Contains(output, "Hook: kept") {
+		t.Fatalf("unclear uninstall output: %s", output)
+	}
+	if _, err := os.Stat(legacyOpenClaw); !os.IsNotExist(err) {
+		t.Fatalf("legacy OpenClaw remains: %v", err)
 	}
 	if _, err := os.Stat(executablePath); !os.IsNotExist(err) {
 		t.Fatalf("connector binary remains: %v", err)
