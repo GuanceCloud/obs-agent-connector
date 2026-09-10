@@ -35,8 +35,20 @@ func TestBuiltInInstallersUseManagedConfigPaths(t *testing.T) {
 			result, err := InstallCursor(CursorOptions{Home: home, SourceExecutable: source, Endpoint: "https://example.invalid", Enabled: &enabled})
 			return result.ConfigFile, err
 		}},
+		{name: "dcode", install: func() (string, error) {
+			result, err := InstallDcode(DcodeOptions{Home: home, SourceExecutable: source, Endpoint: "https://example.invalid", Enabled: &enabled})
+			return result.ConfigFile, err
+		}},
 		{name: "codebuddy", install: func() (string, error) {
 			result, err := InstallCodeBuddy(CodeBuddyOptions{Home: home, SourceExecutable: source, Endpoint: "https://example.invalid", Enabled: &enabled})
+			return result.ConfigFile, err
+		}},
+		{name: "grok", install: func() (string, error) {
+			result, err := InstallGrok(GrokOptions{Home: home, SourceExecutable: source, Endpoint: "https://example.invalid", Enabled: &enabled})
+			return result.ConfigFile, err
+		}},
+		{name: "kiro", install: func() (string, error) {
+			result, err := InstallKiro(KiroOptions{Home: home, SourceExecutable: source, Endpoint: "https://example.invalid", Enabled: &enabled})
 			return result.ConfigFile, err
 		}},
 	}
@@ -63,7 +75,9 @@ func TestBuiltInPurgeRemovesManagedAndLegacyFiles(t *testing.T) {
 		"codex":     filepath.Join(".codex", "gtrace.json"),
 		"claude":    filepath.Join(".claude", "gtrace.json"),
 		"cursor":    filepath.Join(".cursor", "gtrace.json"),
+		"dcode":     filepath.Join(".deepagents", "gtrace.json"),
 		"codebuddy": filepath.Join(".codebuddy", "gtrace.json"),
+		"kiro":      filepath.Join(".kiro", "gtrace.json"),
 	}
 	for agent, legacyRelativePath := range legacyConfig {
 		t.Run(agent, func(t *testing.T) {

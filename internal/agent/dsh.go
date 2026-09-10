@@ -1,9 +1,11 @@
 package agent
 
 import (
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 )
 
@@ -38,14 +40,115 @@ func dshPlugin() Definition {
 
 func resolveDshPlugin(p Definition) Definition { return withDshProfile(p, dshProfile()) }
 
-func resolveDshForInstall(p Definition) (Definition, error) { return resolveDshPlugin(p), nil }
+func resolveDshForInstall(p Definition) (Definition, error) {
+	resolved := resolveDshPlugin(p)
+	if command, ok := resolveDshCommandPath(); ok {
+		resolved = withDshCommand(resolved, command)
+		return resolved, nil
+	}
+	return Definition{}, fmt.Errorf("dsh CLI was not found; install DeepSeek Harness CLI or set DSH_BINARY before installing its plugin")
+}
 
 func resolveDshForDiscovery(p Definition) (Definition, bool) {
 	resolved := resolveDshPlugin(p)
-	if _, err := exec.LookPath(resolved.AgentCommand); err == nil || PathExists(ExpandHome(dshHome())) {
+	if command, ok := resolveDshCommandPath(); ok {
+		resolved = withDshCommand(resolved, command)
+		return resolved, true
+	}
+	if PathExists(ExpandHome(dshHome())) {
 		return resolved, true
 	}
 	return Definition{}, false
+}
+
+func resolveDshCommandPath() (string, bool) {
+	candidates := []string{
+		strings.TrimSpace(os.Getenv("DSH_BINARY")),
+		strings.TrimSpace(os.Getenv("DEEPSEEK_HARNESS_BINARY")),
+		strings.TrimSpace(os.Getenv("DSH_CLI_PATH")),
+	}
+	if pathCommand, err := exec.LookPath("dsh"); err == nil {
+		candidates = append(candidates, pathCommand)
+	}
+	candidates = append(candidates, dshCachedCommandPaths()...)
+	seen := make(map[string]struct{}, len(candidates))
+	for _, candidate := range candidates {
+		candidate = strings.TrimSpace(candidate)
+		if candidate == "" {
+			continue
+		}
+		if absolute, err := filepath.Abs(candidate); err == nil {
+			candidate = absolute
+		}
+		if _, ok := seen[candidate]; ok {
+			continue
+		}
+		seen[candidate] = struct{}{}
+		if info, err := os.Stat(candidate); err == nil && !info.IsDir() {
+			return candidate, true
+		}
+	}
+	return "", false
+}
+
+func dshCachedCommandPaths() []string {
+	patterns := []string{
+		"~/.npm/_npx/*/node_modules/.bin/dsh",
+	}
+	var candidates []string
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(ExpandHome(pattern))
+		if err != nil {
+			continue
+		}
+		candidates = append(candidates, matches...)
+	}
+	sort.SliceStable(candidates, func(i, j int) bool {
+		left, leftErr := os.Stat(candidates[i])
+		right, rightErr := os.Stat(candidates[j])
+		switch {
+		case leftErr != nil && rightErr != nil:
+			return candidates[i] < candidates[j]
+		case leftErr != nil:
+			return false
+		case rightErr != nil:
+			return true
+		case left.ModTime().Equal(right.ModTime()):
+			return candidates[i] < candidates[j]
+		default:
+			return left.ModTime().After(right.ModTime())
+		}
+	})
+	return candidates
+}
+
+func withDshCommand(p Definition, command string) Definition {
+	command = strings.TrimSpace(command)
+	if command == "" {
+		return p
+	}
+	resolved := p
+	resolved.AgentCommand = command
+	commandDir := filepath.Dir(command)
+	if commandDir == "" || commandDir == "." {
+		return resolved
+	}
+	pathValue := commandDir
+	if current := strings.TrimSpace(os.Getenv("PATH")); current != "" {
+		pathValue += string(os.PathListSeparator) + current
+	}
+	replaced := false
+	for index, item := range resolved.Env {
+		if strings.HasPrefix(item, "PATH=") {
+			resolved.Env[index] = "PATH=" + pathValue
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		resolved.Env = append(resolved.Env, "PATH="+pathValue)
+	}
+	return resolved
 }
 
 func withDshProfile(p Definition, profile string) Definition {

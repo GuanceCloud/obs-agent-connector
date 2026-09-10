@@ -6,6 +6,7 @@ const (
 	appName            = "obs-agent-connector"
 	fixedType          = "gtrace"
 	defaultStaticBase  = "https://static.guance.com"
+	pluginOSSDirectory = "agent_plugins"
 	pluginSourceOSS    = "oss"
 	pluginSourceGitHub = "github"
 	configDirName      = ".obs-agent-connector"
@@ -21,6 +22,8 @@ func Run(args []string) error {
 	}
 
 	switch args[0] {
+	case "agents":
+		return listAgents(args[1:])
 	case "list":
 		return listPlugins(args[1:])
 	case "status":
@@ -63,6 +66,7 @@ Usage:
   obs-agent-connector <command> [arguments]
 
 Commands:
+  agents                List supported Agents and platforms
   list                  List installed Agent plugins
   status <agent>        Show one Agent plugin status
   discover              Detect local Agents; install missing plugins, or sync all with -u
@@ -74,25 +78,6 @@ Commands:
   remove <agent>        Remove an Agent plugin
   uninstall             Uninstall obs-agent-connector and its managed built-in Hooks
   version               Show version and check for updates
-
-Examples:
-  obs-agent-connector discover
-  obs-agent-connector discover -u
-  obs-agent-connector status codex
-  obs-agent-connector install codex
-  obs-agent-connector install codebuddy
-  obs-agent-connector install dsh
-  obs-agent-connector install cursor
-  obs-agent-connector config codex list
-  obs-agent-connector config codex edit --enabled=false
-  obs-agent-connector install opencode
-  obs-agent-connector install qoder
-  obs-agent-connector enable codex
-  obs-agent-connector disable codex
-  obs-agent-connector update codex
-  obs-agent-connector remove codex
-  obs-agent-connector uninstall
-  obs-agent-connector version
 
 `, appName)
 }

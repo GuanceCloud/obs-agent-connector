@@ -19,6 +19,20 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 	}
 	printSingleDetail("Runtime", executable)
 	switch p.Name {
+	case "workbuddy":
+		_, err = telemetryinstall.InstallWorkBuddy(telemetryinstall.WorkBuddyOptions{
+			ProfileDir: agent.ExpandHome(strings.TrimSuffix(p.BuiltinHookFile, "/settings.json")),
+			CodeBuddyOptions: telemetryinstall.CodeBuddyOptions{
+				SourceExecutable: executable, DestinationExecutable: executable,
+				Endpoint: input.Endpoint, TracePath: input.TracePath, MetricsPath: input.MetricsPath,
+				InstallType: fixedType, XToken: input.XToken, Headers: append([]string{}, input.Headers...),
+				ResourceAttributes: builtinResourceAttributes(input), CaptureContent: input.CaptureContent,
+				MaxChars: input.MaxChars, Enabled: input.Enabled, NoConfig: noConfig,
+			},
+		})
+		if err == nil {
+			printSingleDetail("Note", "Restart WorkBuddy before the next conversation to load the built-in Hooks and unload the previous plugin. If settings are overwritten on exit, rerun installation after quitting WorkBuddy.")
+		}
 	case "claude":
 		_, err = telemetryinstall.InstallClaude(telemetryinstall.ClaudeOptions{
 			SourceExecutable:      executable,
@@ -87,6 +101,76 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 			Enabled:               input.Enabled,
 			NoConfig:              noConfig,
 		})
+	case "dcode":
+		_, err = telemetryinstall.InstallDcode(telemetryinstall.DcodeOptions{
+			SourceExecutable:      executable,
+			DestinationExecutable: executable,
+			Endpoint:              input.Endpoint,
+			TracePath:             input.TracePath,
+			MetricsPath:           input.MetricsPath,
+			InstallType:           fixedType,
+			XToken:                input.XToken,
+			Headers:               append([]string{}, input.Headers...),
+			ResourceAttributes:    builtinResourceAttributes(input),
+			CaptureContent:        input.CaptureContent,
+			MaxChars:              input.MaxChars,
+			Enabled:               input.Enabled,
+			NoConfig:              noConfig,
+		})
+		if err == nil {
+			printSingleDetail("Note", "Start a new dcode session or run /reload to load the reconciled Hooks.")
+			printSingleDetail("Fallback", "Failed sessions are exported when Dcode emits SessionEnd with reason=other; provider error details remain unavailable.")
+		}
+	case "grok":
+		knownVersion, versionErr := agent.ValidateGrokVersion(p.AgentCommand)
+		if versionErr != nil {
+			err = versionErr
+			break
+		}
+		if !knownVersion {
+			printSingleDetail("Warning", "Could not determine the Grok Build version; continuing installation, but Grok Build "+agent.MinimumGrokVersion+" or later is required.")
+		}
+		resourceAttributes := builtinResourceAttributes(input)
+		if grokVersion, detected := agent.DetectGrokVersion(p.AgentCommand); detected {
+			resourceAttributes = append(resourceAttributes, "agent_version="+grokVersion)
+		}
+		_, err = telemetryinstall.InstallGrok(telemetryinstall.GrokOptions{
+			SourceExecutable:      executable,
+			DestinationExecutable: executable,
+			Endpoint:              input.Endpoint,
+			TracePath:             input.TracePath,
+			MetricsPath:           input.MetricsPath,
+			InstallType:           fixedType,
+			XToken:                input.XToken,
+			Headers:               append([]string{}, input.Headers...),
+			ResourceAttributes:    resourceAttributes,
+			CaptureContent:        input.CaptureContent,
+			MaxChars:              input.MaxChars,
+			Enabled:               input.Enabled,
+			NoConfig:              noConfig,
+		})
+		if err == nil {
+			printSingleDetail("Note", "Start a new Grok session or press l in the Hooks tab to load the reconciled global Hooks.")
+		}
+	case "kiro":
+		_, err = telemetryinstall.InstallKiro(telemetryinstall.KiroOptions{
+			SourceExecutable:      executable,
+			DestinationExecutable: executable,
+			Endpoint:              input.Endpoint,
+			TracePath:             input.TracePath,
+			MetricsPath:           input.MetricsPath,
+			InstallType:           fixedType,
+			XToken:                input.XToken,
+			Headers:               append([]string{}, input.Headers...),
+			ResourceAttributes:    builtinResourceAttributes(input),
+			CaptureContent:        input.CaptureContent,
+			MaxChars:              input.MaxChars,
+			Enabled:               input.Enabled,
+			NoConfig:              noConfig,
+		})
+		if err == nil {
+			printSingleDetail("Scope", "Kiro telemetry requires an interactive V3 TTY session started with kiro-cli chat --v3; default V2 and --no-interactive sessions do not load global Hooks.")
+		}
 	default:
 		return fmt.Errorf("%s does not have a built-in telemetry adapter", p.Name)
 	}

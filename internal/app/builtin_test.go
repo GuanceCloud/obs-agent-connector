@@ -342,6 +342,120 @@ func TestCodeBuddyInstallUsesBuiltin(t *testing.T) {
 	}
 }
 
+func TestKiroInstallUsesBuiltin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".kiro", "sessions", "cli"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", configPath)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"endpoint":"https://example.com","x_token":"synthetic-secret"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := captureStdout(t, func() {
+		if err := install([]string{"kiro", "--dry-run", "--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(output, "kiro (built into obs-agent-connector)") || strings.Contains(output, "kiro-otel-plugin") {
+		t.Fatalf("unexpected Kiro install plan: %s", output)
+	}
+}
+
+func TestDcodeInstallUsesBuiltin(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	if err := os.MkdirAll(filepath.Join(home, ".deepagents"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", configPath)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"endpoint":"https://example.com","x_token":"synthetic-secret"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	output := captureStdout(t, func() {
+		if err := install([]string{"dcode", "--dry-run", "--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(output, "dcode (built into obs-agent-connector)") || strings.Contains(output, "dcode-otel-plugin") {
+		t.Fatalf("unexpected dcode install plan: %s", output)
+	}
+}
+
+func TestDshInstallUsesCachedCommandForDryRun(t *testing.T) {
+	home := t.TempDir()
+	cacheBin := filepath.Join(home, ".npm", "_npx", "cache-id", "node_modules", ".bin")
+	if err := os.MkdirAll(cacheBin, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(cacheBin, "dsh"), []byte("#!/bin/sh\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	pathDir := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("PATH", pathDir)
+	t.Setenv("DSH_BINARY", "")
+	t.Setenv("DEEPSEEK_HARNESS_BINARY", "")
+	t.Setenv("DSH_CLI_PATH", "")
+	configPath := filepath.Join(home, ".obs-agent-connector", "config.json")
+	t.Setenv("OBS_AGENT_CONNECTOR_CONFIG", configPath)
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(configPath, []byte(`{"endpoint":"https://example.com","x_token":"synthetic-secret","plugin_source":"github","plugin_base_url":"https://github.com/GuanceCloud"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	output := captureStdout(t, func() {
+		if err := install([]string{"dsh", "--dry-run", "--yes"}); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(output, "dsh-otel-plugin/releases/latest/download/install-release.sh") {
+		t.Fatalf("unexpected dsh install plan: %s", output)
+	}
+	if !strings.Contains(output, "PATH="+cacheBin+string(os.PathListSeparator)+pathDir) {
+		t.Fatalf("expected dsh command preview to preserve resolved PATH: %s", output)
+	}
+}
+
+func TestBuiltinInstallReportsKiroAndDcodeTelemetryBoundaries(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	executable := filepath.Join(home, ".local", "bin", "obs-agent-connector")
+	originalExecutable := currentExecutable
+	currentExecutable = func() (string, error) { return executable, nil }
+	t.Cleanup(func() { currentExecutable = originalExecutable })
+
+	kiroOutput := captureStdout(t, func() {
+		if err := installBuiltinAdapter(agent.Get("kiro"), installInput{}, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	for _, expected := range []string{"interactive V3 TTY", "kiro-cli chat --v3", "default V2", "--no-interactive"} {
+		if !strings.Contains(kiroOutput, expected) {
+			t.Fatalf("Kiro install output did not report %q:\n%s", expected, kiroOutput)
+		}
+	}
+
+	dcodeOutput := captureStdout(t, func() {
+		if err := installBuiltinAdapter(agent.Get("dcode"), installInput{}, true); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if !strings.Contains(dcodeOutput, "SessionEnd with reason=other") || !strings.Contains(dcodeOutput, "provider error details remain unavailable") {
+		t.Fatalf("Dcode install output did not report the failure-terminal fallback:\n%s", dcodeOutput)
+	}
+}
+
 func TestLifecycleCommandsRejectRemovedNewRuntimeFlag(t *testing.T) {
 	tests := map[string]func([]string) error{
 		"install": install,
@@ -366,7 +480,10 @@ func TestUsageDoesNotAdvertiseNewRuntimeMode(t *testing.T) {
 	if strings.Contains(output, "[-n]") || strings.Contains(output, "new-runtime") || strings.Contains(output, "codex -n") {
 		t.Fatalf("usage must not advertise the removed runtime mode:\n%s", output)
 	}
-	for _, expected := range []string{"install codebuddy", "install codex", "config codex list", "remove codex"} {
+	if strings.Contains(output, "Examples:") {
+		t.Fatalf("main help must not include examples: %s", output)
+	}
+	for _, expected := range []string{"agents", "install <agent>", "config <agent>", "remove <agent>"} {
 		if !strings.Contains(output, expected) {
 			t.Fatalf("expected usage to contain %q, got:\n%s", expected, output)
 		}

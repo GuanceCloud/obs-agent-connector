@@ -116,12 +116,23 @@ plugin_base_from_download_base() {
   value="$1"
   value="${value%/}"
   case "$value" in
+    https://github.com/*/releases/download/*|http://github.com/*/releases/download/*)
+      printf '\n'
+      ;;
     */*)
-      printf '%s\n' "${value%/*}"
+	  printf '%s/agent_plugins\n' "${value%/*}"
       ;;
     *)
       printf '%s\n' "$value"
       ;;
+  esac
+}
+
+normalize_oss_plugin_base() {
+  value="${1%/}"
+  case "$value" in
+    */agent_plugins) printf '%s\n' "$value" ;;
+    *) printf '%s/agent_plugins\n' "$value" ;;
   esac
 }
 
@@ -203,6 +214,12 @@ fi
 if [ -z "${PLUGIN_BASE_URL}" ]; then
   if [ "${PLUGIN_SOURCE}" = "oss" ]; then
     PLUGIN_BASE_URL="$(plugin_base_from_download_base "${DOWNLOAD_BASE_URL}")"
+    if [ -z "${PLUGIN_BASE_URL}" ]; then
+      PLUGIN_BASE_URL="$(plugin_base_from_download_base "$(download_base_from_endpoint "${ENDPOINT}")")"
+    fi
+    if [ -z "${PLUGIN_BASE_URL}" ]; then
+      PLUGIN_BASE_URL="https://static.guance.com/agent_plugins"
+    fi
   fi
 fi
 
@@ -221,6 +238,9 @@ fi
 if [ "${PLUGIN_SOURCE}" = "github" ] && [ -z "${PLUGIN_BASE_URL}" ]; then
   echo "plugin_base_url is required when plugin_source=github; pass --plugin-base-url <url>" >&2
   exit 2
+fi
+if [ "${PLUGIN_SOURCE}" = "oss" ]; then
+  PLUGIN_BASE_URL="$(normalize_oss_plugin_base "${PLUGIN_BASE_URL}")"
 fi
 if [ -n "${GLOBAL_TAGS_LINES}" ]; then
   old_ifs="${IFS}"

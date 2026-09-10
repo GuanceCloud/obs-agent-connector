@@ -84,7 +84,7 @@ func TestResolvePluginsForInstallUsesWorkBuddyProfileDirectory(t *testing.T) {
 	if got := resolved[0].Env; len(got) != 1 || got[0] != "WORKBUDDY_CONFIG_DIR=~/.workbuddy" {
 		t.Fatalf("expected WorkBuddy env override, got %#v", got)
 	}
-	if got := resolved[0].ConfigFiles; len(got) != 1 || got[0] != "~/.workbuddy/gtrace.json" {
+	if got := resolved[0].ConfigFiles; len(got) != 2 || got[0] != "~/.obs-agent-connector/workbuddy/gtrace.json" || got[1] != "~/.workbuddy/gtrace.json" {
 		t.Fatalf("expected WorkBuddy config path, got %#v", got)
 	}
 }

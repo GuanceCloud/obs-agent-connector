@@ -55,9 +55,16 @@ func pluginDownloadSettings(overrideBase string, cfg connectorConfig, endpoint s
 	switch source {
 	case "", pluginSourceOSS:
 		source = pluginSourceOSS
+		if githubReleaseDownloadBase(baseURL) {
+			baseURL = ""
+		}
+		if baseURL == "" {
+			baseURL = staticBaseFromDownloadBase(cfg.DownloadBaseURL)
+		}
 		if baseURL == "" {
 			baseURL = staticBaseURL("", endpoint)
 		}
+		baseURL = ossPluginBaseURL(baseURL)
 	case pluginSourceGitHub:
 		if baseURL == "" {
 			return pluginDownloadConfig{}, fmt.Errorf("plugin_base_url is required when plugin_source=github")
@@ -70,6 +77,14 @@ func pluginDownloadSettings(overrideBase string, cfg connectorConfig, endpoint s
 		Source:  source,
 		BaseURL: strings.TrimRight(baseURL, "/"),
 	}, nil
+}
+
+func ossPluginBaseURL(value string) string {
+	value = strings.TrimRight(strings.TrimSpace(value), "/")
+	if value == "" || strings.HasSuffix(value, "/"+pluginOSSDirectory) {
+		return value
+	}
+	return value + "/" + pluginOSSDirectory
 }
 
 func normalizePluginSource(value string) string {
@@ -294,6 +309,9 @@ func staticBaseFromDownloadBase(downloadBase string) string {
 	if downloadBase == "" {
 		return ""
 	}
+	if githubReleaseDownloadBase(downloadBase) {
+		return ""
+	}
 
 	parsed, err := url.Parse(downloadBase)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
@@ -317,6 +335,11 @@ func staticBaseFromDownloadBase(downloadBase string) string {
 
 	parsed.Path = cleanedPath[:lastSlash]
 	return strings.TrimRight(parsed.String(), "/")
+}
+
+func githubReleaseDownloadBase(value string) bool {
+	_, ok := githubReleaseRepo(value)
+	return ok
 }
 
 func derivedStaticBaseFromEndpoint(endpoint string) string {

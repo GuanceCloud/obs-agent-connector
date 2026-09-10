@@ -41,6 +41,8 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 	var result RemoveResult
 	var err error
 	switch adapter {
+	case "workbuddy":
+		result, err = removeWorkBuddy(home, options)
 	case "claude":
 		result, err = removeClaude(home, options)
 	case "codebuddy":
@@ -49,6 +51,12 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 		result, err = removeCodex(home, options)
 	case "cursor":
 		result, err = removeCursor(home, options)
+	case "dcode":
+		result, err = removeDcode(home, options)
+	case "grok":
+		result, err = removeGrok(home, options)
+	case "kiro":
+		result, err = removeKiro(home, options)
 	default:
 		return RemoveResult{}, errors.New("unsupported adapter " + adapter)
 	}
@@ -62,6 +70,163 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 		}
 		result.ConfigRemoved = true
 		result.ManagedFilesRemoved = true
+	}
+	return result, nil
+}
+
+func removeGrok(home string, options RemoveOptions) (RemoveResult, error) {
+	result := RemoveResult{
+		Adapter:    "grok",
+		HookFile:   filepath.Join(home, ".grok", "hooks", "obs-agent-connector.json"),
+		ConfigFile: agentfiles.ConfigPath(home, "grok"),
+	}
+	value, exists, err := readJSONObjectIfExists(result.HookFile)
+	if err != nil {
+		return result, err
+	}
+	if exists {
+		hooks, err := grokHooksObject(value)
+		if err != nil {
+			return result, err
+		}
+		for _, event := range grokHookEvents {
+			groups, err := grokHookGroups(hooks, event)
+			if err != nil {
+				return result, err
+			}
+			next, changed := removeManagedGrokHandlers(groups)
+			if !changed {
+				continue
+			}
+			result.HookRemoved = true
+			if len(next) == 0 {
+				delete(hooks, event)
+			} else {
+				hooks[event] = next
+			}
+		}
+		if result.HookRemoved {
+			if len(hooks) == 0 {
+				delete(value, "hooks")
+			}
+			if len(value) == 0 {
+				if err := removeFileIfExists(result.HookFile); err != nil {
+					return result, err
+				}
+			} else if err := writeJSONAtomic(result.HookFile, value); err != nil {
+				return result, err
+			}
+		}
+	}
+	if options.PurgeConfig {
+		if err := removeConfigFiles(result.ConfigFile); err != nil {
+			return result, err
+		}
+		result.ConfigRemoved = true
+	}
+	if options.PurgeState {
+		if err := os.RemoveAll(filepath.Join(agentfiles.Directory(home, "grok"), "state")); err != nil {
+			return result, err
+		}
+		if err := removeFileIfExists(agentfiles.HookLogPath(home, "grok")); err != nil {
+			return result, err
+		}
+		result.StatePurged = true
+	}
+	return result, nil
+}
+
+func removeDcode(home string, options RemoveOptions) (RemoveResult, error) {
+	result := RemoveResult{
+		Adapter:    "dcode",
+		HookFile:   filepath.Join(home, ".deepagents", "hooks.json"),
+		ConfigFile: agentfiles.ConfigPath(home, "dcode"),
+	}
+	value, exists, err := readJSONObjectIfExists(result.HookFile)
+	if err != nil {
+		return result, err
+	}
+	if exists {
+		hooks, _ := value["hooks"].(map[string]any)
+		for _, event := range dcodeHookEvents {
+			groups, _ := hooks[event].([]any)
+			next, changed := removeManagedDcodeHandlers(groups)
+			if changed {
+				hooks[event] = next
+				result.HookRemoved = true
+			}
+		}
+		if result.HookRemoved {
+			if err := writeJSONWatched(result.HookFile, value); err != nil {
+				return result, err
+			}
+		}
+	}
+	if options.PurgeConfig {
+		if err := removeConfigFiles(result.ConfigFile, filepath.Join(home, ".deepagents", "gtrace.json")); err != nil {
+			return result, err
+		}
+		result.ConfigRemoved = true
+	}
+	if options.PurgeState {
+		if err := os.RemoveAll(filepath.Join(agentfiles.Directory(home, "dcode"), "state")); err != nil {
+			return result, err
+		}
+		if err := removeFileIfExists(agentfiles.HookLogPath(home, "dcode")); err != nil {
+			return result, err
+		}
+		result.StatePurged = true
+	}
+	return result, nil
+}
+
+func removeKiro(home string, options RemoveOptions) (RemoveResult, error) {
+	result := RemoveResult{
+		Adapter:    "kiro",
+		HookFile:   filepath.Join(home, ".kiro", "hooks", "obs-agent-connector.json"),
+		ConfigFile: agentfiles.ConfigPath(home, "kiro"),
+	}
+	value, exists, err := readJSONObjectIfExists(result.HookFile)
+	if err != nil {
+		return result, err
+	}
+	if exists {
+		entries, _ := value["hooks"].([]any)
+		next := make([]any, 0, len(entries))
+		for _, entry := range entries {
+			if managedKiroHook(entry) {
+				result.HookRemoved = true
+				continue
+			}
+			next = append(next, entry)
+		}
+		if result.HookRemoved {
+			if len(next) == 0 {
+				if err := removeFileIfExists(result.HookFile); err != nil {
+					return result, err
+				}
+			} else {
+				value["hooks"] = next
+				if err := writeJSONAtomic(result.HookFile, value); err != nil {
+					return result, err
+				}
+			}
+		}
+	}
+	if options.PurgeConfig {
+		if err := removeConfigFiles(result.ConfigFile, filepath.Join(home, ".kiro", "gtrace.json")); err != nil {
+			return result, err
+		}
+		result.ConfigRemoved = true
+	}
+	if options.PurgeState {
+		if err := os.RemoveAll(filepath.Join(home, ".kiro", "gtrace")); err != nil {
+			return result, err
+		}
+		if err := removeFileIfExists(agentfiles.HookLogPath(home, "kiro")); err != nil {
+			return result, err
+		}
+		result.StatePurged = true
 	}
 	return result, nil
 }

@@ -184,10 +184,49 @@ func TestPluginDownloadSettingsUsesConfigForGitHub(t *testing.T) {
 	}
 }
 
+func TestPluginDownloadSettingsAddsOSSDirectory(t *testing.T) {
+	for _, base := range []string{
+		"https://static.example.com",
+		"https://static.example.com/agent_plugins",
+	} {
+		download, err := pluginDownloadSettings(base, connectorConfig{}, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if download.Source != pluginSourceOSS || download.BaseURL != "https://static.example.com/agent_plugins" {
+			t.Fatalf("unexpected plugin download config: %#v", download)
+		}
+	}
+}
+
 func TestPluginDownloadSettingsRejectsGitHubWithoutBaseURL(t *testing.T) {
 	_, err := pluginDownloadSettings("", connectorConfig{PluginSource: "github"}, "")
 	if err == nil {
 		t.Fatal("expected plugin_base_url validation error")
+	}
+}
+
+func TestPluginDownloadSettingsFallsBackFromGitHubReleasePathForOSS(t *testing.T) {
+	cfg := connectorConfig{
+		DownloadBaseURL: "https://github.com/GuanceCloud/obs-agent-connector/releases/download/v0.1.23-rc2",
+		PluginSource:    "oss",
+		PluginBaseURL:   "https://github.com/GuanceCloud/obs-agent-connector/releases/download/agent_plugins",
+	}
+	download, err := pluginDownloadSettings("", cfg, "https://llm-openway.guance.com")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if download.Source != pluginSourceOSS {
+		t.Fatalf("expected source %q, got %q", pluginSourceOSS, download.Source)
+	}
+	if download.BaseURL != "https://static.guance.com/agent_plugins" {
+		t.Fatalf("unexpected plugin base URL %q", download.BaseURL)
+	}
+}
+
+func TestStaticBaseFromDownloadBaseRejectsGitHubReleaseDownloadPath(t *testing.T) {
+	if got := staticBaseFromDownloadBase("https://github.com/GuanceCloud/obs-agent-connector/releases/download/v0.1.23-rc2"); got != "" {
+		t.Fatalf("expected empty static base for GitHub release download path, got %q", got)
 	}
 }
 

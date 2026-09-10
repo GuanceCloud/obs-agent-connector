@@ -26,7 +26,7 @@ func update(args []string) error {
 func updatePlugins(args []string) error {
 	fs := flag.NewFlagSet("update", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
-	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
+	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. OSS paths use the agent_plugins directory")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without updating")
 

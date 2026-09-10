@@ -10,8 +10,10 @@ Supported Agents:
 - `codebuddy`
 - `codex`
 - `cursor`
+- `dcode`
 - `dsh`
 - `hermes`
+- `kiro`
 - `opencode`
 - `openclaw`
 - `qoder`
@@ -20,7 +22,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dsh`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
+- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `kiro`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
 
 ## Install obs-agent-connector
 
@@ -66,7 +68,7 @@ Typical content:
 {
   "download_base_url": "https://static.guance.com/obs-agent-connector",
   "plugin_source": "oss",
-  "plugin_base_url": "https://static.guance.com",
+  "plugin_base_url": "https://static.guance.com/agent_plugins",
   "endpoint": "https://llm-openway.guance.com",
   "x_token": "agent_xxx"
 }
@@ -78,7 +80,7 @@ Field reference:
 | --- | --- |
 | `download_base_url` | Download base URL for the connector itself, including metadata and binary packages |
 | `plugin_source` | Agent plugin source, currently `oss` or `github` |
-| `plugin_base_url` | Base URL used for Agent plugin downloads |
+| `plugin_base_url` | Base URL used for Agent plugin downloads; OSS defaults to the `agent_plugins` directory |
 | `endpoint` | OBS / GTrace ingest endpoint |
 | `x_token` | Authentication token |
 
@@ -122,7 +124,8 @@ Default behavior:
 - if `--download-base-url` is omitted, it is derived from `--endpoint`  
   Example: `https://llm-openway.guance.com` -> `https://static.guance.com/obs-agent-connector`
 - if `--plugin-source` is omitted, the default is `oss`
-- if `plugin_source=oss` and `--plugin-base-url` is omitted, the value is derived from `download_base_url`
+- if `plugin_source=oss` and `--plugin-base-url` is omitted, the value is derived from `download_base_url` and ends in `/agent_plugins`
+- legacy OSS base URLs without `/agent_plugins` are normalized automatically
 
 ### `install.ps1`
 
@@ -155,6 +158,7 @@ obs-agent-connector discover -u
 obs-agent-connector install codex
 obs-agent-connector install codebuddy
 obs-agent-connector install cursor
+obs-agent-connector install dcode
 obs-agent-connector config codex list
 obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
 obs-agent-connector install opencode
@@ -186,7 +190,7 @@ The output includes:
 
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
 
-Claude, CodeBuddy, Codex, and Cursor use built-in runtimes. Other Agents use their external plugins.
+Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, and Kiro use built-in runtimes. Other Agents use their external plugins.
 
 ## `status`
 
@@ -243,7 +247,7 @@ Notes:
 - `list` prints the current managed `gtrace.json` values
 - `edit` merges the supplied values into the existing config and rewrites the file
 - built-in adapters write `~/.obs-agent-connector/<agent>/gtrace.json`; an existing Agent-local config is used as the migration source when necessary
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `kiro`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are not supported by this command
 
 ## `discover`
@@ -294,6 +298,9 @@ obs-agent-connector discover --update
 - only includes `qoder` when `~/.qoder` or `~/.qoder-cn` already exists
 - includes `cursor` when `~/.cursor` already exists, even if the Cursor CLI is not in `PATH`
 - prefers `cursor-agent` when multiple compatible Cursor CLI binaries are present
+- includes `dcode` when the Dcode command is available or `~/.deepagents` already exists
+- Dcode normal turns use `Stop`; failed sessions use `SessionEnd(reason=other)` and omit unsupported provider error details, LLM spans, and usage data
+- Kiro telemetry requires `kiro-cli chat --v3` in an interactive TTY; default V2 and non-interactive modes do not load the managed global Hooks
 - also includes `opencode` when `~/.config/opencode` already exists, even if `opencode` is not in `PATH`
 - only includes `workbuddy` when the WorkBuddy profile directory already exists, for example `~/.workbuddy`
 
@@ -325,7 +332,7 @@ Parameters:
 Behavior:
 
 - removes the current connector binary
-- removes the managed Claude, CodeBuddy, Codex, and Cursor adapters and compatible legacy plugin residue
+- removes the managed Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, and Kiro adapters and compatible legacy plugin residue where applicable
 - removes connector-managed per-Agent config, Hook logs, and upload state by default
 - removes the global connector config by default
 - with `--keep-config`, preserves global and per-Agent config while still removing Hooks, logs, and upload state
@@ -338,6 +345,9 @@ Install a single Agent plugin:
 
 ```bash
 obs-agent-connector install codex
+obs-agent-connector install cursor
+obs-agent-connector install dcode
+obs-agent-connector install kiro
 ```
 
 Install a built-in adapter with the ordinary command:
@@ -346,6 +356,9 @@ Install a built-in adapter with the ordinary command:
 obs-agent-connector install claude
 obs-agent-connector install codebuddy
 obs-agent-connector install codex
+obs-agent-connector install cursor
+obs-agent-connector install dcode
+obs-agent-connector install kiro
 ```
 
 Parameters:
@@ -386,6 +399,8 @@ Notes:
 - Claude installation replaces legacy `claude-otel-plugin` Hook entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - CodeBuddy installation replaces legacy `codebuddy-hook` entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - Codex installation replaces legacy `codex-otel-plugin` Hook entries, updates managed Stop Hooks, and preserves unrelated Hook entries
+- Dcode installation manages Hooks v2 in `~/.deepagents/hooks.json` and preserves unrelated Hook groups and handlers; start a new session or run `/reload` after installation; failed sessions with `SessionEnd(reason=other)` produce an error root Trace without fabricated LLM or usage data
+- Kiro installation manages `~/.kiro/hooks/obs-agent-connector.json`, preserves unrelated entries in that file, and replays the exact modern or legacy terminal session selected by the Hook session ID; the supported launch mode is `kiro-cli chat --v3` in an interactive TTY
 - existing runtime configuration and upload state are preserved unless explicitly changed or purged
 
 ## `update`
@@ -408,7 +423,7 @@ Notes:
 
 - `update` accepts a single Agent target only
 - the command preserves the existing runtime config
-- the built-in Claude, CodeBuddy, Codex, and Cursor adapters reconcile their Hooks without modifying `~/.obs-agent-connector/<agent>/gtrace.json`
+- the built-in Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, and Kiro adapters reconcile their Hooks without modifying `~/.obs-agent-connector/<agent>/gtrace.json`
 - external plugin installers receive `--no-config`
 
 ## `enable` / `disable`
@@ -438,6 +453,9 @@ Notes:
   - `claude`
   - `codebuddy`
   - `codex`
+  - `cursor`
+  - `dcode`
+  - `kiro`
   - `qoder`
   - `openclaw`
 - `hermes` is not supported because its runtime config is YAML, not the JSON `enabled` structure handled by this CLI
@@ -470,6 +488,8 @@ Notes:
 - legacy Agent-local and external plugin configuration is kept unless `--purge-config` is supplied
 - `remove` accepts a single Agent target only
 - `remove claude` and `remove codebuddy` preserve unrelated entries in their settings files
+- `remove dcode` removes connector-owned handlers from `~/.deepagents/hooks.json` and preserves unrelated Hook groups and handlers
+- `remove kiro` removes connector-owned entries from `~/.kiro/hooks/obs-agent-connector.json` and preserves unrelated entries
 - `remove codex` removes connector-owned Codex Hooks and trust state and also attempts to clean legacy `codex-otel-plugin` residue without blocking removal on legacy cleanup failures
 
 ## `version`
@@ -514,6 +534,8 @@ Supported Agents on Windows:
 - `codebuddy`
 - `codex`
 - `cursor`
+- `dcode`
+- `kiro`
 - `opencode`
 - `openclaw`
 - `qoder`
@@ -522,7 +544,7 @@ Supported Agents on Windows:
 Notes:
 
 - built-in adapters register the current connector executable directly
-- external plugins use their GitHub release PowerShell installer
+- external plugins use the PowerShell installer from the configured OSS or GitHub source
 - unsupported Agents return a friendly error
 
 ## Qoder Notes

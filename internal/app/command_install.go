@@ -33,7 +33,7 @@ func install(args []string) error {
 	var tags repeatedValue
 	fs.Var(&headers, "header", "Built-in adapter HTTP header KEY=VALUE; may be repeated")
 	fs.Var(&tags, "tag", "Resource attribute KEY=VALUE; may be repeated")
-	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
+	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. OSS paths use the agent_plugins directory")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print commands without installing")
 
@@ -124,7 +124,6 @@ func install(args []string) error {
 	fmt.Println("Install plan:")
 	targets := make([]string, 0, len(selected))
 	for _, p := range selected {
-		p = agent.Resolve(p)
 		if p.IsBuiltin() {
 			targets = append(targets, fmt.Sprintf("%s (built into obs-agent-connector)", p.Name))
 			continue
@@ -157,7 +156,6 @@ func install(args []string) error {
 		fmt.Println()
 		fmt.Println("Command preview:")
 		for _, p := range selected {
-			p = agent.Resolve(p)
 			if p.IsBuiltin() {
 				fmt.Printf("register %s hook with the current obs-agent-connector runtime\n", p.Name)
 				continue
@@ -181,7 +179,6 @@ func install(args []string) error {
 	}
 
 	for _, p := range selected {
-		p = agent.Resolve(p)
 		if err := installOne(pluginDownload, p, input); err != nil {
 			return err
 		}

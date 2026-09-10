@@ -54,11 +54,24 @@ function Get-PluginBaseFromDownloadBase {
     return ""
   }
   $Trimmed = $Value.TrimEnd("/")
+  if ($Trimmed -match '^https?://github\.com/[^/]+/[^/]+/releases/download/[^/]+$') {
+    return ""
+  }
   $SlashIndex = $Trimmed.LastIndexOf("/")
   if ($SlashIndex -lt 0) {
     return $Trimmed
   }
-  return $Trimmed.Substring(0, $SlashIndex)
+  return "$($Trimmed.Substring(0, $SlashIndex))/agent_plugins"
+}
+
+function Get-NormalizedOssPluginBase {
+  param([string]$Value)
+
+  $Trimmed = $Value.TrimEnd("/")
+  if ($Trimmed.EndsWith("/agent_plugins", [System.StringComparison]::OrdinalIgnoreCase)) {
+    return $Trimmed
+  }
+  return "$Trimmed/agent_plugins"
 }
 
 if (-not $DownloadBaseUrl) {
@@ -74,12 +87,21 @@ if (-not $PluginSource) {
 }
 if ((-not $PluginBaseUrl) -and ($PluginSource -eq "oss")) {
   $PluginBaseUrl = Get-PluginBaseFromDownloadBase -Value $DownloadBaseUrl
+  if (-not $PluginBaseUrl) {
+    $PluginBaseUrl = Get-PluginBaseFromDownloadBase -Value (Get-DownloadBaseFromEndpoint -Value $Endpoint)
+  }
+  if (-not $PluginBaseUrl) {
+    $PluginBaseUrl = "https://static.guance.com/agent_plugins"
+  }
 }
 if (-not $DownloadBaseUrl) {
   throw "download_base_url is required; pass -DownloadBaseUrl <url> or set DOWNLOAD_BASE_URL / OBS_AGENT_CONNECTOR_OSS_ENDPOINT"
 }
 if (($PluginSource -eq "github") -and (-not $PluginBaseUrl)) {
   throw "plugin_base_url is required when plugin_source=github; pass -PluginBaseUrl <url>"
+}
+if ($PluginSource -eq "oss") {
+  $PluginBaseUrl = Get-NormalizedOssPluginBase -Value $PluginBaseUrl
 }
 foreach ($Assignment in @($Tag)) {
   if ((-not $Assignment) -or (-not $Assignment.Contains("=")) -or ($Assignment.IndexOf("=") -le 0)) {

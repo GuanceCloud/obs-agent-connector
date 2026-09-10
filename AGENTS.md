@@ -10,6 +10,7 @@ The CLI supports plugin lifecycle operations for:
 - `codebuddy`
 - `codex`
 - `hermes`
+- `kiro`
 - `openclaw`
 - `qoder`
 - `qoder-cn`

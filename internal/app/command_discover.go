@@ -18,7 +18,7 @@ func discover(args []string) error {
 	fs.SetOutput(os.Stderr)
 	endpoint := fs.String("endpoint", "", "GTrace endpoint")
 	xToken := fs.String("x-token", "", "GTrace X-Token")
-	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. Default: connector download source, then endpoint root domain")
+	staticBaseFlag := fs.String("static-base", "", "Installer script and plugin package base URL. OSS paths use the agent_plugins directory")
 	yes := fs.Bool("yes", false, "Skip confirmation")
 	dryRun := fs.Bool("dry-run", false, "Print planned actions without installing")
 	updateMode := fs.Bool("u", false, "Update installed plugins and install missing ones")
