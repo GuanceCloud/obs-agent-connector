@@ -36,20 +36,41 @@ type Options struct {
 	Events             []JournalEvent
 }
 
+type transcriptUsage struct {
+	InputTokens  int64 `json:"input_tokens"`
+	OutputTokens int64 `json:"output_tokens"`
+	Details      struct {
+		CacheRead     int64 `json:"cache_read"`
+		CacheCreation int64 `json:"cache_creation"`
+	} `json:"input_token_details"`
+}
+
+type transcriptToolCall struct {
+	ID   string `json:"id"`
+	Name string `json:"name"`
+	Args any    `json:"args"`
+}
+
 type transcriptRecord struct {
-	SchemaVersion int    `json:"schema_version"`
-	Sequence      int    `json:"sequence"`
-	RecordID      string `json:"record_id"`
-	Timestamp     string `json:"timestamp"`
-	ThreadID      string `json:"thread_id"`
-	AgentID       string `json:"agent_id"`
-	Role          string `json:"role"`
-	MessageID     string `json:"message_id"`
-	Content       any    `json:"content"`
-	Name          string `json:"name"`
+	ToolCalls     []transcriptToolCall `json:"tool_calls"`
+	ToolCallID    string               `json:"tool_call_id"`
+	Usage         transcriptUsage      `json:"usage_metadata"`
+	SchemaVersion int                  `json:"schema_version"`
+	Sequence      int                  `json:"sequence"`
+	RecordID      string               `json:"record_id"`
+	Timestamp     string               `json:"timestamp"`
+	ThreadID      string               `json:"thread_id"`
+	AgentID       string               `json:"agent_id"`
+	Role          string               `json:"role"`
+	MessageID     string               `json:"message_id"`
+	Content       any                  `json:"content"`
+	Name          string               `json:"name"`
 }
 
 type rawAssistant struct {
+	History   []transcriptRecord
+	ToolCalls []transcriptToolCall
+	Usage     model.Usage
 	ID        string
 	Content   any
 	Text      string
@@ -161,6 +182,12 @@ func currentTurn(records []transcriptRecord, expectedPrompt string) (string, []r
 	}
 	prompt := contentText(records[start].Content)
 	assistants := make([]rawAssistant, 0)
+	history := make([]transcriptRecord, 0)
+	for _, record := range records[:start+1] {
+		if record.AgentID == "" {
+			history = append(history, record)
+		}
+	}
 	for _, record := range records[start+1:] {
 		if record.Role == "user" {
 			break
@@ -171,13 +198,16 @@ func currentTurn(records []transcriptRecord, expectedPrompt string) (string, []r
 		switch record.Role {
 		case "assistant":
 			assistants = append(assistants, rawAssistant{
-				ID: firstNonEmpty(record.MessageID, record.RecordID), Content: record.Content, Text: contentText(record.Content),
+				History: append([]transcriptRecord(nil), history...), ToolCalls: record.ToolCalls,
+				Usage: model.Usage{InputTokens: record.Usage.InputTokens, OutputTokens: record.Usage.OutputTokens, CacheReadTokens: record.Usage.Details.CacheRead, CacheCreateTokens: record.Usage.Details.CacheCreation},
+				ID:    firstNonEmpty(record.MessageID, record.RecordID), Content: record.Content, Text: contentText(record.Content),
 			})
 		case "tool":
 			if len(assistants) > 0 {
 				assistants[len(assistants)-1].ToolCount++
 			}
 		}
+		history = append(history, record)
 	}
 	return prompt, assistants
 }
@@ -276,21 +306,36 @@ func normalize(options Options, prompt, output string, assistants []rawAssistant
 		turn.OutputPreview = preview.Text(output, options.MaxChars)
 	}
 
+	triggeringCalls := toolTriggeringCalls(assistants)
+	for ti, tool := range tools {
+		for _, assistant := range assistants {
+			for _, call := range assistant.ToolCalls {
+				if call.ID == tool.ID && call.ID != "" {
+					for len(triggeringCalls) <= ti {
+						triggeringCalls = append(triggeringCalls, "")
+					}
+					triggeringCalls[ti] = assistant.ID
+				}
+			}
+		}
+	}
 	for index, assistant := range assistants {
-		callStart, callEnd := sliceWindow(start, end, index, len(assistants))
+		callStart, callEnd := llmWindow(start, end, index, assistants, tools, triggeringCalls)
 		call := model.LLMCall{
 			CallID:        firstNonEmpty(assistant.ID, derivedID(turnID, "llm", strconv.Itoa(index))),
 			StartUnixNano: callStart, EndUnixNano: callEnd, Status: "ok",
-			ExtraAttributes: map[string]any{"timing.source": "dcode_turn_slice"},
+			ExtraAttributes: map[string]any{"timing.source": "dcode_hook_bounds_estimate"},
 		}
 		if index == len(assistants)-1 {
 			call.FinishReasons = []string{"stop"}
 		}
 		if options.CaptureContent != "none" {
-			if index == 0 {
+			call.InputMessages = historyMessages(assistant.History, tools, triggeringCalls, options.MaxChars)
+			if call.InputMessages == nil {
 				call.InputMessages = turn.InputMessages
-				call.InputPreview = turn.InputPreview
 			}
+			call.InputPreview = preview.Text(call.InputMessages, options.MaxChars)
+			call.ExtraAttributes["input.source"] = "dcode_transcript_reconstruction"
 			content := assistant.Content
 			text := assistant.Text
 			if index == len(assistants)-1 && output != "" {
@@ -304,13 +349,47 @@ func normalize(options Options, prompt, output string, assistants []rawAssistant
 				call.OutputKind = "tool_call"
 			}
 		}
+		parts, hasTools := assistantParts(assistant.ID, assistant.Content, assistant.ToolCalls, tools, triggeringCalls, options.MaxChars)
+		if hasTools {
+			call.FinishReasons = []string{"tool_calls"}
+			call.OutputKind = "tool_call"
+			if options.CaptureContent != "none" {
+				call.OutputMessages = []any{map[string]any{"role": "assistant", "parts": parts}}
+				call.OutputPreview = preview.Text(parts, options.MaxChars)
+			}
+		}
+
+		// Preserve structured records separately while presenting the complete
+		// reconstructed conversation to receivers that display only message 0.
+		if options.CaptureContent != "none" {
+			call.ExtraAttributes["dcode.input.messages"] = messageJSON(call.InputMessages)
+			call.ExtraAttributes["dcode.output.messages"] = messageJSON(call.OutputMessages)
+			call.InputMessages = conversationText(call.InputMessages, options.MaxChars)
+			call.InputPreview = preview.Text(call.InputMessages, options.MaxChars)
+			if hasTools {
+				call.OutputMessages = conversationText(call.OutputMessages, options.MaxChars)
+			}
+		}
+		call.Usage = assistant.Usage
+		turn.Usage.InputTokens += call.Usage.InputTokens
+		turn.Usage.OutputTokens += call.Usage.OutputTokens
+		turn.Usage.CacheReadTokens += call.Usage.CacheReadTokens
+		turn.Usage.CacheCreateTokens += call.Usage.CacheCreateTokens
 		turn.LLMCalls = append(turn.LLMCalls, call)
 	}
 
-	triggeringCalls := toolTriggeringCalls(assistants)
 	for index, raw := range tools {
 		toolStart, toolEnd, timingSource := toolWindow(raw, start, end)
 		arguments := firstNonNil(raw.Pre.Payload["tool_input"], raw.Post.Payload["tool_input"])
+		if arguments == nil {
+			for _, assistant := range assistants {
+				for _, call := range assistant.ToolCalls {
+					if call.ID != "" && call.ID == raw.ID {
+						arguments = call.Args
+					}
+				}
+			}
+		}
 		result := raw.Post.Payload["tool_response"]
 		tool := model.ToolCall{
 			CallID: raw.ID, Name: firstNonEmpty(raw.Name, eventToolName(raw.Pre.Payload), eventToolName(raw.Post.Payload), "unknown"),
@@ -368,6 +447,134 @@ func normalize(options Options, prompt, output string, assistants []rawAssistant
 		turn.AssistantOutputs = append(turn.AssistantOutputs, assistant)
 	}
 	return turn
+}
+
+func conversationText(value any, maxChars int) string {
+	messages, _ := value.([]any)
+	var lines []string
+	for _, item := range messages {
+		message, _ := item.(map[string]any)
+		role, _ := message["role"].(string)
+		lines = append(lines, role+":")
+		parts, _ := message["parts"].([]any)
+		for _, item := range parts {
+			part, _ := item.(map[string]any)
+			switch part["type"] {
+			case "text":
+				lines = append(lines, privacy.Text(part["content"], maxChars))
+			case "tool_call":
+				lines = append(lines, "tool_call "+privacy.Text(part["name"], maxChars)+" ("+privacy.Text(part["id"], maxChars)+") arguments: "+privacy.Text(part["arguments"], maxChars))
+			case "tool_call_response":
+				lines = append(lines, "tool_result "+privacy.Text(part["name"], maxChars)+" ("+privacy.Text(part["id"], maxChars)+"): "+privacy.Text(part["response"], maxChars))
+			}
+		}
+		lines = append(lines, "")
+	}
+	return privacy.Text(strings.TrimSpace(strings.Join(lines, "\n")), maxChars)
+}
+
+func messageJSON(messages any) any {
+	if messages == nil {
+		return nil
+	}
+	encoded, err := json.Marshal(messages)
+	if err != nil {
+		return nil
+	}
+	return string(encoded)
+}
+
+// historyMessages reconstructs the available transcript, not the provider's wire
+// request: injected system prompts and context compaction may not be recorded.
+func historyMessages(records []transcriptRecord, tools []toolBoundary, triggers []string, maxChars int) any {
+	var messages []any
+	for _, record := range records {
+		if record.AgentID != "" {
+			continue
+		}
+		var parts []any
+		switch record.Role {
+		case "assistant":
+			parts, _ = assistantParts(firstNonEmpty(record.MessageID, record.RecordID), record.Content, record.ToolCalls, tools, triggers, maxChars)
+		case "tool":
+			parts = []any{map[string]any{"type": "tool_call_response", "id": record.ToolCallID, "name": record.Name, "response": privacy.Sanitize(record.Content, maxChars)}}
+		case "user", "system":
+			parts = []any{map[string]any{"type": "text", "content": privacy.Text(record.Content, maxChars)}}
+		default:
+			continue
+		}
+		if len(parts) > 0 {
+			messages = append(messages, map[string]any{"role": record.Role, "parts": parts})
+		}
+	}
+	if len(messages) == 0 {
+		return nil
+	}
+	return messages
+}
+
+func assistantParts(id string, content any, calls []transcriptToolCall, tools []toolBoundary, triggers []string, maxChars int) ([]any, bool) {
+	var parts []any
+	if text := contentText(content); text != "" {
+		parts = append(parts, map[string]any{"type": "text", "content": privacy.Text(text, maxChars)})
+	}
+	seen := map[string]bool{}
+	hasTools := false
+	add := func(id, name string, args any) {
+		if id != "" && seen[id] {
+			return
+		}
+		seen[id] = true
+		hasTools = true
+		parts = append(parts, map[string]any{"type": "tool_call", "id": id, "name": name, "arguments": privacy.Sanitize(args, maxChars)})
+	}
+	for _, call := range calls {
+		add(call.ID, call.Name, call.Args)
+	}
+	for ti, raw := range tools {
+		if ti < len(triggers) && triggers[ti] == id && id != "" {
+			add(raw.ID, raw.Name, firstNonNil(raw.Pre.Payload["tool_input"], raw.Post.Payload["tool_input"]))
+		}
+	}
+	return parts, hasTools
+}
+
+// llmWindow bounds inferred calls by causally preceding/following tool hooks.
+// Consecutive model messages without an observed tool boundary share that gap.
+func llmWindow(start, end int64, index int, assistants []rawAssistant, tools []toolBoundary, triggers []string) (int64, int64) {
+	parentStart, parentEnd := start, end
+	left, right := 0, len(assistants)-1
+	for ti, tool := range tools {
+		if ti >= len(triggers) {
+			continue
+		}
+		for ai, assistant := range assistants {
+			if assistant.ID != triggers[ti] {
+				continue
+			}
+			ts, te, _ := toolWindow(tool, parentStart, parentEnd)
+			if ai < index {
+				if te > start {
+					start = te
+				}
+				if ai+1 > left {
+					left = ai + 1
+				}
+			} else {
+				if ts < end {
+					end = ts
+				}
+				if ai < right {
+					right = ai
+				}
+			}
+			break
+		}
+	}
+	if end <= start {
+		end = start + 1
+	}
+	return sliceWindow(start, end, index-left, right-left+1)
 }
 
 func failedSessionEnd(events []JournalEvent) (JournalEvent, bool) {

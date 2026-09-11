@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -51,6 +52,13 @@ func TestReadTurnBuildsDcodeToolChain(t *testing.T) {
 	}
 	if got := turn.ToolCalls[0].EndUnixNano - turn.ToolCalls[0].StartUnixNano; got != 1250*int64(time.Millisecond) {
 		t.Fatalf("dcode duration_ms was not used: %d", got)
+	}
+	if turn.LLMCalls[0].EndUnixNano > turn.ToolCalls[0].StartUnixNano || turn.LLMCalls[1].StartUnixNano < turn.ToolCalls[0].EndUnixNano {
+		t.Fatalf("LLM/tool causal order lost: %#v", turn)
+	}
+	encoded, _ := json.Marshal(turn.LLMCalls[0].OutputMessages)
+	if !strings.Contains(string(encoded), "go test ./...") || !strings.Contains(string(encoded), "tool_call") || turn.LLMCalls[0].OutputPreview == "" {
+		t.Fatalf("missing tool arguments in LLM output: %s", encoded)
 	}
 	if turn.Resource["team"] != "platform" || turn.Resource["agent_runtime"] != "dcode" {
 		t.Fatalf("unexpected resource attributes: %#v", turn.Resource)
@@ -183,5 +191,27 @@ func writeTranscript(t *testing.T, path string, records []map[string]any) {
 	}
 	if err := file.Close(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestReadTurnUsesPerMessageUsage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "usage.jsonl")
+	writeTranscript(t, path, []map[string]any{
+		{"schema_version": 1, "thread_id": "s", "role": "user", "content": "old"},
+		{"schema_version": 1, "thread_id": "s", "role": "assistant", "usage_metadata": map[string]any{"input_tokens": 999}},
+		{"schema_version": 1, "thread_id": "s", "role": "user", "content": "read"},
+		{"schema_version": 1, "thread_id": "s", "role": "assistant", "message_id": "a", "content": "", "usage_metadata": map[string]any{"input_tokens": 11647, "output_tokens": 50, "input_token_details": map[string]any{"cache_read": 10240}}},
+		{"schema_version": 1, "thread_id": "s", "role": "assistant", "message_id": "sub", "agent_id": "child", "usage_metadata": map[string]any{"input_tokens": 999}},
+		{"schema_version": 1, "thread_id": "s", "role": "assistant", "message_id": "b", "content": "done", "usage_metadata": map[string]any{"input_tokens": 11732, "output_tokens": 13, "input_token_details": map[string]any{"cache_read": 11264}}},
+	})
+	turn, ok, err := ReadTurn(Options{TranscriptPath: path, SessionID: "s", TurnID: "t", CaptureContent: "none"})
+	if err != nil || !ok {
+		t.Fatalf("read: %v %v", ok, err)
+	}
+	if len(turn.LLMCalls) != 2 || turn.Usage.InputTokens != 23379 || turn.Usage.OutputTokens != 63 || turn.Usage.CacheReadTokens != 21504 {
+		t.Fatalf("incorrect usage: %#v", turn)
+	}
+	if turn.LLMCalls[0].Usage.InputTokens != 11647 || turn.LLMCalls[1].Usage.OutputTokens != 13 {
+		t.Fatal("per-call usage missing")
 	}
 }

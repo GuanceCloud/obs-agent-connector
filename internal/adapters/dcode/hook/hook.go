@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/dcode/buildinfo"
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/dcode/checkpoint"
 	dcodeconfig "github.com/GuanceCloud/obs-agent-connector/internal/adapters/dcode/config"
 	dcodeparse "github.com/GuanceCloud/obs-agent-connector/internal/adapters/dcode/parse"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
@@ -263,6 +264,7 @@ func ProcessQueue(queuePath string, options RunOptions) error {
 		return os.Remove(queuePath)
 	}
 	if queued.Turn == nil {
+		queued.TranscriptPath = checkpoint.Enrich(queued.SessionID, queued.TranscriptPath)
 		turn, ok, err := dcodeparse.ReadTurn(dcodeparse.Options{
 			TranscriptPath: queued.TranscriptPath, SessionID: queued.SessionID, TurnID: queued.TurnID,
 			Cwd: queued.Cwd, LastAssistant: queued.LastAssistant, AgentVersion: queued.AgentVersion,
