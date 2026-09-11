@@ -324,7 +324,7 @@ func buildTurnSpans(turn *model.Turn, sessionMeta model.SessionMeta, cfg config.
 		if step.HasModelEndTime {
 			llmEnd = step.ModelEndTime
 		}
-		spans = append(spans, makeSpan(traceID, generationSpanID, rootSpanID, "llm", llmStart, llmEnd, llmAttrs, resource, scope, ingest, model.SpanStatus{Code: "STATUS_CODE_UNSET"}))
+		spans = append(spans, makeSpan(traceID, generationSpanID, rootSpanID, "llm", llmStart, llmEnd, llmAttrs, resource, scope, ingest, model.SpanStatus{Code: "STATUS_CODE_OK"}))
 
 		for messageIndex, message := range assistantMessagesFromStep(step) {
 			assistantAttrs := commonAttributes(cfg, sessionMeta)
@@ -346,7 +346,7 @@ func buildTurnSpans(turn *model.Turn, sessionMeta model.SessionMeta, cfg config.
 			setAttr(assistantAttrs, "step_index", index)
 			setAttr(assistantAttrs, "message_index", messageIndex)
 			setAttr(assistantAttrs, "status", "ok")
-			spans = append(spans, makeSpan(traceID, randomSpanID(), rootSpanID, "assistant", message.StartTime, message.EndTime, assistantAttrs, resource, scope, ingest, model.SpanStatus{Code: "STATUS_CODE_UNSET"}))
+			spans = append(spans, makeSpan(traceID, randomSpanID(), rootSpanID, "assistant", message.StartTime, message.EndTime, assistantAttrs, resource, scope, ingest, model.SpanStatus{Code: "STATUS_CODE_OK"}))
 		}
 
 		for _, tc := range step.ToolCalls {
@@ -1341,7 +1341,7 @@ func spanStatus(hasError bool, message string) model.SpanStatus {
 	if hasError {
 		return model.SpanStatus{Code: "STATUS_CODE_ERROR", Message: message}
 	}
-	return model.SpanStatus{Code: "STATUS_CODE_UNSET"}
+	return model.SpanStatus{Code: "STATUS_CODE_OK"}
 }
 
 func previousToolOutputs(toolCalls []*model.ToolCall, maxChars int) any {

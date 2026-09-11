@@ -1,0 +1,9 @@
+{"schema":1,"session_id":"test-session","turn_id":"test-turn","started_at":1700000000000,"ended_at":1700000001000,"events":[
+{"type":"input","at":1700000000001,"message":{"role":"user","content":"Read the skill and say hello","timestamp":1700000000001}},
+{"type":"turn_start","at":1700000000002},
+{"type":"assistant","at":1700000000200,"message":{"role":"assistant","timestamp":1700000000010,"duration":180,"ttft":15,"provider":"test","model":"test-model","stopReason":"toolUse","usage":{"input":10,"output":5,"cacheRead":3,"cacheWrite":2},"content":[{"type":"toolCall","id":"call-1","name":"read","arguments":{"path":"/synthetic/skills/example/SKILL.md"}}]}},
+{"type":"tool_start","at":1700000000201,"call_id":"call-1","name":"read","args":{"path":"/synthetic/skills/example/SKILL.md","token":"private-value"}},
+{"type":"tool_end","at":1700000000300,"call_id":"call-1","name":"read","result":[{"type":"text","text":"A synthetic skill"}],"is_error":false},
+{"type":"turn_start","at":1700000000301},
+{"type":"assistant","at":1700000000900,"message":{"role":"assistant","timestamp":1700000000310,"duration":550,"provider":"test","model":"test-model","stopReason":"stop","usage":{"input":20,"output":7},"content":[{"type":"text","text":"Hello token=private-value"}]}}
+]}

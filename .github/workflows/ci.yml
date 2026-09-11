@@ -29,6 +29,12 @@ jobs:
       - name: Run vet
         run: go vet ./...
 
+      - name: Verify OMP extension lifecycle
+        run: |
+          node scripts/test-omp-extension.mjs
+          node scripts/test-omp-subagents.mjs
+          node scripts/test-omp-worker.mjs
+
       - name: Build local binary
         run: go build -o obs-agent-connector ./cmd/obs-agent-connector
 

@@ -19,6 +19,21 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 	}
 	printSingleDetail("Runtime", executable)
 	switch p.Name {
+	case "omp":
+		ompVersion, versionErr := agent.OMPVersion(p.AgentCommand)
+		if versionErr != nil {
+			return versionErr
+		}
+		attributes := append(builtinResourceAttributes(input), "agent_version="+ompVersion)
+		_, err = telemetryinstall.InstallOMP(telemetryinstall.CodexOptions{
+			SourceExecutable: executable, Endpoint: input.Endpoint, TracePath: input.TracePath,
+			MetricsPath: input.MetricsPath, InstallType: fixedType, XToken: input.XToken,
+			Headers: input.Headers, ResourceAttributes: attributes, CaptureContent: input.CaptureContent,
+			MaxChars: input.MaxChars, Enabled: input.Enabled, NoConfig: noConfig,
+		})
+		if err == nil {
+			printSingleDetail("Note", "Fully exit and restart OMP to load the telemetry extension. /reload-plugins does not reload JavaScript extensions.")
+		}
 	case "workbuddy":
 		_, err = telemetryinstall.InstallWorkBuddy(telemetryinstall.WorkBuddyOptions{
 			ProfileDir: agent.ExpandHome(strings.TrimSuffix(p.BuiltinHookFile, "/settings.json")),

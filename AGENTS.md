@@ -12,6 +12,7 @@ The CLI supports plugin lifecycle operations for:
 - `hermes`
 - `kiro`
 - `openclaw`
+- `omp`
 - `qoder`
 - `qoder-cn`
 
@@ -33,7 +34,7 @@ Do not add Agent-specific branches to `internal/agent/registry.go`. Use the reso
 
 Do not generate Agent runtime configuration in command handlers. Runtime configuration files such as `gtrace.json`, `config.yaml`, or `openclaw.json` are owned by the matching built-in or external Agent installer.
 
-Shared telemetry behavior belongs in `internal/core`. Product-specific collection behavior belongs in `internal/adapters/<product>`. CodeBuddy uses its built-in adapter. Claude, Codex, and other Agents use their external plugins.
+Shared telemetry behavior belongs in `internal/core`. Product-specific collection behavior belongs in `internal/adapters/<product>`. OMP uses a bundled native extension and the built-in Go collector. Each Agent's backend is defined in its matching file under `internal/agent`.
 
 ## Commands
 

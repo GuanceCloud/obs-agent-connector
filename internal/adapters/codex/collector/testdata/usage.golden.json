@@ -5,7 +5,7 @@
       "name": "assistant",
       "parent_key": "invoke_agent|run=turn-1",
       "duration_ms": 300,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "assistant_message_event_time": "2026-06-03T10:00:04.300Z",
         "assistant_message_start_time": "2026-06-03T10:00:04.000Z",
@@ -21,7 +21,7 @@
       "key": "invoke_agent|run=turn-1",
       "name": "invoke_agent",
       "duration_ms": 3400,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "final_status": "completed",
         "gen_ai.conversation.id": "sess-basic",
@@ -80,7 +80,7 @@
       "name": "llm",
       "parent_key": "invoke_agent|run=turn-1",
       "duration_ms": 1100,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "gen_ai.conversation.id": "sess-basic",
         "gen_ai.operation.name": "chat",
@@ -142,7 +142,7 @@
       "name": "llm",
       "parent_key": "invoke_agent|run=turn-1",
       "duration_ms": 1600,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "gen_ai.conversation.id": "sess-basic",
         "gen_ai.operation.name": "chat",
@@ -204,7 +204,7 @@
       "name": "tool:exec_command",
       "parent_key": "invoke_agent|run=turn-1",
       "duration_ms": 1000,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "gen_ai.conversation.id": "sess-basic",
         "gen_ai.operation.name": "execute_tool",
@@ -230,7 +230,7 @@
       "name": "skill:plugin-creator",
       "parent_key": "tool:exec_command|call=call-1",
       "duration_ms": 1000,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "gen_ai.conversation.id": "sess-basic",
         "gen_ai.operation.name": "skill",

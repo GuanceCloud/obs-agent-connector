@@ -17,6 +17,7 @@ var definitions = map[string]Definition{
 	"grok":      grokPlugin(),
 	"hermes":    hermesPlugin(),
 	"kiro":      kiroPlugin(),
+	"omp":       ompPlugin(),
 	"opencode":  opencodePlugin(),
 	"openclaw":  openClawPlugin(),
 	"qoder":     qoderPlugin(),

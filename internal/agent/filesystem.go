@@ -8,6 +8,9 @@ import (
 )
 
 func InstalledMarker(p Definition) (string, bool) {
+	if p.ResolveInstalled != nil {
+		return p.ResolveInstalled(p)
+	}
 	if p.IsBuiltin() {
 		for _, rawPath := range p.Markers {
 			path := ExpandHome(rawPath)
