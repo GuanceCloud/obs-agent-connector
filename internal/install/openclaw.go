@@ -88,9 +88,6 @@ func InstallOpenClaw(options OpenClawOptions) (CodexResult, error) {
 				attrs["service.name"] = name
 				current["resourceAttributes"] = attrs
 			}
-			if enabled, ok := legacy["enabled"].(bool); ok && !enabled {
-				current["enabled"] = false
-			}
 			migrated = true
 		}
 	}

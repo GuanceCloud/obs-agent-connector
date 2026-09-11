@@ -85,6 +85,40 @@ func TestOpenClawLifecycle(t *testing.T) {
 		t.Fatal("legacy config not purged")
 	}
 }
+
+func TestOpenClawMigrationIgnoresDisabledLegacyRegistration(t *testing.T) {
+	o := openClawOptions(t)
+	host := OpenClawConfigPath(o.Home)
+	legacy := map[string]any{
+		"plugins": map[string]any{
+			"entries": map[string]any{
+				"openclaw-otel-plugin": map[string]any{
+					"enabled": false,
+					"config": map[string]any{
+						"enabled":  true,
+						"endpoint": "https://legacy.invalid",
+					},
+				},
+			},
+		},
+	}
+	if err := writeJSONAtomic(host, legacy); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := InstallOpenClaw(o)
+	if err != nil {
+		t.Fatal(err)
+	}
+	config, _, err := readJSONObjectIfExists(result.ConfigFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if config["enabled"] != true {
+		t.Fatalf("disabled legacy registration disabled the built-in runtime: %#v", config)
+	}
+}
+
 func TestOpenClawCustomRootAndMalformedConfig(t *testing.T) {
 	o := openClawOptions(t)
 	root := filepath.Join(o.Home, "custom-state")
