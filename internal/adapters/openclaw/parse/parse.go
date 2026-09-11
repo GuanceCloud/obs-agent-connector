@@ -310,7 +310,18 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 			if at <= 0 || at > end {
 				at = end
 			}
-			call := llm(m, fmt.Sprintf("message-%d", i), at-int64(time.Millisecond), at, cfg)
+			callStart := at - int64(time.Millisecond)
+			transcriptBoundary := assistantCount == 1 && at > start && str(m, "provider") != "" && str(m, "model") != ""
+			if transcriptBoundary {
+				callStart = start
+			}
+			call := llm(m, fmt.Sprintf("message-%d", i), callStart, at, cfg)
+			if transcriptBoundary {
+				call.InputPreview = t.InputPreview
+				call.InputMessages = t.InputMessages
+				call.InputLength = t.InputLength
+				call.ExtraAttributes["openclaw.timing_source"] = "transcript_turn_boundary"
+			}
 			for _, window := range windows {
 				if assistantCount == 1 && ((window.messageID != "" && window.messageID == str(m, "id")) || len(windows) == 1) {
 					applyWindow(&call, window)
@@ -403,7 +414,7 @@ func Normalize(p Payload, cfg config.Config) (model.Turn, bool) {
 	if len(modelCalls) == 0 {
 		measured := make([]model.LLMCall, 0, len(t.LLMCalls))
 		for _, call := range t.LLMCalls {
-			if call.ExtraAttributes["openclaw.timing_source"] == "native_hook_boundary" {
+			if source := call.ExtraAttributes["openclaw.timing_source"]; source == "native_hook_boundary" || source == "transcript_turn_boundary" {
 				measured = append(measured, call)
 			}
 		}

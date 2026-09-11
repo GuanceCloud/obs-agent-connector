@@ -134,6 +134,32 @@ func TestSnapshotKeepsStructuredToolCallOutput(t *testing.T) {
 	}
 }
 
+func TestSingleModelSnapshotRecoversLLMWhenTypedHooksAreMissing(t *testing.T) {
+	p, err := Decode([]byte(`{"event":"agent_end","at":2000000,"startedAt":1999000,"sessionId":"s1","runId":"r1","success":true,"prompt":"current","messages":[
+{"role":"user","timestamp":1999000,"content":"current"},
+{"role":"assistant","timestamp":1999900,"provider":"openai","model":"gpt-5.5","stopReason":"stop","content":[{"type":"text","text":"done"}],"usage":{"input":12,"output":3,"cacheRead":4}}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	turn, ok := Normalize(p, config.Config{CaptureContent: "preview", MaxChars: 1000})
+	if !ok || len(turn.LLMCalls) != 1 {
+		t.Fatalf("missing transcript-backed LLM call: %#v", turn)
+	}
+	call := turn.LLMCalls[0]
+	if call.Provider != "openai" || call.RequestModel != "gpt-5.5" || call.EndUnixNano-call.StartUnixNano != 900*int64(time.Millisecond) {
+		t.Fatalf("invalid transcript-backed LLM identity or timing: %#v", call)
+	}
+	if call.ExtraAttributes["openclaw.timing_source"] != "transcript_turn_boundary" || call.Usage.InputTokens != 12 || call.Usage.OutputTokens != 3 || call.Usage.CacheReadTokens != 4 || turn.AggregateUsageOnly {
+		t.Fatalf("transcript-backed LLM metadata was lost: %#v", call)
+	}
+	assertTextMessages(t, call.InputMessages, "user", "current")
+	assertTextMessages(t, call.OutputMessages, "assistant", "done")
+	spans := (semantic.Builder{}).Build(turn)
+	if len(spans) != 3 || spans[1].Name != "llm" {
+		t.Fatalf("expected invoke_agent, llm, and assistant spans: %#v", spans)
+	}
+}
+
 func TestNativeStartBoundariesAndMissingToolTiming(t *testing.T) {
 	p, _ := Decode([]byte(fixture))
 	p.Observations = append(p.Observations,

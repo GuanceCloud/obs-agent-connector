@@ -48,6 +48,8 @@ test('native bridge isolates runs, passes argv without a shell, and respects dis
     assert.equal(ended.timeToFirstByteMs,125);
     assert.equal(ended.headers,undefined);
     assert.equal(sent[0].observations.length, 4);
+    const diagnostics = readFileSync(join(dir, 'gtrace-hooks.json'), 'utf8').trim().split('\n').map(line => JSON.parse(line));
+    assert.deepEqual(diagnostics[0].extra, { observations: 4, kinds: { llm_input: 1, llm_output: 1, model_call_started: 1, model_call_ended: 1 } });
     await hooks.get('agent_end')({ runId: 'b', success: true, messages: [] }, {});
     assert.equal(sent[1].prompt, 'second');
     assert.equal(sent[1].observations.length, 1);
@@ -59,7 +61,7 @@ test('native bridge isolates runs, passes argv without a shell, and respects dis
     registerBridge({ on: (name, cb) => hooks.set(name, cb), registerService: () => {} }, () => { throw new Error('secret-command-argument'); });
     await hooks.get('agent_end')({ runId: 'd', success: true }, { sessionId: 's' });
     const logs = readFileSync(join(dir, 'gtrace-hooks.json'), 'utf8');
-    const event = JSON.parse(logs.trim());
+    const event = logs.trim().split('\n').map(line => JSON.parse(line)).find(item => item.message === 'bridge failed');
     assert.equal(event.message, 'bridge failed');
     assert.equal(event.extra.reason, 'spawn failed');
     assert.ok(Number.isFinite(Date.parse(event.ts)));

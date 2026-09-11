@@ -86,6 +86,9 @@ export function registerBridge(api, launch = spawn, now = Date.now) {
       const key = keyFor(event, ctx);
       const run = key && runs.get(key);
       if (key) runs.delete(key);
+      const kinds = {};
+      for (const observation of run?.observations || []) kinds[observation.kind] = (kinds[observation.kind] || 0) + 1;
+      log('agent end observed', { observations: run?.observations?.length || 0, kinds });
       return execute({ ...run, event: 'agent_end', at: now(), runId: event.runId || ctx.runId,
         sessionId: ctx.sessionId || run?.sessionId || ctx.sessionKey, trigger: ctx.trigger,
         success: event.success, error: event.error, durationMs: event.durationMs,
