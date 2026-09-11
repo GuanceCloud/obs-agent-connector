@@ -134,6 +134,9 @@ Generate an observability dashboard.
 		t.Fatalf("expected 2 assistant spans, got %d", len(assistants))
 	}
 	for _, span := range assistants {
+		if span.Status.Code != "STATUS_CODE_OK" {
+			t.Fatalf("%s: expected explicit OK, got %s", span.Name, span.Status.Code)
+		}
 		if span.ParentID != root.SpanID {
 			t.Fatalf("assistant parent mismatch: %#v", span)
 		}

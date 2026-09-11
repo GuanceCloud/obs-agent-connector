@@ -63,6 +63,9 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 	}
 	ids := map[string]string{}
 	for _, span := range spans {
+		if span.Status.Code != "STATUS_CODE_OK" {
+			t.Fatalf("%s: expected explicit OK, got %s", span.Name, span.Status.Code)
+		}
 		ids[span.Name] = span.SpanID
 		if span.Name != "invoke_agent" && span.Name != "skill:demo" && span.ParentID != root.SpanID {
 			t.Fatalf("%s must be a direct root child", span.Name)

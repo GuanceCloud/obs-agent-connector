@@ -3,6 +3,7 @@ package hook
 import (
 	"compress/gzip"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/omp/config"
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/omp/parse"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/proto"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
@@ -286,5 +288,64 @@ func TestOMPMalformedSnapshotIsDiscarded(t *testing.T) {
 	entries, err := os.ReadDir(filepath.Dir(path))
 	if err != nil || len(entries) != 0 {
 		t.Fatal("malformed snapshot retained", err)
+	}
+}
+
+func TestOMPNativeStatusMatchesGTraceAfterEncoding(t *testing.T) {
+	for _, failed := range []bool{false, true} {
+		snapshot, err := parse.DecodeSnapshot(fixtureBody(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if failed {
+			for i := range snapshot.Events {
+				if snapshot.Events[i].Type == "tool_end" {
+					snapshot.Events[i].IsError = true
+				}
+				if snapshot.Events[i].Message.Role == "assistant" {
+					snapshot.Events[i].Message.StopReason = "error"
+				}
+			}
+		}
+		turn, err := parse.Normalize(snapshot, testConfig(t))
+		if err != nil {
+			t.Fatal(err)
+		}
+		spans := buildSpans(turn)
+		expected := map[string]int{}
+		errorCount := 0
+		for _, span := range spans {
+			switch span.Attributes["status"] {
+			case "ok":
+				expected[span.SpanID] = 1
+			case "error":
+				expected[span.SpanID] = 2
+				errorCount++
+			default:
+				t.Fatalf("unexpected GTrace status: %v", span.Attributes["status"])
+			}
+		}
+		if len(spans) == 0 || (failed && errorCount == 0) {
+			t.Fatal("missing status coverage")
+		}
+		wire := proto.EncodeExportTraceServiceRequest(otlp.SpansToProtoRequest(spans))
+		decoded, err := proto.DecodeExportTraceServiceRequest(wire)
+		if err != nil {
+			t.Fatal(err)
+		}
+		count := 0
+		for _, resource := range decoded.ResourceSpans {
+			for _, scope := range resource.ScopeSpans {
+				for _, span := range scope.Spans {
+					count++
+					if int(span.Status.Code) != expected[hex.EncodeToString(span.SpanID)] {
+						t.Fatalf("%s status=%d, want %d", span.Name, span.Status.Code, expected[hex.EncodeToString(span.SpanID)])
+					}
+				}
+			}
+		}
+		if count != len(spans) {
+			t.Fatal("encoded spans missing")
+		}
 	}
 }

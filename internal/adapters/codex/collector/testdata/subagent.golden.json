@@ -5,7 +5,7 @@
       "name": "assistant",
       "parent_key": "invoke_agent|run=turn-child",
       "duration_ms": 300,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "assistant_message_event_time": "2026-07-24T08:00:02.300Z",
         "assistant_message_start_time": "2026-07-24T08:00:02.000Z",
@@ -20,7 +20,7 @@
       "name": "assistant",
       "parent_key": "invoke_agent|run=turn-child",
       "duration_ms": 100,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "assistant_message_start_time": "2026-07-24T08:00:04.000Z",
         "gen_ai.conversation.id": "sess-child",
@@ -34,7 +34,7 @@
       "name": "invoke_agent",
       "parent_key": "invoke_agent|run=turn-child",
       "duration_ms": 1100,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "final_status": "completed",
         "gen_ai.conversation.id": "sess-child",
@@ -52,7 +52,7 @@
       "key": "invoke_agent|run=turn-parent",
       "name": "invoke_agent",
       "duration_ms": 1400,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "final_status": "completed",
         "gen_ai.conversation.id": "sess-parent",
@@ -71,7 +71,7 @@
       "name": "llm",
       "parent_key": "invoke_agent|run=turn-child",
       "duration_ms": 1000,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "gen_ai.conversation.id": "sess-child",
         "gen_ai.operation.name": "chat",
@@ -91,7 +91,7 @@
       "name": "llm",
       "parent_key": "invoke_agent|run=turn-child",
       "duration_ms": 1200,
-      "status_code": "STATUS_CODE_UNSET",
+      "status_code": "STATUS_CODE_OK",
       "attributes": {
         "gen_ai.conversation.id": "sess-parent",
         "gen_ai.operation.name": "chat",

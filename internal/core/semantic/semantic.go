@@ -224,7 +224,7 @@ func makeSpan(
 	scope model.Scope,
 	errorType string,
 ) model.Span {
-	status := model.SpanStatus{Code: "STATUS_CODE_UNSET"}
+	status := model.SpanStatus{Code: "STATUS_CODE_OK"}
 	if errorType != "" {
 		status.Code = "STATUS_CODE_ERROR"
 		status.Message = errorType
