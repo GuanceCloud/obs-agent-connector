@@ -1,27 +1,37 @@
 # obs-agent-connector
 
-`obs-agent-connector` is the single command-line runtime for installing, managing, and collecting OBS/GTrace telemetry across multiple AI coding agents.
+`obs-agent-connector` is a single Go binary for installing and managing OBS/GTrace integrations and collecting telemetry from AI coding agents.
 
-The tool provides one binary and one version for connector lifecycle operations and built-in telemetry adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, and WorkBuddy. Other Agents continue to use their external plugins.
+The current stable release is [v0.1.24](https://github.com/GuanceCloud/obs-agent-connector/releases/tag/v0.1.24). See the [release notes](docs/releases/v0.1.24.md) for changes and compatibility details.
 
 ## Features
 
-- Bootstrap the CLI and OBS defaults with one installer command.
-- Collect Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, and WorkBuddy turns through built-in adapters without separate repositories.
-- Install external Agent plugins through their standard release installers.
-- Auto-discover local Agents, install missing plugins, and sync all plugins with `discover -u`.
-- Reuse stored `endpoint` and `x-token` defaults from `~/.obs-agent-connector/config.json`.
-- Update one installed Agent plugin while preserving plugin-owned configuration.
-- Enable or disable an installed plugin by updating its runtime config.
-- Remove installed plugins while keeping configuration by default, with an automatic CLI fallback when the native Agent command is unavailable.
-- Detect installed plugins and their configuration paths.
-- Show the current CLI version and check whether a newer GitHub release is available.
-- Run CLI self-update directly from the `version -u` command.
-- Support separate Qoder international and China editions.
-- Install the CLI through a dedicated installer script.
-- Use native installers for Unix shell and Windows PowerShell.
-- Keep CLI download metadata in `~/.obs-agent-connector/config.json`.
-- Build release packages for macOS, Linux, and Windows.
+- Built-in telemetry adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, and WorkBuddy, with one binary and one version.
+- External plugin installation through standard OSS or GitHub Release installers.
+- Local Agent discovery, installation, updates, status, configuration, enable/disable, and removal.
+- Shared endpoint and X-Token defaults, automatically generated Agent identities, and configuration-preserving plugin updates.
+- CLI version checks and self-update with `version -u`.
+- Verified release packages and native installers for macOS, Linux, and Windows on AMD64 and ARM64.
+
+## Install
+
+macOS / Linux:
+
+```bash
+curl -fsSL -O https://static.guance.com/obs-agent-connector/install.sh && \
+sh install.sh --endpoint=https://llm-openway.guance.com --x-token=agent_xxx
+```
+
+Windows PowerShell:
+
+```powershell
+Invoke-WebRequest -Uri "https://static.guance.com/obs-agent-connector/install.ps1" -OutFile "install.ps1"
+.\install.ps1 -Endpoint "https://llm-openway.guance.com" -XToken "agent_xxx"
+```
+
+The installer verifies `SHA256SUMS`, installs the binary, and records the download source and shared defaults in `~/.obs-agent-connector/config.json`. Reload your shell if the installer updates `PATH`. Run command-line binaries from a terminal; do not double-click them in macOS Finder.
+
+For a specific version or GitHub download source, see the [distribution guide](docs/distribution.md).
 
 ## Supported Agents
 
@@ -42,168 +52,63 @@ The tool provides one binary and one version for connector lifecycle operations 
 | `qoder` | `qoder-otel-plugin` | `✅` | `✅` | `✅` | Auto-detects CN vs global layout and passes the matching `--variant` value |
 | `workbuddy` | Built into `obs-agent-connector` | `✅` | `❌` | `✅` | Multi-Hook journal plus JSONL replay; restart after migrating from the external plugin |
 
+`qoder` automatically selects the global (`~/.qoder`) or CN (`~/.qoder-cn`) layout. The legacy `qoder-cn` target remains available and forces the CN layout.
+
+Platform support describes connector installation and packaging; product runtime requirements and validation limits are listed above and in the [plugin matrix](docs/plugins.md).
+
 ## Common Commands
 
 ```bash
-obs-agent-connector agents
-obs-agent-connector list
-obs-agent-connector status codex
-obs-agent-connector discover
-obs-agent-connector discover -u
-obs-agent-connector install codex
-obs-agent-connector install codebuddy
-obs-agent-connector install cursor
-obs-agent-connector install dcode
-obs-agent-connector install grok
-obs-agent-connector install kiro
-obs-agent-connector install dsh
+obs-agent-connector agents                 # List supported Agents and platforms
+obs-agent-connector discover               # Detect Agents and install missing plugins
+obs-agent-connector discover -u            # Sync all detected plugins
+obs-agent-connector install codex          # Install one Agent integration
 obs-agent-connector install omp
-obs-agent-connector config codex list
-obs-agent-connector config codex edit --enabled=false --endpoint=https://llm-openway.truewatch.com
-obs-agent-connector install opencode
-obs-agent-connector install qoder
 obs-agent-connector install workbuddy
+obs-agent-connector list                   # List installed plugins
+obs-agent-connector status codex
+obs-agent-connector config codex list
+obs-agent-connector config codex edit --enabled=false
 obs-agent-connector enable codex
 obs-agent-connector disable codex
-obs-agent-connector update codex
+obs-agent-connector update codex           # Preserve existing plugin configuration
 obs-agent-connector remove codex
 obs-agent-connector uninstall
 obs-agent-connector version
-obs-agent-connector version -u
+obs-agent-connector version -u             # Update the connector binary
 ```
 
-For Qoder installs, `obs-agent-connector` detects the local layout and uses:
+`install` and `discover` reuse stored endpoint and X-Token defaults and generate Agent ID and Agent Name unless explicitly supplied. `update` requires one Agent name and preserves configuration with `--no-config`.
 
-- `--variant cn` with `~/.qoder-cn` when the CN layout is detected
-- `--variant global` with `~/.qoder` when the global layout is detected
+Built-in adapters store configuration, Hook logs, and replay state under `~/.obs-agent-connector/<agent>/`. External installers own their runtime configuration. Removing a built-in adapter deletes its managed Hooks and directory; legacy Agent-local configuration remains unless `--purge-config` is supplied. Use `uninstall --keep-config` to retain connector-managed configuration.
 
-For plugin installation, `obs-agent-connector` first reuses the CLI download source recorded in `~/.obs-agent-connector/config.json`.
-If that source is unavailable, the CLI derives the installer base from `--endpoint` by mapping the root domain to `https://static.<root-domain>/agent_plugins`.
-Use `--static-base` to override this behavior.
-
-External plugins use one installer contract for OSS and GitHub Release sources. The connector passes the common version, `--type gtrace`, endpoint, X-Token, tags, and profile/variant arguments. The plugin installer owns archive download and checksum verification, plugin registration, and its private runtime configuration. The connector does not pass `--source` or read an external plugin's private `gtrace.json`.
-
-Compatibility note:
-
-- `qoder-cn` is still accepted as a legacy compatibility target and always forces the CN layout.
-- On Windows, `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `omp`, `opencode`, `openclaw`, `qoder`, and `workbuddy` are supported.
-- Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, and WorkBuddy register the connector directly; external plugins use the PowerShell installer from the configured OSS or GitHub source.
-
-Bootstrap the CLI with shared defaults:
-
-```bash
-curl -fsSL -O https://static.guance.com/obs-agent-connector/install.sh && \
-sh install.sh --endpoint=https://llm-openway.guance.com --x-token=agent_xxx
-```
-
-On first install, the script derives `download_base_url` from the endpoint root domain.
-For example, `https://llm-openway.guance.com` maps to `https://static.guance.com/obs-agent-connector`.
-The downloaded package is verified against `SHA256SUMS` before installation.
-
-After bootstrap, use `discover` to auto-install missing plugins, or use `install <agent>` for a single Agent.
-Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, and WorkBuddy are managed as built-in adapters with ordinary commands such as `install <agent>`, `status <agent>`, and `remove <agent>`.
-`install` and `discover` generate `agent_id` and `agent_name` automatically when you do not pass them explicitly.
-The default `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
-The default name uses `<hostname>_<agent>_<YYYYMMDD>`, for example `liurui_claude_20260715`.
-`list` and `discover` also show the detected plugin version when it can be resolved from the local install layout.
-`status <agent>` prints a single-Agent view including install state, version, config path, plugin path, and runtime `enabled` status when the plugin uses a supported JSON config.
-`config <agent> list` shows the current managed `gtrace.json` parameters for supported Agents. `config <agent> edit` merges one or more parameters into the existing file and rewrites it.
-Built-in adapters keep runtime config and Hook logs under the connector directory:
-
-```text
-~/.obs-agent-connector/
-├── claude/
-│   ├── gtrace.json
-│   └── gtrace-hooks.json
-├── codebuddy/
-│   ├── gtrace.json
-│   └── gtrace-hooks.json
-├── codex/
-│   ├── gtrace.json
-│   └── gtrace-hooks.json
-├── cursor/
-│   ├── gtrace.json
-│   └── gtrace-hooks.json
-├── dcode/
-│   ├── gtrace.json
-│   └── gtrace-hooks.json
-├── grok/
-│   ├── gtrace.json
-│   ├── gtrace-hooks.json
-│   └── state/
-├── kiro/
-│   ├── gtrace.json
-│   └── gtrace-hooks.json
-└── config.json
-```
-
-Existing Agent-local `gtrace.json` files remain readable for upgrade compatibility. New installs and config edits write the connector-managed path.
-Qoder is considered installed only when `~/.qoder` or `~/.qoder-cn` exists.
-OpenCode is discovered when the `opencode` command is in `PATH` or when `~/.config/opencode` already exists.
-Cursor is discovered when `~/.cursor` already exists, or when the Cursor CLI family is available in `PATH`. `cursor-agent` is preferred when multiple compatible Cursor binaries are present.
-Dcode is discovered when `dcode` or `deepagents-code` is available in `PATH`, or when `~/.deepagents` already exists. The built-in adapter requires Hooks v2 from Dcode 0.1.46 or later; start a new session or run `/reload` after installation. Normal turns are exported on `Stop`. Dcode 0.1.60 model/API failures are exported from `SessionEnd(reason=other)` as an error `invoke_agent` without fabricated LLM spans, token usage, or provider error details.
-Grok Build is discovered when `grok` is available in `PATH` or `~/.grok` exists. The built-in adapter targets Grok Build CLI 1.0.5 or later and manages `~/.grok/hooks/obs-agent-connector.json`. It journals short-lived Hook evidence and replays `updates.jsonl`, exporting only terminal turns. After installation, restart Grok or run `/hooks`, open the Hooks tab, and press `l` to reload.
-WorkBuddy is discovered when its profile directory exists, for example `~/.workbuddy`. Its built-in adapter registers command Hooks without downloading a plugin or requiring Node.js. Restart WorkBuddy after migrating from the external plugin; see [WorkBuddy migration and limitations](docs/product-research/workbuddy.md).
-Kiro is discovered from `kiro-cli`, the modern `~/.kiro/session-index` store, or the legacy `~/.kiro/sessions/cli` store. Telemetry requires an interactive V3 TTY session started with `kiro-cli chat --v3`. Default V2 and `--no-interactive` sessions do not load standalone global Hooks and are not observable by this adapter. The adapter reads modern workspace-bucketed sessions under `~/.kiro/sessions` and remains compatible with legacy V3 terminal storage.
-DSH is discovered when the `dsh` command is in `PATH` or when `~/.dsh` exists. The connector installs the bundle into the `web` profile by default and honors `DSH_HOME` and `DSH_PROFILE` when set. DSH runtime configuration is generated and merged by `dsh-otel-plugin`; the connector only supplies the standard installer arguments.
-`enable <agent>` and `disable <agent>` update the plugin runtime `enabled` switch in its JSON config file. `hermes` is excluded because its runtime config is YAML.
-`config` currently supports the managed `gtrace.json` layout used by `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `omp`, `opencode`, `qoder`, and `workbuddy`. `hermes` and `openclaw` are excluded.
-Removing any built-in adapter removes its connector-managed Hooks and matching `~/.obs-agent-connector/<agent>/` directory. Legacy Agent-local configuration is preserved unless `--purge-config` is supplied. `uninstall` removes all managed built-in adapters before removing the connector binary, configuration, and PATH entry; use `--keep-config` to retain connector-managed configuration.
-
-OMP uses a bundled JavaScript extension to capture lifecycle events and a built-in Go worker to upload terminal requests. See [OMP setup, profiles, and limitations](docs/product-research/omp.md).
+After migrating WorkBuddy from the external plugin, restart WorkBuddy to load the managed Hooks. See [WorkBuddy migration](docs/product-research/workbuddy.md). OMP uses a bundled native extension and the built-in Go collector; see [OMP setup and limitations](docs/product-research/omp.md).
 
 ## Build
 
-Build a local binary:
+Requires Go 1.22 or later.
 
 ```bash
+go test ./...
+go vet ./...
 go build -o obs-agent-connector ./cmd/obs-agent-connector
+VERSION=v0.1.24 ./scripts/build-release.sh
 ```
 
-Build release packages:
+Release artifacts are written to `dist/`: six platform archives, installer scripts, `latest.txt`, and `SHA256SUMS`. Tagged builds embed the tag as the CLI and built-in adapter version.
 
-```bash
-./scripts/build-release.sh
-```
-
-Release artifacts are written to `dist/`.
-Tagged release builds embed the Git tag as the CLI version.
-
-On macOS, do not double-click the extracted binary in Finder.
-Finder launches command-line executables through Terminal and appends `; exit;` automatically. Run the binary from Terminal instead.
-
-Preferred CLI installation uses the release installer script.
-The installer writes `~/.obs-agent-connector/config.json`, including `download_base_url`, `endpoint`, and `x_token`.
-`install`, `discover`, `version`, and self-update reuse that file.
-Use `install.sh` on macOS/Linux and `install.ps1` on Windows.
-
-GitHub Actions:
-
-- `CI` runs on pushes and pull requests.
-- `Package` runs manually and uploads packaged artifacts as a workflow artifact.
-- `Release` runs on tags matching `v*`, reuses the `Package` workflow, and publishes the same artifacts to GitHub Releases. RC tags are pre-releases; the final release note consolidates the RC changes.
-
-The current stable release is [v0.1.23](https://github.com/GuanceCloud/obs-agent-connector/releases/tag/v0.1.23).
+GitHub Actions runs CI on pushes and pull requests. The manual `Package` workflow creates downloadable artifacts. Tags matching `v*` trigger `Release`, which reuses the packaging workflow and publishes to GitHub Releases; RC tags are prereleases.
 
 ## Project Layout
 
-```text
-.
-├── docs/                 Detailed documentation
-├── .github/workflows/    CI and release workflows
-├── scripts/              Build and release scripts
-├── dist/                 Generated release artifacts
-├── cmd/
-│   └── obs-agent-connector/  Executable entry point
-├── internal/
-│   ├── adapters/         Built-in Agent telemetry adapters
-│   ├── agent/            Agent definitions, discovery, and registry
-│   ├── app/              Commands, installation, config, and version flows
-│   ├── core/             Turn, Trace, Metrics, OTLP, privacy, and state logic
-│   └── install/          Built-in Hook and runtime-config installers
-├── go.mod
-└── README.md
-```
+- `cmd/obs-agent-connector/`: executable entry point.
+- `internal/app/`: commands and shared application workflows.
+- `internal/agent/`: Agent definitions and discovery.
+- `internal/adapters/`: product-specific telemetry collectors.
+- `internal/core/`: shared Trace, Metrics, OTLP, privacy, and state logic.
+- `internal/install/`: built-in Hook and runtime-config installers.
+- `scripts/`: installation, build, and release scripts.
+- `docs/`: usage, commands, integration details, and release notes.
 
 ## Documentation
 
@@ -211,6 +116,8 @@ The current stable release is [v0.1.23](https://github.com/GuanceCloud/obs-agent
 - [Command reference](docs/commands.md)
 - [Plugin matrix](docs/plugins.md)
 - [Distribution guide](docs/distribution.md)
+- [DCode checkpoint collection](docs/dcode-checkpoint-collection.md)
+- [Release notes](docs/releases/v0.1.24.md)
 
 ## License
 
