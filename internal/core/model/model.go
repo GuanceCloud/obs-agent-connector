@@ -53,6 +53,7 @@ type SkillUse struct {
 
 type ToolCall struct {
 	CallID            string
+	SpanID            string
 	TriggeringLLMCall string
 	Name              string
 	StartUnixNano     int64
@@ -88,6 +89,11 @@ type AssistantOutput struct {
 type Turn struct {
 	SessionID        string
 	TurnID           string
+	TraceID          string
+	RootSpanID       string
+	ParentSpanID     string
+	ParentToolCallID string
+	ChildRunID       string
 	AgentRuntime     string
 	AgentName        string
 	AgentVersion     string

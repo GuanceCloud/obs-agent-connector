@@ -191,7 +191,7 @@ The output includes:
 
 If the version cannot be derived from the local layout or plugin manifest, the version column shows `-`.
 
-Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, and Kiro use built-in runtimes. Other Agents use their external plugins.
+Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, and WorkBuddy use built-in runtimes. Other Agents use their external plugins.
 
 ## `status`
 
@@ -248,7 +248,7 @@ Notes:
 - `list` prints the current managed `gtrace.json` values
 - `edit` merges the supplied values into the existing config and rewrites the file
 - built-in adapters write `~/.obs-agent-connector/<agent>/gtrace.json`; an existing Agent-local config is used as the migration source when necessary
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `kiro`, `mimo`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `mimo`, `omp`, `pi`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are not supported by this command
 
 ## `discover`
@@ -333,7 +333,7 @@ Parameters:
 Behavior:
 
 - removes the current connector binary
-- removes the managed Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, and Kiro adapters and compatible legacy plugin residue where applicable
+- removes all managed built-in adapters, including Pi, and compatible legacy plugin residue where applicable
 - removes connector-managed per-Agent config, Hook logs, and upload state by default
 - removes the global connector config by default
 - with `--keep-config`, preserves global and per-Agent config while still removing Hooks, logs, and upload state
@@ -349,6 +349,7 @@ obs-agent-connector install codex
 obs-agent-connector install cursor
 obs-agent-connector install dcode
 obs-agent-connector install kiro
+obs-agent-connector install pi
 ```
 
 Install a built-in adapter with the ordinary command:
@@ -360,6 +361,7 @@ obs-agent-connector install codex
 obs-agent-connector install cursor
 obs-agent-connector install dcode
 obs-agent-connector install kiro
+obs-agent-connector install pi
 ```
 
 Parameters:
@@ -424,7 +426,7 @@ Notes:
 
 - `update` accepts a single Agent target only
 - the command preserves the existing runtime config
-- the built-in Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, and Kiro adapters reconcile their Hooks without modifying `~/.obs-agent-connector/<agent>/gtrace.json`
+- built-in adapters reconcile their managed Hooks or extensions without modifying `~/.obs-agent-connector/<agent>/gtrace.json`
 - external plugin installers receive `--no-config`
 
 ## `enable` / `disable`
@@ -538,6 +540,8 @@ Supported Agents on Windows:
 - `dcode`
 - `kiro`
 - `mimo`
+- `omp`
+- `pi`
 - `opencode`
 - `openclaw`
 - `qoder`
