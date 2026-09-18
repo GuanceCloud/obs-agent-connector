@@ -19,6 +19,21 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 	}
 	printSingleDetail("Runtime", executable)
 	switch p.Name {
+	case "pi":
+		piVersion, versionErr := agent.PiVersion(p.AgentCommand)
+		if versionErr != nil {
+			return versionErr
+		}
+		attributes := append(builtinResourceAttributes(input), "agent_version="+piVersion)
+		_, err = telemetryinstall.InstallPi(telemetryinstall.CodexOptions{
+			SourceExecutable: executable, Endpoint: input.Endpoint, TracePath: input.TracePath,
+			MetricsPath: input.MetricsPath, InstallType: fixedType, XToken: input.XToken,
+			Headers: input.Headers, ResourceAttributes: attributes, CaptureContent: input.CaptureContent,
+			MaxChars: input.MaxChars, Enabled: input.Enabled, NoConfig: noConfig,
+		})
+		if err == nil {
+			printSingleDetail("Note", "Start a new Pi session or run /reload to load the telemetry extension.")
+		}
 	case "omp":
 		ompVersion, versionErr := agent.OMPVersion(p.AgentCommand)
 		if versionErr != nil {

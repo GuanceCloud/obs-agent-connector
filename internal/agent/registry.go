@@ -18,6 +18,7 @@ var definitions = map[string]Definition{
 	"hermes":    hermesPlugin(),
 	"kiro":      kiroPlugin(),
 	"omp":       ompPlugin(),
+	"pi":        piPlugin(),
 	"opencode":  opencodePlugin(),
 	"openclaw":  openClawPlugin(),
 	"qoder":     qoderPlugin(),
