@@ -165,6 +165,41 @@ func TestBuildSkipsUnsetAndBlankTurns(t *testing.T) {
 	}
 }
 
+func TestBuildUsesExplicitCrossProcessTraceContext(t *testing.T) {
+	start := time.Date(2026, 9, 18, 10, 0, 0, 0, time.UTC).UnixNano()
+	turn := model.Turn{
+		SessionID:     "child-session",
+		TurnID:        "child-turn",
+		TraceID:       "11111111111111111111111111111111",
+		RootSpanID:    "2222222222222222",
+		ParentSpanID:  "3333333333333333",
+		AgentRuntime:  "pi",
+		AgentName:     "pi",
+		StartUnixNano: start,
+		EndUnixNano:   start + int64(time.Second),
+		FinalStatus:   model.FinalStatusCompleted,
+		InputPreview:  "child task",
+		ToolCalls: []model.ToolCall{{
+			CallID:        "read-1",
+			SpanID:        "4444444444444444",
+			Name:          "read",
+			StartUnixNano: start + 1,
+			EndUnixNano:   start + 2,
+		}},
+	}
+
+	spans := (Builder{}).Build(turn)
+	if len(spans) != 2 {
+		t.Fatalf("expected root and tool spans, got %#v", spans)
+	}
+	if spans[0].TraceID != turn.TraceID || spans[0].SpanID != turn.RootSpanID || spans[0].ParentID != turn.ParentSpanID {
+		t.Fatalf("explicit root context was not preserved: %#v", spans[0])
+	}
+	if spans[1].TraceID != turn.TraceID || spans[1].SpanID != turn.ToolCalls[0].SpanID || spans[1].ParentID != turn.RootSpanID {
+		t.Fatalf("explicit tool context was not preserved: %#v", spans[1])
+	}
+}
+
 func TestBuildKeepsExplicitTerminalErrorWithoutContent(t *testing.T) {
 	now := time.Now().UnixNano()
 	spans := (Builder{}).Build(model.Turn{

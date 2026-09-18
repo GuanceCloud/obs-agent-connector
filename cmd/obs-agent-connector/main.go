@@ -12,6 +12,7 @@ import (
 	grokhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/grok/hook"
 	kirohook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/kiro/hook"
 	omphook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/omp/hook"
+	pihook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/pi/hook"
 	workbuddyhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/workbuddy/hook"
 	"github.com/GuanceCloud/obs-agent-connector/internal/app"
 )
@@ -19,6 +20,8 @@ import (
 func main() {
 	if len(os.Args) >= 3 && os.Args[1] == "hook" {
 		switch os.Args[2] {
+		case "pi":
+			os.Exit(pihook.RunCLI(os.Args[3:]))
 		case "omp":
 			os.Exit(omphook.RunCLI(os.Args[3:]))
 		case "workbuddy":

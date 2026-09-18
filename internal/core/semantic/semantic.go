@@ -29,8 +29,17 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 		return nil
 	}
 
-	traceID := randomHex(16)
-	rootID := randomHex(8)
+	explicitTraceID := validHexOrEmpty(turn.TraceID, 16)
+	explicitRootID := validHexOrEmpty(turn.RootSpanID, 8)
+	traceID := validOrRandomHex(explicitTraceID, 16)
+	rootID := validOrRandomHex(explicitRootID, 8)
+	parentID := ""
+	if explicitTraceID != "" && explicitRootID != "" {
+		parentID = validHexOrEmpty(turn.ParentSpanID, 8)
+		if parentID == rootID {
+			parentID = ""
+		}
+	}
 	scope := model.Scope{
 		Name:       firstNonEmpty(b.ScopeName, "gtrace-agent-core"),
 		Version:    b.ScopeVersion,
@@ -67,7 +76,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 	setAttr(rootAttrs, "gen_ai.usage.credit", positiveFloat(turn.CreditUsage))
 
 	spans := []model.Span{makeSpan(
-		traceID, rootID, "", "invoke_agent", start, end,
+		traceID, rootID, parentID, "invoke_agent", start, end,
 		rootAttrs, resource, scope, turn.ErrorType,
 	)}
 	llmSpanByCallID := map[string]string{}
@@ -106,7 +115,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 
 	for _, tool := range turn.ToolCalls {
 		toolStart, toolEnd := normalizeWindow(tool.StartUnixNano, tool.EndUnixNano, start, end)
-		toolID := randomHex(8)
+		toolID := validOrRandomHex(tool.SpanID, 8)
 		toolName := firstNonEmpty(tool.Name, "unknown")
 		attrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 		attrs["gen_ai.operation.name"] = "execute_tool"
@@ -169,6 +178,24 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 		))
 	}
 	return spans
+}
+
+func validOrRandomHex(value string, size int) string {
+	if valid := validHexOrEmpty(value, size); valid != "" {
+		return valid
+	}
+	return randomHex(size)
+}
+
+func validHexOrEmpty(value string, size int) string {
+	value = strings.ToLower(strings.TrimSpace(value))
+	if len(value) != size*2 || strings.Trim(value, "0") == "" {
+		return ""
+	}
+	if _, err := hex.DecodeString(value); err != nil {
+		return ""
+	}
+	return value
 }
 
 func observable(turn model.Turn) bool {
