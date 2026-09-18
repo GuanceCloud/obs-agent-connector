@@ -42,6 +42,7 @@ const (
 	attrRequestTopP               = "gen_ai.request.top_p"
 	attrResponseFinishReasons     = "gen_ai.response.finish_reasons"
 	attrResponseModel             = "gen_ai.response.model"
+	attrResponseTimeToFirstChunk  = "gen_ai.response.time_to_first_chunk"
 	attrSkillDescriptionCompat    = "skill.description"
 	attrSkillDescription          = "gen_ai.skill.description"
 	attrSkillCallID               = "skill_call_id"
@@ -314,6 +315,9 @@ func buildTurnSpans(turn *model.Turn, sessionMeta model.SessionMeta, cfg config.
 		setUsageAttrs(llmAttrs, usage)
 		setAttr(llmAttrs, "step_index", index)
 		setAttr(llmAttrs, "ttft", ttft)
+		if llmRequestStart <= step.StartTime {
+			setAttr(llmAttrs, attrResponseTimeToFirstChunk, float64(ttft)/float64(time.Second/time.Millisecond))
+		}
 		setAttr(llmAttrs, "status", "ok")
 
 		llmStart := step.StartTime

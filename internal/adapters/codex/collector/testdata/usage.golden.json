@@ -101,6 +101,7 @@
           "stop"
         ],
         "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.response.time_to_first_chunk": 0.9,
         "gen_ai.system_instructions": [
           {
             "content": "You are a file assistant.",
@@ -163,6 +164,7 @@
           "tool_call"
         ],
         "gen_ai.response.model": "gpt-5.4",
+        "gen_ai.response.time_to_first_chunk": 1,
         "gen_ai.system_instructions": [
           {
             "content": "You are a file assistant.",

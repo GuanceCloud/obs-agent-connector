@@ -172,7 +172,9 @@ Generate an observability dashboard.
 			"finish_reason": "stop",
 		},
 	})
-	if firstLLM.DurationMs != 1200 || firstLLM.Attributes["ttft"] != int64(1000) {
+	if firstLLM.DurationMs != 1200 ||
+		firstLLM.Attributes["ttft"] != int64(1000) ||
+		firstLLM.Attributes[attrResponseTimeToFirstChunk] != float64(1) {
 		t.Fatalf("unexpected first llm timing: duration=%d attrs=%#v", firstLLM.DurationMs, firstLLM.Attributes)
 	}
 	if tool.Attributes[attrTriggeredByLlmSpanID] != firstLLM.SpanID {
