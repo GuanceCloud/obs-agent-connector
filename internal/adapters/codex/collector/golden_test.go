@@ -569,6 +569,7 @@ func normalizeGoSpans(spans []model.Span) []normalizedSpan {
 				"gen_ai.request.frequency_penalty",
 				"gen_ai.request.stop_sequences",
 				"gen_ai.response.finish_reasons",
+				"gen_ai.response.time_to_first_chunk",
 				"gen_ai.system_instructions",
 				"gen_ai.tool.definitions",
 				"gen_ai.usage.input_tokens",
