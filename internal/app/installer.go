@@ -286,7 +286,10 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 	}
 
 	if currentGOOS == "windows" {
-		command := renderPowerShellInstallCommand(scriptPath, p, input)
+		command := renderPowerShellWithEnv(
+			renderPowerShellInstallCommand(scriptPath, p, input),
+			pluginEnv(download, p),
+		)
 		printSingleDetail("Command", redactSecret(command, input.XToken))
 		if err := runPowerShell(command); err != nil {
 			return fmt.Errorf("%s installation failed: %w", p.Name, err)
@@ -341,7 +344,10 @@ func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 	}
 
 	if currentGOOS == "windows" {
-		command := renderPowerShellUpdateCommand(scriptPath, p)
+		command := renderPowerShellWithEnv(
+			renderPowerShellUpdateCommand(scriptPath, p),
+			pluginEnv(download, p),
+		)
 		printSingleDetail("Command", command)
 		if err := runPowerShell(command); err != nil {
 			return fmt.Errorf("%s update failed: %w", p.Name, err)
@@ -500,7 +506,10 @@ func renderInstallCommand(download pluginDownloadConfig, p agent.Definition, inp
 	}
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	if currentGOOS == "windows" {
-		return renderPowerShellInstallCommand(scriptPath, p, input)
+		return renderPowerShellWithEnv(
+			renderPowerShellInstallCommand(scriptPath, p, input),
+			pluginEnv(download, p),
+		)
 	}
 	envAssignments := renderEnvAssignments(download, p)
 	envLine := ""
@@ -522,7 +531,10 @@ func renderPluginUpdateCommand(download pluginDownloadConfig, p agent.Definition
 	}
 	scriptPath := tempScriptPathForOS(currentGOOS, p)
 	if currentGOOS == "windows" {
-		return renderPowerShellUpdateCommand(scriptPath, p)
+		return renderPowerShellWithEnv(
+			renderPowerShellUpdateCommand(scriptPath, p),
+			pluginEnv(download, p),
+		)
 	}
 	envAssignments := renderEnvAssignments(download, p)
 	envLine := ""
@@ -550,6 +562,11 @@ func pluginEnv(download pluginDownloadConfig, p agent.Definition) []string {
 	env := []string{}
 	if download.Source == pluginSourceOSS {
 		env = append(env, "OSS_ENDPOINT="+ossPluginBaseURL(download.BaseURL))
+	}
+	if download.Source == pluginSourceGitHub &&
+		githubReleaseDownloadBase(download.BaseURL) &&
+		strings.TrimSpace(p.ReleaseArchiveEnv) != "" {
+		env = append(env, p.ReleaseArchiveEnv+"="+packageArchiveURL(download, p))
 	}
 	for _, item := range p.Env {
 		key, value, ok := splitEnvAssignment(item)
@@ -591,7 +608,7 @@ func installerURLForOS(download pluginDownloadConfig, p agent.Definition, goos s
 		}
 		switch download.Source {
 		case pluginSourceGitHub:
-			return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/releases/latest/download/install-release.ps1", nil
+			return githubPluginAssetBase(download, p) + "/install-release.ps1", nil
 		case pluginSourceOSS:
 			return ossPluginBaseURL(download.BaseURL) + "/" + p.PluginName + "/" + strings.TrimLeft(strings.TrimSpace(p.WindowsInstaller), "/"), nil
 		default:
@@ -600,7 +617,7 @@ func installerURLForOS(download pluginDownloadConfig, p agent.Definition, goos s
 	}
 	switch download.Source {
 	case pluginSourceGitHub:
-		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/releases/latest/download/install-release.sh", nil
+		return githubPluginAssetBase(download, p) + "/install-release.sh", nil
 	case pluginSourceOSS:
 		return ossPluginBaseURL(download.BaseURL) + "/" + p.PluginName + "/install.sh", nil
 	default:
@@ -618,10 +635,22 @@ func downloadSourceURL(download pluginDownloadConfig, p agent.Definition, goos s
 func packageArchiveURL(download pluginDownloadConfig, p agent.Definition) string {
 	switch download.Source {
 	case pluginSourceGitHub:
-		return strings.TrimRight(download.BaseURL, "/") + "/" + p.PluginName + "/releases/latest/download/" + p.PluginName + ".tar.gz"
+		return githubPluginAssetBase(download, p) + "/" + p.PluginName + ".tar.gz"
 	default:
 		return ossPluginBaseURL(download.BaseURL) + "/" + p.PluginName + "/" + p.PluginName + ".tar.gz"
 	}
+}
+
+// GitHub plugin sources normally name an organization root and resolve the
+// latest stable release. A complete releases/download/<tag> URL selects an
+// exact release instead, which is required for prerelease validation because
+// GitHub excludes prereleases from releases/latest.
+func githubPluginAssetBase(download pluginDownloadConfig, p agent.Definition) string {
+	base := strings.TrimRight(strings.TrimSpace(download.BaseURL), "/")
+	if githubReleaseDownloadBase(base) {
+		return base
+	}
+	return base + "/" + p.PluginName + "/releases/latest/download"
 }
 
 func usesPackageArchive(goos string, p agent.Definition) bool {
@@ -812,6 +841,21 @@ func renderPowerShellUpdateCommand(scriptPath string, p agent.Definition) string
 		args = append(args, arg)
 	}
 	return "& { " + strings.Join(args, " ") + " }"
+}
+
+func renderPowerShellWithEnv(command string, env []string) string {
+	assignments := make([]string, 0, len(env))
+	for _, item := range env {
+		key, value, ok := splitEnvAssignment(item)
+		if !ok {
+			continue
+		}
+		assignments = append(assignments, "$env:"+key+" = "+powershellSingleQuote(value))
+	}
+	if len(assignments) == 0 {
+		return command
+	}
+	return "& { " + strings.Join(assignments, "; ") + "; " + command + " }"
 }
 
 func renderPowerShellOptionArgs(args []string) []string {

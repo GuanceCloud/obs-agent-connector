@@ -12,8 +12,10 @@ import (
 func mimoPlugin() Definition {
 	return Definition{
 		Name: "mimo", PluginName: "opencode-otel-plugin", AgentCommand: "mimo",
-		WindowsInstaller: "install-release.ps1", PackageScript: "scripts/install.sh",
-		InstallArgs: []string{"--variant", "mimo"}, WindowsArgs: []string{"-Variant", "mimo"},
+		WindowsInstaller:  "install-release.ps1",
+		ReleaseArchiveEnv: "OPENCODE_OTEL_ARCHIVE_URL",
+		PackageScript:     "scripts/install.sh",
+		InstallArgs:       []string{"--variant", "mimo"}, WindowsArgs: []string{"-Variant", "mimo"},
 		DiscoveryCommandOptional: true, EnabledJSONPath: []string{"enabled"},
 		Resolve: resolveMimoPlugin, ResolveInstall: resolveMimoForInstall,
 		ResolveDiscovery:     resolveMimoForDiscovery,

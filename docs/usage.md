@@ -81,7 +81,7 @@ Field reference:
 | --- | --- |
 | `download_base_url` | Download base URL for the connector itself, including metadata and binary packages |
 | `plugin_source` | Agent plugin source, currently `oss` or `github` |
-| `plugin_base_url` | Base URL used for Agent plugin downloads; OSS defaults to the `agent_plugins` directory |
+| `plugin_base_url` | Base URL used for Agent plugin downloads; OSS defaults to `agent_plugins`. With `plugin_source=github`, it may be an organization root or an exact `.../<plugin>/releases/download/<tag>` URL for RC validation. |
 | `endpoint` | OBS / GTrace ingest endpoint |
 | `x_token` | Authentication token |
 

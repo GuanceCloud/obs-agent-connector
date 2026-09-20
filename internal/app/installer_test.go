@@ -250,6 +250,48 @@ func TestInstallerURLForWindowsUsesGitHubReleaseScript(t *testing.T) {
 	}
 }
 
+func TestInstallerURLForWindowsUsesExactGitHubPrerelease(t *testing.T) {
+	definition := agentDefinitionForTest("mimo")
+	base := "https://github.com/cherrycove/opencode-otel-plugin/releases/download/v0.1.6-rc1"
+	url, err := installerURLForOS(pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: base}, definition, "windows")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := base + "/install-release.ps1"
+	if url != expected {
+		t.Fatalf("expected %q, got %q", expected, url)
+	}
+}
+
+func TestRenderInstallCommandForWindowsUsesExactGitHubPrereleaseArchive(t *testing.T) {
+	previous := currentGOOS
+	currentGOOS = "windows"
+	t.Cleanup(func() {
+		currentGOOS = previous
+	})
+
+	base := "https://github.com/cherrycove/opencode-otel-plugin/releases/download/v0.1.6-rc1"
+	command := renderInstallCommand(
+		pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: base},
+		agentDefinitionForTest("mimo"),
+		installInput{
+			Endpoint:  "https://llm-openway.guance.com",
+			XToken:    "agent_test",
+			AgentID:   "agid_123",
+			AgentName: "demo_mimo",
+		},
+	)
+
+	for _, want := range []string{
+		"$env:OPENCODE_OTEL_ARCHIVE_URL = '" + base + "/opencode-otel-plugin.tar.gz'",
+		"-Variant 'mimo'",
+	} {
+		if !strings.Contains(command, want) {
+			t.Fatalf("expected command to contain %q, got %q", want, command)
+		}
+	}
+}
+
 func TestRenderInstallCommandForWindowsUsesPowerShell(t *testing.T) {
 	previous := currentGOOS
 	currentGOOS = "windows"
@@ -422,6 +464,18 @@ func TestDownloadSourceURLUsesGitHubArchiveForOpencodeOnUnix(t *testing.T) {
 		t.Fatal(err)
 	}
 	expected := "https://github.com/GuanceCloud/opencode-otel-plugin/releases/latest/download/opencode-otel-plugin.tar.gz"
+	if url != expected {
+		t.Fatalf("expected %q, got %q", expected, url)
+	}
+}
+
+func TestDownloadSourceURLUsesExactGitHubPrereleaseForMimoOnUnix(t *testing.T) {
+	base := "https://github.com/cherrycove/opencode-otel-plugin/releases/download/v0.1.6-rc1"
+	url, err := downloadSourceURL(pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: base}, agentDefinitionForTest("mimo"), "linux")
+	if err != nil {
+		t.Fatal(err)
+	}
+	expected := base + "/opencode-otel-plugin.tar.gz"
 	if url != expected {
 		t.Fatalf("expected %q, got %q", expected, url)
 	}
