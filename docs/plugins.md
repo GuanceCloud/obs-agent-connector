@@ -47,7 +47,7 @@ OMP uses a bundled native extension and a built-in Go worker. Fully exit and res
 
 ## Pi
 
-Pi uses a native lifecycle extension registered through the global `extensions` setting. The connector preserves unrelated settings and extensions, and `/reload` or a new session loads an installed update. A terminal snapshot is handed to the built-in Go worker only on `agent_settled`. The adapter derives LLM duration from `before_provider_request` through assistant `message_end`, derives TTFT from the first streaming `message_update`, and omits TTFT when no qualifying stream event exists. The official Subagent extension is observed as a regular `subagent` tool. An explicit process context attaches independently uploaded child roots to that Tool span while each child records its own LLM and Tool lifecycle. See [Pi telemetry product research](product-research/pi.md).
+Pi uses a native lifecycle extension registered through the global `extensions` setting. The connector preserves unrelated settings and extensions, and `/reload` or a new session loads an installed update. A terminal snapshot is handed to one bounded built-in Go queue worker only on `agent_settled`. The adapter derives LLM duration from `before_provider_request` through assistant `message_end`, derives TTFT from the first streaming `message_update`, and omits TTFT when no qualifying stream event exists. The official Subagent extension is observed as a regular `subagent` tool; independently launched child Pi processes produce separate traces and are not linked to the parent trace. See [Pi telemetry product research](product-research/pi.md).
 
 ## Qoder Variants
 
