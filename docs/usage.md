@@ -17,13 +17,14 @@ Supported Agents:
 - `mimo`
 - `opencode`
 - `openclaw`
+- `pi`
 - `qoder`
 - `workbuddy`
 
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `kiro`, `mimo`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
+- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `kiro`, `mimo`, `opencode`, `openclaw`, `pi`, `qoder`, and `workbuddy`
 
 ## Install obs-agent-connector
 

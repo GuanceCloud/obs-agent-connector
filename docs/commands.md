@@ -238,7 +238,7 @@ obs-agent-connector disable codex --dry-run
 
 `enable` and `disable` update the Agent runtime JSON config in place:
 
-- `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `dsh`, `mimo`, `opencode`, and `qoder` set top-level `enabled`
+- `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `dsh`, `mimo`, `opencode`, `pi`, and `qoder` set top-level `enabled`
 - `openclaw` sets `plugins.entries.openclaw-otel-plugin.enabled`
 
 `hermes` is not currently supported because its runtime config is YAML rather than a supported JSON `enabled` switch.
