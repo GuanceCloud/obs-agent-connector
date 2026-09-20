@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -33,6 +34,8 @@ func RunCLI(args []string) int {
 	fs.SetOutput(io.Discard)
 	snapshotPath := fs.String("snapshot", "", "Terminal snapshot file")
 	path := fs.String("config", agentfiles.ConfigPath(home, "pi"), "Runtime configuration")
+	drain := fs.Bool("drain", false, "Drain queued Pi snapshots")
+	workerLock := fs.String("worker-lock", "", "Pi worker lock file")
 	if fs.Parse(args) != nil || fs.NArg() != 0 || *snapshotPath == "" {
 		return 1
 	}
@@ -40,7 +43,13 @@ func RunCLI(args []string) int {
 	if err != nil {
 		return 1
 	}
-	if err := ProcessFile(*snapshotPath, cfg, nil); err != nil {
+	var processErr error
+	if *drain {
+		processErr = DrainQueue(*snapshotPath, *workerLock, cfg, nil)
+	} else {
+		processErr = ProcessFile(*snapshotPath, cfg, nil)
+	}
+	if processErr != nil {
 		appendLog(cfg.LogFile, "Pi telemetry error", map[string]any{"stage": "process", "code": "PROCESS_FAILED"})
 		return 1
 	}
@@ -50,32 +59,131 @@ func RunCLI(args []string) int {
 // ProcessFile handles one JS-owned handoff file. Upload failures keep the file
 // for a bounded opportunistic retry launched by a later terminal request.
 func ProcessFile(path string, cfg config.Config, client *http.Client) error {
-	// Refuse arbitrary paths: only regular JSON files in Pi's handoff directory.
-	absolute, err := filepath.Abs(path)
+	absolute, err := validateSnapshotPath(path, cfg)
 	if err != nil {
 		return err
-	}
-	directory, err := filepath.Abs(filepath.Join(cfg.StateDir, "queue"))
-	if err != nil {
-		return err
-	}
-	if filepath.Dir(absolute) != directory || !strings.HasSuffix(absolute, ".json") {
-		return errors.New("invalid Pi snapshot path")
-	}
-	info, err := os.Lstat(absolute)
-	if os.IsNotExist(err) {
-		return nil
-	}
-	if err != nil {
-		return err
-	}
-	if !info.Mode().IsRegular() {
-		return errors.New("invalid Pi snapshot file")
 	}
 	cleanup(cfg, time.Now())
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	return processSnapshot(ctx, absolute, cfg, client)
+}
+
+func validateSnapshotPath(path string, cfg config.Config) (string, error) {
+	// Refuse arbitrary paths: only regular JSON files in Pi's handoff directory.
+	absolute, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	directory, err := filepath.Abs(filepath.Join(cfg.StateDir, "queue"))
+	if err != nil {
+		return "", err
+	}
+	if filepath.Dir(absolute) != directory || !strings.HasSuffix(absolute, ".json") {
+		return "", errors.New("invalid Pi snapshot path")
+	}
+	info, err := os.Lstat(absolute)
+	if os.IsNotExist(err) {
+		return absolute, nil
+	}
+	if err != nil {
+		return "", err
+	}
+	if !info.Mode().IsRegular() {
+		return "", errors.New("invalid Pi snapshot file")
+	}
+	return absolute, nil
+}
+
+const maxDrainFiles = 8
+
+// DrainQueue serializes nearby parent and child terminal snapshots in one
+// bounded worker. The JS extension creates the lock before spawning this
+// process, which avoids a burst of workers when several Pi processes settle at
+// the same time.
+func DrainQueue(primary, lockPath string, cfg config.Config, client *http.Client) error {
+	primary, err := validateSnapshotPath(primary, cfg)
+	if err != nil {
+		return err
+	}
+	expectedLock, err := filepath.Abs(filepath.Join(cfg.StateDir, "pi-worker.lock"))
+	if err != nil {
+		return err
+	}
+	lockPath, err = filepath.Abs(lockPath)
+	if err != nil || lockPath != expectedLock {
+		return errors.New("invalid Pi worker lock path")
+	}
+	lockInfo, err := os.Lstat(lockPath)
+	if err != nil || !lockInfo.Mode().IsRegular() {
+		return errors.New("invalid Pi worker lock file")
+	}
+	defer os.Remove(lockPath)
+	cleanup(cfg, time.Now())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	attempted := map[string]bool{}
+	var failures []error
+	for len(attempted) < maxDrainFiles {
+		paths := queuedSnapshots(primary, cfg)
+		var next string
+		for _, path := range paths {
+			if !attempted[path] {
+				next = path
+				break
+			}
+		}
+		if next == "" {
+			// Release before the final rescan. A snapshot already written by a
+			// process that observed the old lock is then claimed here; a later
+			// writer can acquire the lock and start its own worker.
+			_ = os.Remove(lockPath)
+			paths = queuedSnapshots(primary, cfg)
+			for _, path := range paths {
+				if !attempted[path] {
+					next = path
+					break
+				}
+			}
+			if next == "" {
+				break
+			}
+			file, lockErr := os.OpenFile(lockPath, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
+			if lockErr != nil {
+				break
+			}
+			_ = file.Close()
+		}
+		attempted[next] = true
+		if err := processSnapshot(ctx, next, cfg, client); err != nil && !errors.Is(err, errClaimBusy) {
+			failures = append(failures, err)
+		}
+		if ctx.Err() != nil {
+			break
+		}
+	}
+	return errors.Join(failures...)
+}
+
+func queuedSnapshots(primary string, cfg config.Config) []string {
+	paths := []string{}
+	if _, err := os.Lstat(primary); err == nil {
+		paths = append(paths, primary)
+	}
+	entries, _ := os.ReadDir(filepath.Join(cfg.StateDir, "queue"))
+	names := make([]string, 0, len(entries))
+	for _, entry := range entries {
+		if entry.IsDir() || entry.Type()&os.ModeSymlink != 0 || !strings.HasSuffix(entry.Name(), ".json") {
+			continue
+		}
+		path := filepath.Join(cfg.StateDir, "queue", entry.Name())
+		if path != primary {
+			names = append(names, path)
+		}
+	}
+	sort.Strings(names)
+	return append(paths, names...)
 }
 
 func processSnapshot(ctx context.Context, path string, cfg config.Config, client *http.Client) error {

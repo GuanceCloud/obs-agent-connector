@@ -1,6 +1,7 @@
 package hook
 
 import (
+	"bytes"
 	"compress/gzip"
 	"context"
 	"encoding/hex"
@@ -43,6 +44,21 @@ func queueFixture(t *testing.T, cfg config.Config) string {
 	}
 	path := filepath.Join(dir, "turn.json")
 	if err := os.WriteFile(path, fixtureBody(t), 0600); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}
+
+func queueNamedFixture(t *testing.T, cfg config.Config, name, sessionID, turnID string) string {
+	t.Helper()
+	dir := filepath.Join(cfg.StateDir, "queue")
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		t.Fatal(err)
+	}
+	body := bytes.ReplaceAll(fixtureBody(t), []byte("test-session"), []byte(sessionID))
+	body = bytes.ReplaceAll(body, []byte("test-turn"), []byte(turnID))
+	path := filepath.Join(dir, name+".json")
+	if err := os.WriteFile(path, body, 0600); err != nil {
 		t.Fatal(err)
 	}
 	return path
@@ -153,6 +169,48 @@ func TestPiConcurrentWorkersUploadOnce(t *testing.T) {
 	defer mu.Unlock()
 	if counts["/traces"] != 1 || counts["/metrics"] != 1 {
 		t.Fatalf("duplicate uploads: %v", counts)
+	}
+}
+
+func TestPiDrainQueueProcessesPrimaryAndRetryInOneWorker(t *testing.T) {
+	cfg := testConfig(t)
+	primary := queueNamedFixture(t, cfg, "primary", "session-primary", "turn-primary")
+	retry := queueNamedFixture(t, cfg, "retry", "session-retry", "turn-retry")
+	lock := filepath.Join(cfg.StateDir, "pi-worker.lock")
+	if err := os.WriteFile(lock, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	var mu sync.Mutex
+	counts := map[string]int{}
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		counts[r.URL.Path]++
+		mu.Unlock()
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	cfg.Transport = transport.Config{Endpoint: server.URL, TracePath: "traces", MetricsPath: "metrics"}
+
+	if err := DrainQueue(primary, lock, cfg, server.Client()); err != nil {
+		t.Fatal(err)
+	}
+	for _, path := range []string{primary, retry, lock} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("drain artifact retained: %s", path)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if counts["/traces"] != 2 || counts["/metrics"] != 2 {
+		t.Fatalf("unexpected drained uploads: %v", counts)
+	}
+}
+
+func TestPiDrainQueueRejectsUnmanagedLock(t *testing.T) {
+	cfg := testConfig(t)
+	primary := queueFixture(t, cfg)
+	if err := DrainQueue(primary, filepath.Join(t.TempDir(), "other.lock"), cfg, nil); err == nil {
+		t.Fatal("accepted unmanaged worker lock")
 	}
 }
 

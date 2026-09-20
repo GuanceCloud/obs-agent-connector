@@ -127,81 +127,10 @@ func TestNormalizePiSubagentResultSummary(t *testing.T) {
 	}
 	tool := turn.ToolCalls[len(turn.ToolCalls)-1]
 	if turn.TraceID != snapshot.TraceID || turn.RootSpanID != snapshot.RootSpanID || tool.SpanID != start.SpanID {
-		t.Fatalf("explicit parent trace context missing: turn=%#v tool=%#v", turn, tool)
+		t.Fatalf("explicit Pi span IDs missing: turn=%#v tool=%#v", turn, tool)
 	}
 	if tool.ExtraAttributes["subagent.count"] != 2 || tool.ExtraAttributes["subagent.failed_count"] != 1 {
 		t.Fatalf("subagent summary missing: %#v", tool.ExtraAttributes)
-	}
-}
-
-func TestNormalizePiChildRequiresCompleteCausalContext(t *testing.T) {
-	snapshot := fixtureSnapshot(t)
-	snapshot.TraceID = "11111111111111111111111111111111"
-	snapshot.RootSpanID = "2222222222222222"
-	snapshot.ParentSpanID = "3333333333333333"
-	snapshot.ParentToolID = "subagent-call-1"
-	snapshot.ChildRunID = "child-run-1"
-
-	turn, err := Normalize(snapshot, testConfig(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if turn.TraceID != snapshot.TraceID || turn.RootSpanID != snapshot.RootSpanID || turn.ParentSpanID != snapshot.ParentSpanID || turn.ParentToolCallID != snapshot.ParentToolID || turn.ChildRunID != snapshot.ChildRunID {
-		t.Fatalf("complete causal context was not retained: %#v", turn)
-	}
-
-	snapshot.ChildRunID = ""
-	turn, err = Normalize(snapshot, testConfig(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if turn.TraceID != "" || turn.RootSpanID != "" || turn.ParentSpanID != "" {
-		t.Fatalf("incomplete causal context must fall back to a standalone trace: %#v", turn)
-	}
-}
-
-func TestPiParentAndChildBuildOneTrace(t *testing.T) {
-	parentSnapshot := fixtureSnapshot(t)
-	parentSnapshot.TraceID = "11111111111111111111111111111111"
-	parentSnapshot.RootSpanID = "2222222222222222"
-	parentSnapshot.Events = append(parentSnapshot.Events,
-		Event{Type: "tool_start", At: parentSnapshot.Start + 901, CallID: "subagent-call-1", SpanID: "3333333333333333", Name: "subagent", Args: map[string]any{"agent": "worker"}},
-		Event{Type: "tool_end", At: parentSnapshot.Start + 950, CallID: "subagent-call-1", Name: "subagent", Result: map[string]any{"details": map[string]any{"results": []any{map[string]any{"exitCode": float64(0)}}}}},
-	)
-	childSnapshot := fixtureSnapshot(t)
-	childSnapshot.SessionID = "child-session"
-	childSnapshot.TurnID = "child-turn"
-	childSnapshot.TraceID = parentSnapshot.TraceID
-	childSnapshot.RootSpanID = "4444444444444444"
-	childSnapshot.ParentSpanID = "3333333333333333"
-	childSnapshot.ParentToolID = "subagent-call-1"
-	childSnapshot.ChildRunID = "child-turn"
-
-	parentTurn, err := Normalize(parentSnapshot, testConfig(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	childTurn, err := Normalize(childSnapshot, testConfig(t))
-	if err != nil {
-		t.Fatal(err)
-	}
-	parentSpans := (semantic.Builder{}).Build(parentTurn)
-	childSpans := (semantic.Builder{}).Build(childTurn)
-	var delegate model.Span
-	for _, span := range parentSpans {
-		if span.Name == "tool:subagent" {
-			delegate = span
-			break
-		}
-	}
-	if delegate.SpanID == "" {
-		t.Fatal("parent delegate span missing")
-	}
-	if childSpans[0].TraceID != parentSpans[0].TraceID || childSpans[0].ParentID != delegate.SpanID {
-		t.Fatalf("child root was not attached to the delegate span: parent=%#v delegate=%#v child=%#v", parentSpans[0], delegate, childSpans[0])
-	}
-	if childSpans[0].SpanID == parentSpans[0].SpanID || childSpans[0].SpanID == delegate.SpanID {
-		t.Fatal("child root span ID must be unique")
 	}
 }
 

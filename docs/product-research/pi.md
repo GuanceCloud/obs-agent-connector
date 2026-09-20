@@ -8,7 +8,7 @@
 - Platforms: macOS, Linux, and Windows
 - Adapter: built into `obs-agent-connector`
 
-The event contract and settings behavior were checked against the current official Pi documentation and the 0.85.1 package metadata. The connector has synthetic extension, parser, installer, OTLP, and cross-build coverage. Real Pi conversation and linked independent-child-process runtime smokes have run on macOS; backend trace assembly and Windows runtime smokes remain required before the adapter is described as fully product-validated.
+The event contract and settings behavior were checked against the current official Pi documentation and the 0.85.1 package metadata. The connector has synthetic extension, parser, installer, OTLP, and cross-build coverage. Real Pi conversation and independent child-process runtime smokes have run on macOS; backend and Windows runtime smokes remain required before the adapter is described as fully product-validated.
 
 ## Extension and data sources
 
@@ -64,9 +64,10 @@ Input token usage includes the native input, cache-read, and cache-write values.
 - `enabled=false` exits before request state is created.
 - `captureContent=none` retains topology, timing, token usage, Tool identity, and Skill identity while omitting captured content and paths.
 - Values are recursively bounded and redact credential-shaped keys and common secret text.
+- Each provider context retains metadata for the latest 100 messages and captured content for only the latest 12, bounding synchronous work on Pi's event thread while preserving native aggregate token usage.
 - Snapshots are written atomically with per-turn size and event limits.
 - Configuration is refreshed at session, request-start, and terminal boundaries instead of on streaming deltas.
-- A terminal event starts one worker for the current snapshot and at most one bounded historical retry, preventing upload-process bursts.
+- A terminal event atomically elects one worker. That worker processes the current snapshot first and then drains at most eight queued snapshots serially under one 30-second deadline.
 - The Go worker validates that input is a regular JSON file in the Pi-managed queue.
 - Persistent upload state prevents duplicate Trace and Metrics delivery and permits signal-specific retry after partial success.
 - Collection and upload failures do not change Pi prompts, Tool results, or stop behavior.
@@ -77,11 +78,9 @@ Skill detection requires a `read` Tool call whose resolved basename is `SKILL.md
 
 ## Subagent behavior
 
-Pi's official Subagent example launches an independent `pi --mode json -p --no-session` process. The parent knows the relationship because its `subagent` Tool owns the process and returns structured `details.results[]` data. The official extension does not provide a native parent trace or Tool-call identifier.
+Pi's official Subagent example launches an independent `pi --mode json -p --no-session` process. The parent `subagent` Tool records its native duration and bounded result summary, including child count, failed count, and observed models. Each child Pi process records its own native LLM and Tool lifecycle as a separate trace.
 
-The connector assigns the parent turn Trace ID and `tool:subagent` Span ID before Tool execution. During that exact Tool lifecycle it exposes a bounded W3C trace context and the native parent Tool call ID to child processes. Each child connector extension records that context with its own generated child run ID. The child `invoke_agent` root therefore shares the parent Trace ID and points to the actual `tool:subagent` span. Child LLM, Tool, TTFT, and token data come only from the child's native lifecycle events; the parent retains only bounded result summaries and does not add child usage again.
-
-Official single, chain, and parallel modes use one outer `subagent` Tool call, so every spawned child points to that delegate span while retaining a unique root Span ID and child run ID. Nested calls repeat the same mechanism. If multiple distinct `subagent` Tool calls overlap in one Pi tool batch, the connector suppresses ambient propagation and leaves those children as standalone traces instead of guessing a relationship. Exact child process startup time remains represented by the parent Tool duration rather than a fabricated child span boundary.
+The connector does not propagate parent trace context into child processes and does not infer parentage from timing or result text. Single, parallel, chain, and nested Subagent runs therefore remain independent traces. Exact child process startup time is represented only within the parent `tool:subagent` duration.
 
 ## Installation and upgrade
 
@@ -104,4 +103,4 @@ Sources:
 - [Pi settings documentation](https://github.com/earendil-works/pi/blob/main/packages/coding-agent/docs/settings.md)
 - [Pi Subagent example](https://github.com/earendil-works/pi/tree/main/packages/coding-agent/examples/extensions/subagent)
 
-Implemented fixtures cover multi-LLM Tool flow, native TTFT, token and cache usage, Skill metadata, cancellation, incomplete Tool suppression, content-free capture, Subagent result summaries, explicit parent-child Trace context, ambiguous concurrent-call fallback, duplicate terminal events, disabled collection, and upload deduplication. A real Pi Subagent runtime smoke completed both child and parent uploads. Backend trace assembly and Windows runtime loading remain open validation items.
+Implemented fixtures cover multi-LLM Tool flow, native TTFT, token and cache usage, Skill metadata, cancellation, incomplete Tool suppression, content-free capture, Subagent result summaries, duplicate terminal events, disabled collection, upload deduplication, absence of Subagent context propagation, and serialized queue draining. A real Pi Subagent runtime smoke completed independent child and parent uploads. Backend validation and Windows runtime loading remain open validation items.

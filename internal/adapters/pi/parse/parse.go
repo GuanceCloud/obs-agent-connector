@@ -20,9 +20,6 @@ type Snapshot struct {
 	TurnID         string  `json:"turn_id"`
 	TraceID        string  `json:"trace_id"`
 	RootSpanID     string  `json:"root_span_id"`
-	ParentSpanID   string  `json:"parent_span_id"`
-	ParentToolID   string  `json:"parent_tool_call_id"`
-	ChildRunID     string  `json:"child_run_id"`
 	Start          int64   `json:"started_at"`
 	End            int64   `json:"ended_at"`
 	Events         []Event `json:"events"`
@@ -84,21 +81,6 @@ func Normalize(s Snapshot, cfg config.Config) (model.Turn, error) {
 	}
 	end := max(s.End, s.Start+1)
 	t := model.Turn{SessionID: s.SessionID, TurnID: s.TurnID, TraceID: validHexID(s.TraceID, 16), RootSpanID: validHexID(s.RootSpanID, 8), AgentRuntime: "pi", AgentName: "pi", StartUnixNano: s.Start * 1e6, EndUnixNano: end * 1e6, FinalStatus: model.FinalStatusCompleted, Resource: map[string]any{}, ExtraAttributes: map[string]any{"run_id": s.TurnID}}
-	if s.ParentSpanID != "" || s.ParentToolID != "" || s.ChildRunID != "" {
-		parentID := validHexID(s.ParentSpanID, 8)
-		parentToolID := boundedIdentity(s.ParentToolID, 512)
-		childRunID := boundedIdentity(s.ChildRunID, 256)
-		if t.TraceID == "" || t.RootSpanID == "" || parentID == "" || parentToolID == "" || childRunID == "" {
-			// An incomplete bridge is not reliable causal evidence. Fall back to
-			// a standalone trace instead of attaching the child speculatively.
-			t.TraceID = ""
-			t.RootSpanID = ""
-		} else {
-			t.ParentSpanID = parentID
-			t.ParentToolCallID = parentToolID
-			t.ChildRunID = childRunID
-		}
-	}
 	for k, v := range cfg.Resource {
 		t.Resource[k] = v
 	}
@@ -340,14 +322,6 @@ func validHexID(value string, size int) string {
 		if !strings.ContainsRune("0123456789abcdef", character) {
 			return ""
 		}
-	}
-	return value
-}
-
-func boundedIdentity(value string, limit int) string {
-	value = strings.TrimSpace(value)
-	if value == "" || len(value) > limit {
-		return ""
 	}
 	return value
 }
