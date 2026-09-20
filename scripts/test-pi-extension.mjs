@@ -52,14 +52,13 @@ try {
   emit("before_agent_start", { prompt: "Delegate the task" });
   emit("message_start", { message: { ...user, content: "Delegate the task" } });
   emit("tool_execution_start", { toolName: "subagent", toolCallId: "subagent-call-1", args: { agent: "worker" } });
-  const propagatedTraceparent = process.env.OBS_AGENT_CONNECTOR_PI_TRACEPARENT;
-  assert.match(propagatedTraceparent, /^00-[0-9a-f]{32}-[0-9a-f]{16}-01$/);
-  assert.equal(process.env.OBS_AGENT_CONNECTOR_PI_PARENT_TOOL_CALL_ID, "subagent-call-1");
+  assert.equal(process.env.OBS_AGENT_CONNECTOR_PI_TRACEPARENT, undefined, "subagent tool must not publish ambient trace context");
+  assert.equal(process.env.OBS_AGENT_CONNECTOR_PI_PARENT_TOOL_CALL_ID, undefined, "subagent tool must not publish an ambient parent tool ID");
 
   emit("tool_execution_start", { toolName: "subagent", toolCallId: "subagent-call-2", args: { agent: "worker" } });
-  assert.equal(process.env.OBS_AGENT_CONNECTOR_PI_TRACEPARENT, undefined, "ambiguous concurrent subagent calls must not share context");
+  assert.equal(process.env.OBS_AGENT_CONNECTOR_PI_TRACEPARENT, undefined, "concurrent subagent calls must not share ambient context");
   emit("tool_execution_end", { toolName: "subagent", toolCallId: "subagent-call-2", result: { details: { results: [] } } });
-  assert.equal(process.env.OBS_AGENT_CONNECTOR_PI_TRACEPARENT, propagatedTraceparent, "remaining subagent context was not restored");
+  assert.equal(process.env.OBS_AGENT_CONNECTOR_PI_TRACEPARENT, undefined, "subagent completion must not create ambient context");
 
   const childHandlers = new Map();
   const childModule = await import(`${pathToFileURL(moduleFile).href}?child=1`);
@@ -82,15 +81,16 @@ try {
   const parentSnapshot = bridgeSnapshots.find(item => item.session_id === "synthetic-session" && item.events.some(event => event.call_id === "subagent-call-1"));
   const childSnapshot = bridgeSnapshots.find(item => item.session_id === "synthetic-child-session");
   const parentTool = parentSnapshot.events.find(event => event.type === "tool_start" && event.call_id === "subagent-call-1");
-  assert.equal(childSnapshot.trace_id, parentSnapshot.trace_id);
-  assert.equal(childSnapshot.parent_span_id, parentTool.span_id);
-  assert.equal(childSnapshot.parent_tool_call_id, "subagent-call-1");
-  assert(childSnapshot.child_run_id && childSnapshot.child_run_id === childSnapshot.turn_id);
+  assert(parentTool, "parent subagent tool was not recorded");
+  assert.notEqual(childSnapshot.trace_id, parentSnapshot.trace_id, "independent child Pi must use a separate trace");
+  assert.equal(childSnapshot.parent_span_id, undefined);
+  assert.equal(childSnapshot.parent_tool_call_id, undefined);
+  assert.equal(childSnapshot.child_run_id, undefined);
 
+  writeFileSync(configFile, JSON.stringify({ ...cfg, captureContent: "none" }));
   emit("before_agent_start", { prompt: user.content });
   emit("message_start", { message: user });
   emit("before_provider_request", { payload: {} });
-  writeFileSync(configFile, JSON.stringify({ ...cfg, captureContent: "none" }));
   emit("message_end", { message: assistant });
   emit("tool_execution_start", { toolName: "read", toolCallId: "skill-none", args: { path: join(root, "skills", "example", "SKILL.md") } });
   emit("tool_execution_end", { toolName: "read", toolCallId: "skill-none", result: { content: [{ type: "text", text: "private skill body" }] } });
@@ -105,7 +105,7 @@ try {
   writeFileSync(configFile, JSON.stringify({ ...cfg, enabled: false }));
   emit("before_agent_start"); emit("message_start", { message: user }); emit("agent_settled");
   assert.equal(readdirSync(queue).length, 4, "disabled extension queued a turn");
-  console.log("Pi extension tests passed: terminal gating, native LLM timing, subagent propagation, privacy, policy changes and disabled mode.");
+  console.log("Pi extension tests passed: terminal gating, native LLM timing, independent subagent traces, privacy, policy changes and disabled mode.");
 } finally {
   rmSync(root, { recursive: true, force: true });
 }
