@@ -17,6 +17,7 @@
 | `dsh` | DeepSeek Harness | Unix: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install.sh` Windows: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install-release.ps1` | `$DSH_HOME/gtrace.json` (default `~/.dsh/gtrace.json`) | `$DSH_HOME/profiles/<profile>/node_modules/dsh-otel-plugin` |
 | `hermes` | Hermes | `https://static.guance.com/agent_plugins/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
 | `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/agent_plugins/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://static.guance.com/agent_plugins/opencode-otel-plugin/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
+| `mimo` | MiMo Code using the host-aware OpenCode plugin with `--variant mimo` | Same package and release installer as `opencode` (requires a host-aware release) | `~/.config/mimocode/gtrace.json` | `~/.config/mimocode/plugins/opencode-otel-plugin` |
 | `openclaw` | OpenClaw | Unix: `https://static.guance.com/agent_plugins/openclaw-otel-plugin/install.sh`  Windows: `https://static.guance.com/agent_plugins/openclaw-otel-plugin/install-release.ps1` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
 | `qoder` | Qoder with automatic CN/global detection | Unix: `https://static.guance.com/agent_plugins/qoder-otel-plugin/qoder-otel-plugin.tar.gz`  Windows: `https://static.guance.com/agent_plugins/qoder-otel-plugin/install-release.ps1` | `~/.qoder/gtrace.json` or `~/.qoder-cn/gtrace.json` | `~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin` or `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
 | `workbuddy` | WorkBuddy with automatic profile-directory detection | Built into `obs-agent-connector` | `~/.obs-agent-connector/workbuddy/gtrace.json` (legacy profile config remains readable) | `<profile>/settings.json` managed Hooks |
@@ -70,6 +71,7 @@ Windows installation and update are currently supported only for:
 - `omp`
 - `codebuddy`
 - `dsh`
+- `mimo`
 - `opencode`
 - `openclaw`
 - `qoder`
@@ -126,6 +128,7 @@ contract and add a regression test for the generated command.
 | `kiro` | `enabled` |
 | `omp` | `enabled` |
 | `dsh` | `enabled` |
+| `mimo` | `enabled` |
 | `opencode` | `enabled` |
 | `openclaw` | `plugins.entries.openclaw-otel-plugin.enabled` |
 | `qoder` | `enabled` |

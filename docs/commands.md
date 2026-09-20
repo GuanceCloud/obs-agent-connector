@@ -138,7 +138,7 @@ Supported edit parameters:
 Notes:
 
 - `edit` merges the supplied values into the existing config and rewrites the file atomically
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `omp`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `omp`, `mimo`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are excluded because they do not use the managed `gtrace.json` layout
 
 ## Install
@@ -236,7 +236,7 @@ obs-agent-connector disable codex --dry-run
 
 `enable` and `disable` update the Agent runtime JSON config in place:
 
-- `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `dsh`, `opencode`, and `qoder` set top-level `enabled`
+- `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `dsh`, `mimo`, `opencode`, and `qoder` set top-level `enabled`
 - `openclaw` sets `plugins.entries.openclaw-otel-plugin.enabled`
 
 `hermes` is not currently supported because its runtime config is YAML rather than a supported JSON `enabled` switch.
@@ -314,3 +314,39 @@ Behavior:
 - keeps connector-managed global and per-Agent configuration when `--keep-config` is used; Hooks, logs, and upload state are still removed
 - removes the installer-managed PATH export from `~/.zshrc`, `~/.bashrc`, or `~/.profile` when found
 - removes the connector install directory from the Windows user PATH when present
+
+
+### MiMo Code
+
+`discover` recognizes the `mimo` executable or an existing MiMo config/data directory.
+The default directories are `~/.config/mimocode` and `~/.local/share/mimocode`,
+including on Windows (under the user home). Absolute `XDG_CONFIG_HOME` and
+`XDG_DATA_HOME` override their respective roots. An absolute `MIMOCODE_HOME`
+takes precedence and uses `<root>/config` and `<root>/data`; an empty root alone
+is not a discovery signal. A relative `MIMOCODE_HOME` is invalid. OpenCode paths
+and `OPENCODE_HOME` do not identify a MiMo installation.
+
+```bash
+obs-agent-connector install mimo
+obs-agent-connector status mimo
+obs-agent-connector update mimo
+obs-agent-connector disable mimo
+obs-agent-connector enable mimo
+obs-agent-connector config mimo
+obs-agent-connector remove mimo
+```
+
+This target requires a host-aware `opencode-otel-plugin` release supporting
+`--variant mimo` (`-Variant mimo` on Windows). Older installers reject the variant;
+the connector must not fall back to installing the OpenCode target. Development
+validation uses local packaged artifacts until that release is available.
+
+The connector passes the resolved directory as `MIMOCODE_CONFIG_DIR`. The plugin
+installer owns registration in `mimocode.json` / `mimocode.jsonc` and runtime
+configuration. Updates preserve telemetry configuration with `--no-config`.
+Removal invokes the packaged unregistration helper before deleting plugin files,
+and aborts if that helper fails. Node.js must remain available for removal.
+By default `gtrace.json` is retained; `remove mimo --purge-config` deletes only
+that telemetry configuration. Authentication, providers, memory and unrelated
+plugin registrations are preserved. Supporting native installation does not fix
+the separate missing LLM-input telemetry after tool calls.
