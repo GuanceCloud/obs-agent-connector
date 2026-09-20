@@ -15,6 +15,7 @@ type Definition struct {
 	AgentCommand             string
 	SupportedPlatforms       []string
 	WindowsInstaller         string
+	ReleaseArchiveEnv        string
 	PackageScript            string
 	PackageArgs              []string
 	PackageRootArg           bool

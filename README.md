@@ -48,6 +48,7 @@ For a specific version or GitHub download source, see the [distribution guide](d
 | `dsh` | `dsh-otel-plugin` | `✅` | `✅` | `✅` | DeepSeek Harness profile bundle |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
+| `mimo` | `opencode-otel-plugin` (MiMo variant) | `✅` | `✅` | `✅` | Native MiMo paths; requires the host-aware plugin release |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
 | `qoder` | `qoder-otel-plugin` | `✅` | `✅` | `✅` | Auto-detects CN vs global layout and passes the matching `--variant` value |
 | `workbuddy` | Built into `obs-agent-connector` | `✅` | `❌` | `✅` | Multi-Hook journal plus JSONL replay; restart after migrating from the external plugin |

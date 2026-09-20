@@ -14,6 +14,7 @@ Supported Agents:
 - `dsh`
 - `hermes`
 - `kiro`
+- `mimo`
 - `opencode`
 - `openclaw`
 - `qoder`
@@ -22,7 +23,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `kiro`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
+- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `kiro`, `mimo`, `opencode`, `openclaw`, `qoder`, and `workbuddy`
 
 ## Install obs-agent-connector
 
@@ -80,7 +81,7 @@ Field reference:
 | --- | --- |
 | `download_base_url` | Download base URL for the connector itself, including metadata and binary packages |
 | `plugin_source` | Agent plugin source, currently `oss` or `github` |
-| `plugin_base_url` | Base URL used for Agent plugin downloads; OSS defaults to the `agent_plugins` directory |
+| `plugin_base_url` | Base URL used for Agent plugin downloads; OSS defaults to `agent_plugins`. With `plugin_source=github`, it may be an organization root or an exact `.../<plugin>/releases/download/<tag>` URL for RC validation. |
 | `endpoint` | OBS / GTrace ingest endpoint |
 | `x_token` | Authentication token |
 
@@ -247,7 +248,7 @@ Notes:
 - `list` prints the current managed `gtrace.json` values
 - `edit` merges the supplied values into the existing config and rewrites the file
 - built-in adapters write `~/.obs-agent-connector/<agent>/gtrace.json`; an existing Agent-local config is used as the migration source when necessary
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `kiro`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `kiro`, `mimo`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are not supported by this command
 
 ## `discover`
@@ -536,6 +537,7 @@ Supported Agents on Windows:
 - `cursor`
 - `dcode`
 - `kiro`
+- `mimo`
 - `opencode`
 - `openclaw`
 - `qoder`

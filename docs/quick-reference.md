@@ -19,6 +19,7 @@ This document is a compact reference for:
 | `dsh` | `dsh-otel-plugin` | `✅` | `✅` | `✅` | DeepSeek Harness profile bundle |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
+| `mimo` | `opencode-otel-plugin` (MiMo variant) | `✅` | `✅` | `✅` | Native MiMo paths; requires the host-aware plugin release |
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
 | `qoder` | `qoder-otel-plugin` | `✅` | `✅` | `✅` | Auto-detects CN vs global layout and passes the matching `--variant` value |
 | `workbuddy` | `workbuddy-otel-plugin` | `✅` | `❌` | `✅` | Uses the detected WorkBuddy profile directory and writes `gtrace.json` there |
@@ -143,6 +144,7 @@ Current JSON runtime toggle support:
 - `grok`
 - `kiro`
 - `dsh`
+- `mimo`
 - `opencode`
 - `openclaw`
 - `qoder`

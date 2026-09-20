@@ -13,6 +13,7 @@ func opencodePlugin() Definition {
 		PluginName:               "opencode-otel-plugin",
 		AgentCommand:             "opencode",
 		WindowsInstaller:         "install-release.ps1",
+		ReleaseArchiveEnv:        "OPENCODE_OTEL_ARCHIVE_URL",
 		PackageScript:            "scripts/install.sh",
 		DiscoveryCommandOptional: true,
 		Markers: []string{
