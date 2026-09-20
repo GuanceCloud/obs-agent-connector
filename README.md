@@ -2,7 +2,7 @@
 
 `obs-agent-connector` is a single Go binary for installing and managing OBS/GTrace integrations and collecting telemetry from AI coding agents.
 
-The current stable release is [v0.1.24](https://github.com/GuanceCloud/obs-agent-connector/releases/tag/v0.1.24). See the [release notes](docs/releases/v0.1.24.md) for changes and compatibility details.
+The current stable release is [v0.1.26](https://github.com/GuanceCloud/obs-agent-connector/releases/tag/v0.1.26). See the [release notes](docs/releases/v0.1.26.md) for changes and compatibility details.
 
 ## Features
 
@@ -93,7 +93,7 @@ Requires Go 1.22 or later.
 go test ./...
 go vet ./...
 go build -o obs-agent-connector ./cmd/obs-agent-connector
-VERSION=v0.1.24 ./scripts/build-release.sh
+VERSION=v0.1.26 ./scripts/build-release.sh
 ```
 
 Release artifacts are written to `dist/`: six platform archives, installer scripts, `latest.txt`, and `SHA256SUMS`. Tagged builds embed the tag as the CLI and built-in adapter version.
@@ -118,7 +118,7 @@ GitHub Actions runs CI on pushes and pull requests. The manual `Package` workflo
 - [Plugin matrix](docs/plugins.md)
 - [Distribution guide](docs/distribution.md)
 - [DCode checkpoint collection](docs/dcode-checkpoint-collection.md)
-- [Release notes](docs/releases/v0.1.24.md)
+- [Release notes](docs/releases/v0.1.26.md)
 
 ## License
 
