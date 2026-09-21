@@ -12,6 +12,45 @@ import (
 	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
+func TestPiBuiltinInstallRegistersExtensionAndPersistsDetectedVersion(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	t.Setenv("PI_CODING_AGENT_DIR", filepath.Join(home, "pi-agent"))
+	command := filepath.Join(t.TempDir(), "pi")
+	if err := os.WriteFile(command, []byte("#!/bin/sh\necho 0.85.1\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	executable := filepath.Join(home, ".local", "bin", "obs-agent-connector")
+	originalExecutable := currentExecutable
+	currentExecutable = func() (string, error) { return executable, nil }
+	t.Cleanup(func() { currentExecutable = originalExecutable })
+
+	plugin := agent.Get("pi")
+	plugin.AgentCommand = command
+	enabled := true
+	if err := installBuiltinAdapter(plugin, installInput{Endpoint: "https://example.invalid", XToken: "test-token", Enabled: &enabled}, false); err != nil {
+		t.Fatal(err)
+	}
+	configPath := filepath.Join(home, ".obs-agent-connector", "pi", "gtrace.json")
+	body, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var config map[string]any
+	if err := json.Unmarshal(body, &config); err != nil {
+		t.Fatal(err)
+	}
+	resource, _ := config["resourceAttributes"].(map[string]any)
+	if resource["agent_version"] != "0.85.1" {
+		t.Fatalf("Pi version missing from config: %#v", config)
+	}
+	settingsBody, err := os.ReadFile(filepath.Join(home, "pi-agent", "settings.json"))
+	if err != nil || !strings.Contains(string(settingsBody), filepath.Join(home, ".obs-agent-connector", "pi", "extension.js")) {
+		t.Fatalf("Pi extension was not registered: %s, %v", settingsBody, err)
+	}
+}
+
 func TestCodeBuddyBuiltinUpdateReconcilesLegacyHookAndPreservesConfigState(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("HOME", home)

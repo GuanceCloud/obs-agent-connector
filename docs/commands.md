@@ -23,7 +23,7 @@ obs-agent-connector <command> [arguments]
 | `uninstall` | Uninstall all managed built-in adapters and then remove `obs-agent-connector`, its config, and its managed PATH entry. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print or run a matching self-update action when a newer release is available. |
 
-Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, and WorkBuddy are built into the connector. Other Agents use their external plugins.
+Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, and WorkBuddy are built into the connector. Other Agents use their external plugins.
 
 ## Bootstrap
 
@@ -138,7 +138,7 @@ Supported edit parameters:
 Notes:
 
 - `edit` merges the supplied values into the existing config and rewrites the file atomically
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `omp`, `mimo`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `mimo`, `omp`, `pi`, `opencode`, `qoder`, and `workbuddy`
 - `hermes` and `openclaw` are excluded because they do not use the managed `gtrace.json` layout
 
 ## Install
@@ -152,6 +152,7 @@ obs-agent-connector install dcode
 obs-agent-connector install grok
 obs-agent-connector install kiro
 obs-agent-connector install omp
+obs-agent-connector install pi
 ```
 
 Install the default built-in adapters:
@@ -165,6 +166,7 @@ obs-agent-connector install dcode
 obs-agent-connector install grok
 obs-agent-connector install kiro
 obs-agent-connector install omp
+obs-agent-connector install pi
 ```
 
 Override stored defaults or identity values:
@@ -182,8 +184,8 @@ By default, `install` reuses the CLI download source recorded in `~/.obs-agent-c
 If that source is unavailable, `install` derives the installer base from `--endpoint`.
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com/agent_plugins`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com/agent_plugins`.
 Use `--static-base` when you need to override the installer base.
-On Windows, Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, and WorkBuddy register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
-Claude, Cursor, CodeBuddy, Codex, Deep Agents Code, Grok Build, Kiro, OMP, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows.
+On Windows, Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, and WorkBuddy register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
+Claude, Cursor, CodeBuddy, Codex, Deep Agents Code, Grok Build, Kiro, OMP, Pi, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows.
 For Grok Build, installation creates the global trusted Hook file at `~/.grok/hooks/obs-agent-connector.json`. Restart Grok, or run `/hooks`, select the Hooks tab, and press `l` to reload it in an active session. Runtime config, Hook logs, and durable queue/upload state are stored under `~/.obs-agent-connector/grok/`.
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
@@ -236,7 +238,7 @@ obs-agent-connector disable codex --dry-run
 
 `enable` and `disable` update the Agent runtime JSON config in place:
 
-- `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `dsh`, `mimo`, `opencode`, and `qoder` set top-level `enabled`
+- `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `dsh`, `mimo`, `opencode`, `pi`, and `qoder` set top-level `enabled`
 - `openclaw` sets `plugins.entries.openclaw-otel-plugin.enabled`
 
 `hermes` is not currently supported because its runtime config is YAML rather than a supported JSON `enabled` switch.
@@ -308,7 +310,7 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
-- removes the managed Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, and WorkBuddy adapters, including compatible legacy plugin residue where applicable
+- removes the managed Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, and WorkBuddy adapters, including compatible legacy plugin residue where applicable
 - removes each built-in adapter's connector-managed config, Hook log, and upload state by default
 - removes `~/.obs-agent-connector/config.json` by default
 - keeps connector-managed global and per-Agent configuration when `--keep-config` is used; Hooks, logs, and upload state are still removed

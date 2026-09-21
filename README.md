@@ -6,7 +6,7 @@ The current stable release is [v0.1.26](https://github.com/GuanceCloud/obs-agent
 
 ## Features
 
-- Built-in telemetry adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, and WorkBuddy, with one binary and one version.
+- Built-in telemetry adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, Pi, and WorkBuddy, with one binary and one version.
 - External plugin installation through standard OSS or GitHub Release installers.
 - Local Agent discovery, installation, updates, status, configuration, enable/disable, and removal.
 - Shared endpoint and X-Token defaults, automatically generated Agent identities, and configuration-preserving plugin updates.
@@ -45,6 +45,7 @@ For a specific version or GitHub download source, see the [distribution guide](d
 | `grok` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Grok Build CLI 1.0.5+; TUI/headless Hooks plus terminal `updates.jsonl` replay |
 | `kiro` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | V3 interactive TTY only (`kiro-cli chat --v3`); default V2 and `--no-interactive` do not load global Hooks |
 | `omp` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | OMP 18.1.15+; macOS ARM64 product-tested; Linux/Windows build-only validation |
+| `pi` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Pi 0.85.1+ native lifecycle extension; macOS ARM64 product-tested; Linux/Windows build-only validation |
 | `dsh` | `dsh-otel-plugin` | `✅` | `✅` | `✅` | DeepSeek Harness profile bundle |
 | `hermes` | `hermes-otel-plugin` | `✅` | `✅` | `❌` | Hermes plugin |
 | `opencode` | `opencode-otel-plugin` | `✅` | `✅` | `✅` | Uses the OpenCode config directory under `~/.config/opencode` |
@@ -65,6 +66,7 @@ obs-agent-connector discover               # Detect Agents and install missing p
 obs-agent-connector discover -u            # Sync all detected plugins
 obs-agent-connector install codex          # Install one Agent integration
 obs-agent-connector install omp
+obs-agent-connector install pi
 obs-agent-connector install workbuddy
 obs-agent-connector list                   # List installed plugins
 obs-agent-connector status codex
@@ -84,6 +86,8 @@ obs-agent-connector version -u             # Update the connector binary
 Built-in adapters store configuration, Hook logs, and replay state under `~/.obs-agent-connector/<agent>/`. External installers own their runtime configuration. Removing a built-in adapter deletes its managed Hooks and directory; legacy Agent-local configuration remains unless `--purge-config` is supplied. Use `uninstall --keep-config` to retain connector-managed configuration.
 
 After migrating WorkBuddy from the external plugin, restart WorkBuddy to load the managed Hooks. See [WorkBuddy migration](docs/product-research/workbuddy.md). OMP uses a bundled native extension and the built-in Go collector; see [OMP setup and limitations](docs/product-research/omp.md).
+
+Pi uses a connector-managed JavaScript extension registered in the global Pi settings and a built-in Go worker. It exports only after `agent_settled`, measures LLM duration and TTFT from native provider and stream events, and preserves high-confidence Skill identity when content capture is disabled. See [Pi telemetry product research](docs/product-research/pi.md).
 
 ## Build
 
