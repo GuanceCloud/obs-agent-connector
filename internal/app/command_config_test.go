@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -70,6 +71,50 @@ func TestMergeConnectorConfigKeepsExistingValuesWhenArgumentsAreEmpty(t *testing
 	}
 	if cfg["endpoint"] != "https://existing.example.com" || cfg["x_token"] != "existing-token" {
 		t.Fatalf("empty arguments overwrote existing config: %#v", cfg)
+	}
+}
+
+func TestMergeConnectorConfigPreservesDistinctUnicodeTagsAndCommaValues(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	userName := "\u6d4b\u8bd5\u7528\u6237"
+	tags := strings.Join([]string{
+		"user_id=user-redacted",
+		"user_name=" + userName,
+		"regions=us-east,us-west",
+	}, "\n")
+	if err := mergeConnectorConfig([]string{"--path", path, "--global-tags", tags}); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := readConnectorConfigObject(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, ok := cfg["global_tags"].([]any)
+	if !ok || len(got) != 3 {
+		t.Fatalf("global_tags = %#v, want three entries", cfg["global_tags"])
+	}
+	for index, want := range []string{"user_id=user-redacted", "user_name=" + userName, "regions=us-east,us-west"} {
+		if got[index] != want {
+			t.Fatalf("global_tags[%d] = %#v, want %q", index, got[index], want)
+		}
+	}
+}
+
+func TestMergeConnectorConfigRejectsCommaJoinedTags(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "config.json")
+	err := mergeConnectorConfig([]string{
+		"--path", path,
+		"--global-tags", "user_id=user-redacted,user_name=test-user,env=prod",
+	})
+	if err == nil {
+		t.Fatal("expected comma-joined global tags to be rejected")
+	}
+	if !strings.Contains(err.Error(), "-Tag @") {
+		t.Fatalf("expected actionable PowerShell guidance, got %q", err)
+	}
+	if _, statErr := os.Stat(path); !os.IsNotExist(statErr) {
+		t.Fatalf("invalid tag input must not write config, stat error = %v", statErr)
 	}
 }
 

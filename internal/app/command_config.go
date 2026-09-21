@@ -38,7 +38,11 @@ func mergeConnectorConfig(args []string) error {
 	setNonEmptyString(current, "plugin_base_url", strings.TrimRight(strings.TrimSpace(*pluginBaseURL), "/"))
 	setNonEmptyString(current, "endpoint", strings.TrimSpace(*endpoint))
 	setNonEmptyString(current, "x_token", strings.TrimSpace(*xToken))
-	if tags := splitNonEmptyLines(*globalTags); len(tags) > 0 {
+	tags, err := parseGlobalTags(*globalTags)
+	if err != nil {
+		return err
+	}
+	if len(tags) > 0 {
 		current["global_tags"] = tags
 	}
 	return writeConnectorConfigAtomic(*path, current)
@@ -83,6 +87,31 @@ func splitNonEmptyLines(value string) []string {
 		}
 	}
 	return result
+}
+
+func parseGlobalTags(value string) ([]string, error) {
+	tags := splitNonEmptyLines(value)
+	for _, assignment := range tags {
+		separator := strings.Index(assignment, "=")
+		if separator <= 0 {
+			return nil, fmt.Errorf("global tag must use KEY=VALUE format")
+		}
+		if containsCommaJoinedAssignment(assignment[separator+1:]) {
+			return nil, fmt.Errorf("comma-separated global tag assignments are ambiguous; pass one tag per line (PowerShell: -Tag @('user_id=user-123', 'user_name=Guance'))")
+		}
+	}
+	return tags, nil
+}
+
+func containsCommaJoinedAssignment(value string) bool {
+	for _, segment := range strings.Split(value, ",")[1:] {
+		segment = strings.TrimSpace(segment)
+		separator := strings.Index(segment, "=")
+		if separator > 0 && strings.TrimSpace(segment[:separator]) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func writeConnectorConfigAtomic(path string, value map[string]any) error {

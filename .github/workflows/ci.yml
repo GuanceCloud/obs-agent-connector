@@ -65,3 +65,7 @@ jobs:
 
       - name: Run Grok Windows Hook shell tests
         run: go test ./internal/install -run '^TestGrokWindowsHookCommandExecutes' -count=1
+
+      - name: Verify Windows installer tag contract
+        shell: pwsh
+        run: ./scripts/test-install.ps1

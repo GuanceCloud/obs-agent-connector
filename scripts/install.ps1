@@ -18,6 +18,28 @@ $AppName = "obs-agent-connector"
 $ScriptPath = $MyInvocation.MyCommand.Path
 $EndpointWasProvided = [bool]$Endpoint
 
+function Assert-TagAssignments {
+  param([AllowEmptyCollection()][string[]]$Assignments)
+
+  foreach ($Assignment in @($Assignments)) {
+    if ((-not $Assignment) -or (-not $Assignment.Contains("=")) -or ($Assignment.IndexOf("=") -le 0)) {
+      throw "tag must use KEY=VALUE format"
+    }
+
+    $ValueStart = $Assignment.IndexOf("=") + 1
+    $Value = $Assignment.Substring($ValueStart)
+    if ($Value -match ',\s*[^,=\s]+\s*=') {
+      throw "comma-separated tag assignments are ambiguous; pass one value per tag, for example -Tag @('user_id=user-123', 'user_name=Guance'). A comma remains valid inside a single tag value when the text after it is not another KEY=VALUE assignment."
+    }
+  }
+}
+
+# Dot-sourcing exposes the validation helper to the Windows contract test
+# without downloading or installing release assets.
+if ($MyInvocation.InvocationName -eq ".") {
+  return
+}
+
 if (-not $ConfigDir) {
   $ConfigDir = Join-Path $HOME ".obs-agent-connector"
 }
@@ -103,11 +125,7 @@ if (($PluginSource -eq "github") -and (-not $PluginBaseUrl)) {
 if ($PluginSource -eq "oss") {
   $PluginBaseUrl = Get-NormalizedOssPluginBase -Value $PluginBaseUrl
 }
-foreach ($Assignment in @($Tag)) {
-  if ((-not $Assignment) -or (-not $Assignment.Contains("=")) -or ($Assignment.IndexOf("=") -le 0)) {
-    throw "tag must use KEY=VALUE format: $Assignment"
-  }
-}
+Assert-TagAssignments -Assignments $Tag
 if ((-not $BinaryOnly) -and (-not $Endpoint)) {
   throw "endpoint is required; pass -Endpoint <url>"
 }
