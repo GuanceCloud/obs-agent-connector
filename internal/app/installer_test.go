@@ -366,6 +366,28 @@ func TestBuildInstallArgsIncludesGlobalTagsBeforeAgentIdentity(t *testing.T) {
 	}
 }
 
+func TestRenderPowerShellInstallCommandUsesDistinctTagArrayEntries(t *testing.T) {
+	userName := "\u6d4b\u8bd5\u7528\u6237"
+	command := renderPowerShellInstallCommand("install.ps1", agentDefinitionForTest("kiro"), installInput{
+		Endpoint:  "https://llm-openway.guance.com",
+		XToken:    "agent_test",
+		AgentID:   "agid_123",
+		AgentName: "demo",
+		GlobalTags: []string{
+			"user_id=user-redacted",
+			"user_name=" + userName,
+			"env=prod",
+		},
+	})
+	want := "-Tag @('user_id=user-redacted', 'user_name=" + userName + "', 'env=prod', 'agent_id=agid_123', 'agent_name=demo')"
+	if !strings.Contains(command, want) {
+		t.Fatalf("PowerShell install command must use distinct tag array entries:\n%s", command)
+	}
+	if strings.Contains(command, "user_id=user-redacted,user_name=") {
+		t.Fatalf("PowerShell install command joined tags with commas: %s", command)
+	}
+}
+
 func TestDshUsesStandardExternalInstallerContract(t *testing.T) {
 	p := agentDefinitionForTest("dsh")
 	args := buildInstallArgs("/tmp/install.sh", p, installInput{

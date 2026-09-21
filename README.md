@@ -29,6 +29,15 @@ Invoke-WebRequest -Uri "https://static.guance.com/obs-agent-connector/install.ps
 .\install.ps1 -Endpoint "https://llm-openway.guance.com" -XToken "agent_xxx"
 ```
 
+Pass multiple global tags as a PowerShell array so each assignment remains distinct:
+
+```powershell
+.\install.ps1 `
+  -Endpoint "https://llm-openway.guance.com" `
+  -XToken "agent_xxx" `
+  -Tag @("user_id=user-123", "user_name=Guance", "env=prod")
+```
+
 The installer verifies `SHA256SUMS`, installs the binary, and records the download source and shared defaults in `~/.obs-agent-connector/config.json`. Reload your shell if the installer updates `PATH`. Run command-line binaries from a terminal; do not double-click them in macOS Finder.
 
 For a specific version or GitHub download source, see the [distribution guide](docs/distribution.md).
