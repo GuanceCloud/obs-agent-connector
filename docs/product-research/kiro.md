@@ -83,7 +83,7 @@ worker           -> exact session metadata + JSONL -> normalized terminal Turn
 | Start/end | Modern record timestamps or legacy sidecar duration | Turn | Per-call windows are non-overlapping inferred slices |
 | TTFT | Unknown | — | Omitted |
 
-Modern `promptTurnSummaries` values with an explicit credit unit are exported on `invoke_agent` as `gen_ai.usage.credit`. Kiro exposes one aggregate turn value without a per-request breakdown, so the credit is not copied to individual `llm` spans. Credits are never mapped to token usage or `gen_ai.client.token.usage`. Legacy token metadata remains on a verified single `llm` call only; aggregate multi-call token metadata is not attributed to individual calls. Other Agent roots do not receive token or credit usage.
+Modern `promptTurnSummaries` values with an explicit credit unit are exported on `invoke_agent` as `gen_ai.usage.credit`. Kiro exposes one aggregate turn value without a per-request breakdown, so the credit is not copied to individual `llm` spans. Credits are never mapped to token usage or `gen_ai.client.token.usage`. Legacy token metadata remains on a verified single `llm` call only; aggregate multi-call token metadata is not attributed to individual calls. Built-in Agent roots do not receive token usage.
 
 ## 7. Tool, Skill, and Subagent Data
 

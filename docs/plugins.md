@@ -2,6 +2,8 @@
 
 `obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, Pi, and WorkBuddy. Other Agents delegate installation and configuration generation to external plugin installers.
 
+Built-in `invoke_agent` spans do not carry token usage. Attributable token usage remains on `llm` spans and drives token metrics. Kiro's aggregate billing credit remains on `invoke_agent` because it has no per-call attribution. Turn-only token usage without supported per-call attribution is omitted from exported spans.
+
 ## Supported Agents
 
 | Agent | Edition | Installer | Default Config | Default Install Marker |

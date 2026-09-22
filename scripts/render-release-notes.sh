@@ -83,7 +83,9 @@ render_changes() {
 
     if printf '%s\n' "${changed_files}" | grep -Eq '(^|/)kiro([^/]*|/.*)$'; then
       if git -C "${ROOT_DIR}" cat-file -e "${previous}:internal/adapters/kiro" 2>/dev/null; then
-        if git -C "${ROOT_DIR}" diff "${previous}..${VERSION}" -- internal/core/semantic/semantic.go | grep -F 'removeUsageAttrs' >/dev/null; then
+        if git -C "${ROOT_DIR}" diff "${previous}..${VERSION}" -- internal/core/semantic/semantic.go | grep -F 'RemoveRootUsageAttrs(rootAttrs)' >/dev/null; then
+          append_line "- Removed token usage from built-in invoke_agent spans while retaining attributable LLM usage and Kiro aggregate billing credit."
+        elif git -C "${ROOT_DIR}" diff "${previous}..${VERSION}" -- internal/core/semantic/semantic.go | grep -F 'removeUsageAttrs' >/dev/null; then
           append_line "- Removed Token and Credit fields from non-Kiro invoke_agent spans while preserving Kiro aggregate billing credit on invoke_agent."
         elif git -C "${ROOT_DIR}" diff "${previous}..${VERSION}" -- internal/adapters/kiro | grep -F 'gen_ai.usage.credit' >/dev/null; then
           append_line "- Added Kiro billing credit telemetry on invoke_agent through the gen_ai.usage.credit attribute without fabricating token usage."
