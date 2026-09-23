@@ -115,6 +115,32 @@ func TestResolveManagedConfigAndHookLogPath(t *testing.T) {
 	}
 }
 
+func TestResolveUsesCODEXHOMEForGlobalConfigAndState(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("CODEX_HOME", codexHome)
+	if err := os.MkdirAll(codexHome, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(codexHome, "gtrace.json"), []byte(`{"enabled":true,"endpoint":"https://custom.example"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := Resolve(ResolveOptions{Home: home, Cwd: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.Enabled || cfg.Endpoint != "https://custom.example" {
+		t.Fatalf("CODEX_HOME config was not loaded: %#v", cfg)
+	}
+	if want := filepath.Join(codexHome, "state", "gtrace-agent"); cfg.StateDir != want {
+		t.Fatalf("StateDir = %q, want %q", cfg.StateDir, want)
+	}
+	if want := filepath.Join(home, ".obs-agent-connector", "codex", "gtrace-hooks.json"); cfg.HookLogFile != want {
+		t.Fatalf("HookLogFile = %q, want %q", cfg.HookLogFile, want)
+	}
+}
+
 func TestResolveParsesManagedHeadersAndTags(t *testing.T) {
 	base := t.TempDir()
 	home := filepath.Join(base, "home")

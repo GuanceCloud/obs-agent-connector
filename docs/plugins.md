@@ -10,7 +10,7 @@ Built-in `invoke_agent` spans do not carry token usage. Attributable token usage
 | --- | --- | --- | --- | --- |
 | `claude` | Claude | Current connector | `~/.obs-agent-connector/claude/gtrace.json` | Managed Hooks in `~/.claude/settings.json` |
 | `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector | `~/.obs-agent-connector/codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
-| `codex` | Codex | Current connector | `~/.obs-agent-connector/codex/gtrace.json` | Managed Hook and trust state in `~/.codex/hooks.json` / `~/.codex/config.toml` |
+| `codex` | Codex | Current connector | `~/.obs-agent-connector/codex/gtrace.json` | Managed Hook and trust state in `$CODEX_HOME/hooks.json` / `$CODEX_HOME/config.toml` (defaults to `~/.codex`) |
 | `cursor` | Cursor with automatic `~/.cursor` or Cursor CLI-family detection, preferring `cursor-agent` | Current connector | `~/.obs-agent-connector/cursor/gtrace.json` | Managed Hooks in `~/.cursor/hooks.json` |
 | `dcode` | Deep Agents Code with Hooks v2 (`dcode` 0.1.46 or later); normal `Stop` plus failed `SessionEnd` terminal telemetry | Current connector | `~/.obs-agent-connector/dcode/gtrace.json` | Managed Hooks in `~/.deepagents/hooks.json` |
 | `grok` | Grok Build CLI 1.0.5+ TUI/headless | Current connector | `~/.obs-agent-connector/grok/gtrace.json` | Managed global Hook in `~/.grok/hooks/obs-agent-connector.json` |

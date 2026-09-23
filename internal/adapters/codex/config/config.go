@@ -50,8 +50,9 @@ func Resolve(options ResolveOptions) (Config, error) {
 	if cwd == "" {
 		cwd, _ = os.Getwd()
 	}
+	codexHome := agentfiles.CodexHome(home)
 
-	legacyGlobalConfig, err := readJSONIfExists(filepath.Join(home, ".codex", "gtrace.json"))
+	legacyGlobalConfig, err := readJSONIfExists(filepath.Join(codexHome, "gtrace.json"))
 	if err != nil {
 		return Config{}, err
 	}
@@ -123,7 +124,7 @@ func Resolve(options ResolveOptions) (Config, error) {
 		Debug:              parseBoolean(merged["debug"], false),
 		FailOnError:        parseBoolean(merged["fail_on_error"], false),
 		HookLogFile:        agentfiles.HookLogPath(home, "codex"),
-		StateDir:           firstNonEmptyString(asString(merged["state_dir"]), filepath.Join(home, ".codex", "state", "gtrace-agent")),
+		StateDir:           firstNonEmptyString(asString(merged["state_dir"]), filepath.Join(codexHome, "state", "gtrace-agent")),
 		LockStaleMs:        parseInteger(merged["lock_stale_ms"], 120_000),
 	}, nil
 }

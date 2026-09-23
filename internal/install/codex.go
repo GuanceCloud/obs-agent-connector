@@ -18,6 +18,7 @@ import (
 
 type CodexOptions struct {
 	Home                  string
+	CodexHome             string
 	SourceExecutable      string
 	DestinationExecutable string
 	HooksFile             string
@@ -66,6 +67,7 @@ Options:
   --no-config                install the hook without modifying gtrace.json
   --skip-trust               skip the Codex app-server trust handshake
   --home <directory>         override the user home used for Agent files
+  --codex-home <directory>   override CODEX_HOME for Codex files
 `
 }
 
@@ -81,6 +83,12 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 		if err != nil {
 			return CodexResult{}, err
 		}
+	}
+	codexHome := strings.TrimSpace(options.CodexHome)
+	if codexHome == "" {
+		codexHome = agentfiles.CodexHome(home)
+	} else {
+		codexHome = filepath.Clean(codexHome)
 	}
 	source := options.SourceExecutable
 	if source == "" {
@@ -100,7 +108,7 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 	}
 	hooksFile := options.HooksFile
 	if hooksFile == "" {
-		hooksFile = filepath.Join(home, ".codex", "hooks.json")
+		hooksFile = filepath.Join(codexHome, "hooks.json")
 	}
 	configFile := options.ConfigFile
 	if configFile == "" {
@@ -124,7 +132,7 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 		return CodexResult{}, fmt.Errorf("parse Codex GTrace config: %w", err)
 	}
 	if !configExists && options.ConfigFile == "" {
-		configValue, configExists, err = readJSONObjectIfExists(filepath.Join(home, ".codex", "gtrace.json"))
+		configValue, configExists, err = readJSONObjectIfExists(filepath.Join(codexHome, "gtrace.json"))
 		if err != nil {
 			return CodexResult{}, fmt.Errorf("parse legacy Codex GTrace config: %w", err)
 		}
@@ -167,7 +175,7 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 	// handshake. Write the runtime config first so that initial invocation sees
 	// the intended enabled state and upload settings.
 	if !options.SkipTrust {
-		if err := trustCodexHook(codexCommand, home, options.TrustTimeout); err != nil {
+		if err := trustCodexHook(codexCommand, home, codexHome, options.TrustTimeout); err != nil {
 			return result, fmt.Errorf("automatically trust Codex hook: %w", err)
 		}
 	} else {
@@ -189,7 +197,7 @@ func ParseInstallArgs(args []string) (CodexOptions, error) {
 	var enable bool
 	var disable bool
 	fs.StringVar(&options.Home, "home", "", "user home")
-	fs.StringVar(&options.Home, "codex-home", "", "deprecated alias for --home")
+	fs.StringVar(&options.CodexHome, "codex-home", "", "Codex data directory")
 	fs.StringVar(&options.Endpoint, "endpoint", "", "OTLP endpoint")
 	fs.StringVar(&options.TracePath, "trace-path", "", "trace path")
 	fs.StringVar(&options.MetricsPath, "metrics-path", "", "metrics path")

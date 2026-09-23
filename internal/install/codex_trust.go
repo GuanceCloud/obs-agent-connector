@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/buildinfo"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 )
 
 type hookTrustState struct {
@@ -39,26 +40,33 @@ func (e *legacyCodexConfigWriteError) Error() string {
 	return "legacy Codex CLI rejected the hook trust config write: " + e.cause
 }
 
-func TrustCodexHook(codexCommand, cwd string, timeout time.Duration) error {
+func TrustCodexHook(codexCommand, cwd, codexHome string, timeout time.Duration) error {
 	if strings.TrimSpace(codexCommand) == "" {
 		return errors.New("codex command is required")
 	}
-	return trustCodexHookWithRunner(codexCommand, cwd, timeout, trustCodexHookProcess)
+	return trustCodexHookWithRunner(codexCommand, cwd, codexHome, timeout, trustCodexHookProcess)
 }
 
 func trustCodexHookWithRunner(
 	codexCommand string,
 	cwd string,
+	codexHome string,
 	timeout time.Duration,
 	run func(*exec.Cmd, string, time.Duration) error,
 ) error {
-	err := run(exec.Command(codexCommand, "app-server"), cwd, timeout)
+	if cwd == "" {
+		cwd = "."
+	}
+	if strings.TrimSpace(codexHome) == "" {
+		codexHome = agentfiles.CodexHome(cwd)
+	}
+	err := run(codexAppServerCommand(codexCommand, codexHome, "app-server"), cwd, timeout)
 	var compatibilityErr *legacyCodexPriorityTierError
 	if !errors.As(err, &compatibilityErr) {
 		return err
 	}
 
-	retryErr := run(exec.Command(codexCommand, "app-server", "-c", `service_tier="fast"`), cwd, timeout)
+	retryErr := run(codexAppServerCommand(codexCommand, codexHome, "app-server", "-c", `service_tier="fast"`), cwd, timeout)
 	if retryErr == nil {
 		return nil
 	}
@@ -66,13 +74,25 @@ func trustCodexHookWithRunner(
 	if !errors.As(retryErr, &configWriteErr) {
 		return fmt.Errorf("trust Codex hook with legacy service tier compatibility: %w", retryErr)
 	}
-	if cwd == "" {
-		cwd = "."
-	}
-	if writeErr := writeCodexTrustState(filepath.Join(cwd, ".codex", "config.toml"), configWriteErr.entries); writeErr != nil {
+	if writeErr := writeCodexTrustState(filepath.Join(codexHome, "config.toml"), configWriteErr.entries); writeErr != nil {
 		return fmt.Errorf("write Codex hook trust state with legacy service tier compatibility: %w", writeErr)
 	}
 	return nil
+}
+
+func codexAppServerCommand(codexCommand, codexHome string, args ...string) *exec.Cmd {
+	cmd := exec.Command(codexCommand, args...)
+	prefix := "CODEX_HOME="
+	env := make([]string, 0, len(os.Environ())+1)
+	for _, item := range os.Environ() {
+		key, _, _ := strings.Cut(item, "=")
+		if strings.EqualFold(key, "CODEX_HOME") {
+			continue
+		}
+		env = append(env, item)
+	}
+	cmd.Env = append(env, prefix+codexHome)
+	return cmd
 }
 
 func trustCodexHookProcess(cmd *exec.Cmd, cwd string, timeout time.Duration) error {

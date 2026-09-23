@@ -48,6 +48,27 @@ func TestResolveCodexInstallUsesExplicitBinary(t *testing.T) {
 	}
 }
 
+func TestResolveCodexPathsUsesCODEXHOME(t *testing.T) {
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("CODEX_HOME", codexHome)
+
+	definition := Resolve(Get("codex"))
+	if want := filepath.Join(codexHome, "hooks.json"); definition.BuiltinHookFile != want {
+		t.Fatalf("BuiltinHookFile = %q, want %q", definition.BuiltinHookFile, want)
+	}
+	for _, path := range append(append([]string{}, definition.Markers...), definition.RemovePaths...) {
+		if !strings.HasPrefix(path, codexHome+string(filepath.Separator)) {
+			t.Fatalf("Codex path did not use CODEX_HOME: %q", path)
+		}
+	}
+	if got, want := definition.ConfigFiles[1], filepath.Join(codexHome, "gtrace.json"); got != want {
+		t.Fatalf("legacy config = %q, want %q", got, want)
+	}
+	if !strings.Contains(definition.RemoveCleanupDetails[0], filepath.Join(codexHome, "config.toml")) {
+		t.Fatalf("cleanup detail did not use CODEX_HOME: %#v", definition.RemoveCleanupDetails)
+	}
+}
+
 func TestResolveCodexCommandPathForWindowsUsesStandaloneBinary(t *testing.T) {
 	dir := t.TempDir()
 	home := filepath.Join(dir, "home")

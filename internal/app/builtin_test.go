@@ -256,12 +256,14 @@ func TestCodexBuiltinInstallReconcilesLegacyHookAndPreservesConfigState(t *testi
 
 func TestCodexBuiltinInstallUsesResolvedCLIForAutomaticTrust(t *testing.T) {
 	executable := filepath.Join(t.TempDir(), "obs-agent-connector")
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("CODEX_HOME", codexHome)
 	originalExecutable := currentExecutable
 	currentExecutable = func() (string, error) { return executable, nil }
 	t.Cleanup(func() { currentExecutable = originalExecutable })
 
 	command := filepath.Join(t.TempDir(), "codex")
-	plugin := agent.Get("codex")
+	plugin := agent.Resolve(agent.Get("codex"))
 	plugin.AgentCommand = command
 
 	originalInstallCodexAdapter := installCodexAdapter
@@ -279,6 +281,9 @@ func TestCodexBuiltinInstallUsesResolvedCLIForAutomaticTrust(t *testing.T) {
 	})
 	if captured.CodexCommand != command {
 		t.Fatalf("expected Codex command %q, got %q", command, captured.CodexCommand)
+	}
+	if captured.CodexHome != codexHome || captured.HooksFile != filepath.Join(codexHome, "hooks.json") {
+		t.Fatalf("expected CODEX_HOME paths, got %#v", captured)
 	}
 	if captured.SkipTrust {
 		t.Fatal("built-in Codex install must attempt automatic hook trust by default")

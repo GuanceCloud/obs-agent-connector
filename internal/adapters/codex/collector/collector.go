@@ -18,6 +18,7 @@ import (
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/model"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/parse"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/sidecar"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 	previewcore "github.com/GuanceCloud/obs-agent-connector/internal/core/preview"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/semantic"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/util"
@@ -1065,10 +1066,20 @@ func toolCommand(tc *model.ToolCall) string {
 }
 
 func skillSourceTypeFromPath(skillFile string) string {
+	normalized := normalizeFilePath(skillFile)
+	if codexHome, ok := agentfiles.ConfiguredCodexHome(); ok {
+		skillsRoot := strings.TrimRight(normalizeFilePath(codexHome), "/") + "/skills/"
+		switch {
+		case strings.HasPrefix(normalized, skillsRoot+".system/"):
+			return "system"
+		case strings.HasPrefix(normalized, skillsRoot):
+			return "user"
+		}
+	}
 	switch {
-	case strings.Contains(skillFile, "/.codex/skills/.system/"):
+	case strings.Contains(normalized, "/.codex/skills/.system/"):
 		return "system"
-	case strings.Contains(skillFile, "/.codex/skills/"):
+	case strings.Contains(normalized, "/.codex/skills/"):
 		return "user"
 	default:
 		return "workspace"

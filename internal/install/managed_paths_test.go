@@ -148,7 +148,7 @@ func TestInstallCodexWritesManagedConfigBeforeTrust(t *testing.T) {
 	originalTrust := trustCodexHook
 	defer func() { trustCodexHook = originalTrust }()
 	trustCalled := false
-	trustCodexHook = func(_ string, gotHome string, _ time.Duration) error {
+	trustCodexHook = func(_ string, gotHome, _ string, _ time.Duration) error {
 		trustCalled = true
 		path := filepath.Join(gotHome, ".obs-agent-connector", "codex", "gtrace.json")
 		current, exists, err := ReadRuntimeConfig(path)

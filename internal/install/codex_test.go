@@ -101,6 +101,45 @@ func TestInstallCodexIsIdempotentAndPreservesConfiguration(t *testing.T) {
 	}
 }
 
+func TestInstallCodexUsesCODEXHOMEForHooksAndLegacyConfig(t *testing.T) {
+	root := t.TempDir()
+	home := filepath.Join(root, "home")
+	codexHome := filepath.Join(root, "codex-home")
+	source := filepath.Join(root, "obs-agent-connector")
+	t.Setenv("CODEX_HOME", codexHome)
+	if err := os.WriteFile(source, []byte("binary"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(codexHome, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(codexHome, "gtrace.json"), []byte(`{"enabled":false,"unknown":"keep"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	result, err := InstallCodex(CodexOptions{
+		Home: home, SourceExecutable: source, DestinationExecutable: source,
+		Endpoint: "https://new.example", SkipTrust: true,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := filepath.Join(codexHome, "hooks.json"); result.HooksFile != want {
+		t.Fatalf("HooksFile = %q, want %q", result.HooksFile, want)
+	}
+	if want := filepath.Join(home, ".obs-agent-connector", "codex", "gtrace.json"); result.ConfigFile != want {
+		t.Fatalf("ConfigFile = %q, want %q", result.ConfigFile, want)
+	}
+	var config map[string]any
+	readTestJSON(t, result.ConfigFile, &config)
+	if config["enabled"] != false || config["unknown"] != "keep" || config["endpoint"] != "https://new.example" {
+		t.Fatalf("legacy CODEX_HOME config was not preserved: %#v", config)
+	}
+	if _, err := os.Stat(filepath.Join(home, ".codex", "hooks.json")); !os.IsNotExist(err) {
+		t.Fatalf("default Codex home was modified: %v", err)
+	}
+}
+
 func TestInstallCodexNoConfigAndInvalidHooksSafety(t *testing.T) {
 	root := t.TempDir()
 	source := filepath.Join(root, "agent-telemetry")
@@ -188,6 +227,7 @@ func TestInstallCodexRequiresCLIForAutomaticTrust(t *testing.T) {
 
 func TestParseCodexInstallArgs(t *testing.T) {
 	options, err := ParseCodexInstallArgs([]string{
+		"--codex-home", "/tmp/codex-home",
 		"--type", "otlp",
 		"--endpoint", "http://127.0.0.1:4318",
 		"--header", "Authorization=placeholder",
@@ -200,7 +240,7 @@ func TestParseCodexInstallArgs(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if options.InstallType != "otlp" || options.Endpoint == "" || options.Enabled == nil || !*options.Enabled ||
+	if options.CodexHome != "/tmp/codex-home" || options.InstallType != "otlp" || options.Endpoint == "" || options.Enabled == nil || !*options.Enabled ||
 		len(options.Headers) != 1 || len(options.ResourceAttributes) != 1 || !options.SkipTrust ||
 		options.CaptureContent != "none" || options.MaxChars != 4096 {
 		t.Fatalf("unexpected parsed options: %#v", options)
@@ -209,7 +249,7 @@ func TestParseCodexInstallArgs(t *testing.T) {
 		t.Fatal("expected conflicting enable flags error")
 	}
 	usage := CodexInstallUsage()
-	for _, option := range []string{"--endpoint", "--type", "--capture-content", "--no-config", "--skip-trust"} {
+	for _, option := range []string{"--endpoint", "--type", "--capture-content", "--no-config", "--skip-trust", "--codex-home"} {
 		if !strings.Contains(usage, option) {
 			t.Fatalf("install usage is missing %s", option)
 		}
@@ -243,7 +283,8 @@ func TestTrustCodexHookRetriesLegacyPriorityTierWithFastOverride(t *testing.T) {
 		return nil
 	}
 
-	if err := trustCodexHookWithRunner("codex", t.TempDir(), 2*time.Second, run); err != nil {
+	home := t.TempDir()
+	if err := trustCodexHookWithRunner("codex", home, filepath.Join(home, ".codex"), 2*time.Second, run); err != nil {
 		t.Fatal(err)
 	}
 	if len(calls) != 2 {
@@ -259,11 +300,12 @@ func TestTrustCodexHookRetriesLegacyPriorityTierWithFastOverride(t *testing.T) {
 
 func TestTrustCodexHookWritesStateWhenLegacyCLICannotValidatePriorityTier(t *testing.T) {
 	home := t.TempDir()
-	configFile := filepath.Join(home, ".codex", "config.toml")
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	configFile := filepath.Join(codexHome, "config.toml")
 	if err := os.MkdirAll(filepath.Dir(configFile), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	key := filepath.Join(home, ".codex", "hooks.json") + ":stop:0:0"
+	key := filepath.Join(codexHome, "hooks.json") + ":stop:0:0"
 	escapedKey, err := json.Marshal(key)
 	if err != nil {
 		t.Fatal(err)
@@ -277,8 +319,17 @@ func TestTrustCodexHookWritesStateWhenLegacyCLICannotValidatePriorityTier(t *tes
 	}
 
 	var calls int
-	run := func(_ *exec.Cmd, _ string, _ time.Duration) error {
+	run := func(cmd *exec.Cmd, _ string, _ time.Duration) error {
 		calls++
+		foundCodexHome := false
+		for _, item := range cmd.Env {
+			if item == "CODEX_HOME="+codexHome {
+				foundCodexHome = true
+			}
+		}
+		if !foundCodexHome {
+			return errors.New("CODEX_HOME was not passed to codex app-server")
+		}
 		if calls == 1 {
 			return &legacyCodexPriorityTierError{messages: []string{
 				"unknown variant `priority`, expected `fast` or `flex`",
@@ -290,7 +341,7 @@ func TestTrustCodexHookWritesStateWhenLegacyCLICannotValidatePriorityTier(t *tes
 		}
 	}
 
-	if err := trustCodexHookWithRunner("codex", home, 2*time.Second, run); err != nil {
+	if err := trustCodexHookWithRunner("codex", home, codexHome, 2*time.Second, run); err != nil {
 		t.Fatal(err)
 	}
 	body, err := os.ReadFile(configFile)

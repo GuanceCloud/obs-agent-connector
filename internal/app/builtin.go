@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
@@ -91,9 +92,12 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 			printSingleDetail("Note", "Restart CodeBuddy if the reconciled Hook is not picked up automatically.")
 		}
 	case "codex":
+		hooksFile := agent.ExpandHome(p.BuiltinHookFile)
 		result, installErr := installCodexAdapter(telemetryinstall.CodexOptions{
 			SourceExecutable:      executable,
 			DestinationExecutable: executable,
+			CodexHome:             filepath.Dir(hooksFile),
+			HooksFile:             hooksFile,
 			CodexCommand:          p.AgentCommand,
 			Endpoint:              input.Endpoint,
 			TracePath:             input.TracePath,

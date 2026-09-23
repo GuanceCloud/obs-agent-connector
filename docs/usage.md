@@ -403,6 +403,7 @@ Notes:
 - Claude installation replaces legacy `claude-otel-plugin` Hook entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - CodeBuddy installation replaces legacy `codebuddy-hook` entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - Codex installation replaces legacy `codex-otel-plugin` Hook entries, updates managed Stop Hooks, and preserves unrelated Hook entries
+- Codex installation, discovery, runtime state, trust, and removal use `CODEX_HOME`; when it is unset, they use `~/.codex`
 - Dcode installation manages Hooks v2 in `~/.deepagents/hooks.json` and preserves unrelated Hook groups and handlers; start a new session or run `/reload` after installation; failed sessions with `SessionEnd(reason=other)` produce an error root Trace without fabricated LLM or usage data
 - Kiro installation manages `~/.kiro/hooks/obs-agent-connector.json`, preserves unrelated entries in that file, and replays the exact modern or legacy terminal session selected by the Hook session ID; the supported launch mode is `kiro-cli chat --v3` in an interactive TTY
 - existing runtime configuration and upload state are preserved unless explicitly changed or purged

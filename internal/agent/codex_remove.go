@@ -7,9 +7,12 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 )
 
 func resolveCodexRemove(p Definition) Definition {
+	p = resolveCodexPaths(p)
 	if command, ok := resolveCodexCommandPath(); ok {
 		p.RemoveCmds = [][]string{
 			{command, "plugin", "remove", "tracing@codex-otel-plugin"},
@@ -96,7 +99,7 @@ func windowsCodexCandidates() []string {
 	}
 	if home, err := os.UserHomeDir(); err == nil && home != "" {
 		candidates = append(candidates,
-			filepath.Join(home, ".codex", "packages", "standalone", "current", "bin", "codex.exe"),
+			filepath.Join(agentfiles.CodexHome(home), "packages", "standalone", "current", "bin", "codex.exe"),
 		)
 	}
 
@@ -156,8 +159,8 @@ func windowsNPMNativeCandidates(prefix string) []string {
 }
 
 func removeCodexRegistration(p Definition) error {
-	configFile := ExpandHome("~/.codex/config.toml")
-	hooksFile := ExpandHome("~/.codex/hooks.json")
+	hooksFile := ExpandHome(p.BuiltinHookFile)
+	configFile := filepath.Join(filepath.Dir(hooksFile), "config.toml")
 
 	if err := removeCodexConfigSections(configFile, hooksFile); err != nil {
 		return err
