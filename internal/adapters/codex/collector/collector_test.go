@@ -213,6 +213,20 @@ Generate an observability dashboard.
 	})
 }
 
+func TestSkillSourceTypeUsesCODEXHOME(t *testing.T) {
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("CODEX_HOME", codexHome)
+	if got := skillSourceTypeFromPath(filepath.Join(codexHome, "skills", "dashboard", "SKILL.md")); got != "user" {
+		t.Fatalf("user skill source = %q", got)
+	}
+	if got := skillSourceTypeFromPath(filepath.Join(codexHome, "skills", ".system", "plugin-creator", "SKILL.md")); got != "system" {
+		t.Fatalf("system skill source = %q", got)
+	}
+	if got := skillSourceTypeFromPath(filepath.Join(t.TempDir(), ".codex", "skills", "workspace", "SKILL.md")); got != "user" {
+		t.Fatalf("default user skill source = %q", got)
+	}
+}
+
 func TestCollectRolloutCaptureNoneOmitsContentAttributes(t *testing.T) {
 	base := t.TempDir()
 	rollout := filepath.Join(base, "rollout.jsonl")

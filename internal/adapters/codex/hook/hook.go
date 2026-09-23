@@ -128,7 +128,7 @@ func RunWithOptions(options RunOptions) error {
 	stateRoot := cfg.StateDir
 	if stateRoot == "" {
 		home, _ := os.UserHomeDir()
-		stateRoot = filepath.Join(home, ".codex", "state", "gtrace-agent")
+		stateRoot = filepath.Join(agentfiles.CodexHome(home), "state", "gtrace-agent")
 	}
 	manager := state.Manager{
 		Root:       filepath.Join(stateRoot, "uploads"),
@@ -267,7 +267,7 @@ func fallbackConfig() config.Config {
 		Debug:       false,
 		FailOnError: false,
 		HookLogFile: agentfiles.HookLogPath(home, "codex"),
-		StateDir:    filepath.Join(home, ".codex", "state", "gtrace-agent"),
+		StateDir:    filepath.Join(agentfiles.CodexHome(home), "state", "gtrace-agent"),
 	}
 }
 

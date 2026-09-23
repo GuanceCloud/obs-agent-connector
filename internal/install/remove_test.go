@@ -184,3 +184,49 @@ trusted_hash = "other-hook-hash"
 		t.Fatalf("unrelated config was not preserved: %s", text)
 	}
 }
+
+func TestRemoveCodexUsesCODEXHOME(t *testing.T) {
+	home := filepath.Join(t.TempDir(), "home")
+	codexHome := filepath.Join(t.TempDir(), "codex-home")
+	t.Setenv("CODEX_HOME", codexHome)
+	customHooks := filepath.Join(codexHome, "hooks.json")
+	defaultHooks := filepath.Join(home, ".codex", "hooks.json")
+	for _, path := range []string{customHooks, defaultHooks} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		writeTestJSON(t, path, map[string]any{"hooks": map[string]any{"Stop": []any{
+			map[string]any{"hooks": []any{map[string]any{"type": "command", "command": "/tmp/obs-agent-connector hook codex"}}},
+		}}})
+	}
+	trustKey := customHooks + ":stop:0:0"
+	if err := os.WriteFile(filepath.Join(codexHome, "config.toml"), []byte(fmt.Sprintf("[hooks.state.%q]\ntrusted_hash = \"hash\"\n", trustKey)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	customState := filepath.Join(codexHome, "state", "gtrace-agent")
+	defaultState := filepath.Join(home, ".codex", "state", "gtrace-agent")
+	for _, path := range []string{customState, defaultState} {
+		if err := os.MkdirAll(path, 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	result, err := RemoveAdapter("codex", home, RemoveOptions{ConnectorOnly: true, PurgeState: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.HookFile != customHooks || !result.HookRemoved || !result.TrustRemoved || !result.StatePurged {
+		t.Fatalf("unexpected result: %#v", result)
+	}
+	if _, err := os.Stat(customState); !os.IsNotExist(err) {
+		t.Fatalf("CODEX_HOME state remains: %v", err)
+	}
+	if _, err := os.Stat(defaultState); err != nil {
+		t.Fatalf("default Codex state should remain untouched: %v", err)
+	}
+	var defaultSettings map[string]any
+	readTestJSON(t, defaultHooks, &defaultSettings)
+	if groups := defaultSettings["hooks"].(map[string]any)["Stop"].([]any); len(groups) != 1 {
+		t.Fatalf("default Codex hook should remain untouched: %#v", defaultSettings)
+	}
+}

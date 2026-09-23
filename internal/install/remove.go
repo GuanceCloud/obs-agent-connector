@@ -403,9 +403,10 @@ func removeClaude(home string, options RemoveOptions) (RemoveResult, error) {
 }
 
 func removeCodex(home string, options RemoveOptions) (RemoveResult, error) {
+	codexHome := agentfiles.CodexHome(home)
 	result := RemoveResult{
 		Adapter:    "codex",
-		HookFile:   filepath.Join(home, ".codex", "hooks.json"),
+		HookFile:   filepath.Join(codexHome, "hooks.json"),
 		ConfigFile: agentfiles.ConfigPath(home, "codex"),
 	}
 	settings, exists, err := readJSONObjectIfExists(result.HookFile)
@@ -424,7 +425,7 @@ func removeCodex(home string, options RemoveOptions) (RemoveResult, error) {
 		locations := managedCodexTrustLocations(groups, managed)
 		next, changed = removeManagedGroups(groups, managed)
 		result.TrustRemoved, err = removeCodexTrustEntries(
-			filepath.Join(home, ".codex", "config.toml"),
+			filepath.Join(codexHome, "config.toml"),
 			result.HookFile,
 			locations,
 			len(next) == 0,
@@ -441,7 +442,7 @@ func removeCodex(home string, options RemoveOptions) (RemoveResult, error) {
 		}
 	} else {
 		result.TrustRemoved, err = removeCodexTrustEntries(
-			filepath.Join(home, ".codex", "config.toml"),
+			filepath.Join(codexHome, "config.toml"),
 			result.HookFile,
 			nil,
 			true,
@@ -451,14 +452,14 @@ func removeCodex(home string, options RemoveOptions) (RemoveResult, error) {
 		}
 	}
 	if options.PurgeConfig {
-		if err := removeConfigFiles(result.ConfigFile, filepath.Join(home, ".codex", "gtrace.json")); err != nil {
+		if err := removeConfigFiles(result.ConfigFile, filepath.Join(codexHome, "gtrace.json")); err != nil {
 			return result, err
 		}
 		result.ConfigRemoved = true
 	}
 	if options.PurgeState {
 		for _, name := range []string{"obs-agent-connector", "agent-telemetry", "gtrace-agent"} {
-			if err := os.RemoveAll(filepath.Join(home, ".codex", "state", name)); err != nil {
+			if err := os.RemoveAll(filepath.Join(codexHome, "state", name)); err != nil {
 				return result, err
 			}
 		}
