@@ -68,10 +68,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 	setAttr(rootAttrs, "output_length", positiveInt(turn.OutputLength))
 	setAttr(rootAttrs, "tool_count", len(turn.ToolCalls))
 	mergeAttrs(rootAttrs, turn.ExtraAttributes)
-	removeUsageAttrs(rootAttrs)
-	addUsage(rootAttrs, turn.Usage)
-	delete(rootAttrs, "gtrace.usage")
-	addGTraceUsage(rootAttrs, turn.Usage)
+	RemoveRootUsageAttrs(rootAttrs)
 	addGTraceObservation(rootAttrs, "agent")
 	setAttr(rootAttrs, "gen_ai.usage.credit", positiveFloat(turn.CreditUsage))
 
@@ -338,9 +335,11 @@ func addGTraceObservation(attrs map[string]any, observationType string) {
 	))
 }
 
-func removeUsageAttrs(attrs map[string]any) {
+// RemoveRootUsageAttrs clears inherited usage and compatibility aliases from
+// invoke_agent. The builder may add explicit turn-level billing credit later.
+func RemoveRootUsageAttrs(attrs map[string]any) {
 	for key := range attrs {
-		if strings.HasPrefix(key, "gen_ai.usage.") {
+		if strings.HasPrefix(key, "gen_ai.usage.") || strings.HasPrefix(key, "gtrace.usage") || strings.HasPrefix(key, "usage_") {
 			delete(attrs, key)
 		}
 	}

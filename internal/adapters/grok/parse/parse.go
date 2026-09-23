@@ -592,12 +592,6 @@ func normalize(
 	}
 	if terminalRecord != nil {
 		turn.Usage = promptUsage(terminalRecord.Params.Update["usage"])
-		if turn.Usage.InputTokens > 0 {
-			turn.ExtraAttributes["usage_input_tokens"] = turn.Usage.InputTokens
-		}
-		if turn.Usage.OutputTokens > 0 {
-			turn.ExtraAttributes["usage_output_tokens"] = turn.Usage.OutputTokens
-		}
 	}
 	if options.CaptureContent != "none" {
 		turn.InputMessages = textMessage("user", prompt, options.MaxChars)

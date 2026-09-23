@@ -145,7 +145,7 @@ Generate an observability dashboard.
 		t.Fatalf("unexpected parent chain root=%s llm=%s tool=%s skill=%s", root.SpanID, firstLLM.ParentID, tool.ParentID, skill.ParentID)
 	}
 	for key := range root.Attributes {
-		if strings.HasPrefix(key, "gen_ai.usage.") {
+		if strings.HasPrefix(key, "gen_ai.usage.") || strings.HasPrefix(key, "gtrace.usage") || strings.HasPrefix(key, "usage_") {
 			t.Fatalf("invoke_agent must not carry usage attribute %s: %#v", key, root.Attributes)
 		}
 	}

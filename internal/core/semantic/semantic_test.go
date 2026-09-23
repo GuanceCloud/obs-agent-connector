@@ -2,6 +2,7 @@ package semantic
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -54,10 +55,7 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 		t.Fatalf("expected 5 spans, got %d", len(spans))
 	}
 	root := spans[0]
-	if root.Attributes["gen_ai.usage.input_tokens"] != int64(13) || root.Attributes["gen_ai.usage.output_tokens"] != int64(5) {
-		t.Fatalf("invoke_agent aggregate usage was not preserved: %#v", root.Attributes)
-	}
-	assertGTraceUsage(t, root, map[string]int64{"input": 13, "output": 5, "total": 18})
+	assertRootUsage(t, root, 0)
 	if root.Attributes["gtrace.observation.type"] != "agent" || root.Attributes["gtrace.observation.input"] != "hello" || root.Attributes["gtrace.observation.output"] != "done" {
 		t.Fatalf("invoke_agent GTrace observation compatibility fields are missing: %#v", root.Attributes)
 	}
@@ -130,7 +128,7 @@ func TestBuildProducesCanonicalTreeWithRootSummaryAndNoAssistantTokens(t *testin
 	}
 }
 
-func TestBuildExportsExplicitTurnCreditAndRootTokens(t *testing.T) {
+func TestBuildExportsTurnCreditWithoutRootTokens(t *testing.T) {
 	start := time.Date(2026, 8, 25, 1, 0, 0, 0, time.UTC).UnixNano()
 	turn := model.Turn{
 		SessionID:     "session-credit",
@@ -143,18 +141,18 @@ func TestBuildExportsExplicitTurnCreditAndRootTokens(t *testing.T) {
 		InputPreview:  "hello",
 		Usage:         model.Usage{InputTokens: 13, OutputTokens: 5},
 		CreditUsage:   0.45,
+		ExtraAttributes: map[string]any{
+			"gen_ai.usage.credit": 0.45,
+			"gtrace.usage":        `{"input":13}`,
+			"usage_input_tokens":  int64(13),
+		},
 	}
 
 	spans := (Builder{ScopeVersion: "test"}).Build(turn)
 	if len(spans) != 1 {
 		t.Fatalf("expected only invoke_agent, got %#v", spans)
 	}
-	if spans[0].Attributes["gen_ai.usage.credit"] != 0.45 {
-		t.Fatalf("explicit turn credit was not preserved: %#v", spans[0].Attributes)
-	}
-	if spans[0].Attributes["gen_ai.usage.input_tokens"] != int64(13) || spans[0].Attributes["gen_ai.usage.output_tokens"] != int64(5) {
-		t.Fatalf("invoke_agent aggregate usage was not preserved: %#v", spans[0].Attributes)
-	}
+	assertRootUsage(t, spans[0], 0.45)
 }
 
 func TestBuildSkipsUnsetAndBlankTurns(t *testing.T) {
@@ -339,6 +337,25 @@ func findSpan(t *testing.T, spans []model.Span, name string) model.Span {
 	}
 	t.Fatalf("missing span %s", name)
 	return model.Span{}
+}
+
+func assertRootUsage(t *testing.T, span model.Span, wantCredit float64) {
+	t.Helper()
+	if got, exists := span.Attributes["gen_ai.usage.credit"]; wantCredit > 0 {
+		if !exists || got != wantCredit {
+			t.Fatalf("invoke_agent credit = %#v, want %v", got, wantCredit)
+		}
+	} else if exists {
+		t.Fatalf("invoke_agent has unexpected credit: %#v", got)
+	}
+	for key := range span.Attributes {
+		if key == "gen_ai.usage.credit" {
+			continue
+		}
+		if strings.HasPrefix(key, "gen_ai.usage.") || strings.HasPrefix(key, "gtrace.usage") || strings.HasPrefix(key, "usage_") {
+			t.Fatalf("invoke_agent must not carry usage attribute %s: %#v", key, span.Attributes)
+		}
+	}
 }
 
 func assertGTraceUsage(t *testing.T, span model.Span, want map[string]int64) {

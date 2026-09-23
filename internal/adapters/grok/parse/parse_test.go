@@ -401,9 +401,7 @@ func TestReadTurnRequiresDurableTerminalAndBuildsPairedResponses(t *testing.T) {
 		t.Fatalf("unexpected Grok trace shape: %#v", spans)
 	}
 	rootID := spans[0].SpanID
-	if spans[0].Attributes["gen_ai.usage.input_tokens"] != int64(35) || spans[0].Attributes["gen_ai.usage.output_tokens"] != int64(12) {
-		t.Fatalf("root aggregate usage was not preserved: %#v", spans[0].Attributes)
-	}
+	assertNoRootUsage(t, spans[0])
 	toolID := ""
 	for _, span := range spans[1:] {
 		switch span.Name {
@@ -545,16 +543,12 @@ func TestReadTurnBuildsSingleCallFromStableTurnUsage(t *testing.T) {
 	if len(spans) != 3 || spans[0].Name != "invoke_agent" || spans[1].Name != "llm" || spans[2].Name != "assistant" {
 		t.Fatalf("unexpected single-call trace shape: %#v", spans)
 	}
-	for _, span := range spans[:2] {
-		if span.Attributes["gen_ai.usage.input_tokens"] != int64(17991) || span.Attributes["gen_ai.usage.output_tokens"] != int64(221) {
-			t.Fatalf("token usage missing from %s: %#v", span.Name, span.Attributes)
-		}
-	}
-	if spans[0].Attributes["usage_input_tokens"] != int64(17991) || spans[0].Attributes["usage_output_tokens"] != int64(221) {
-		t.Fatalf("root token compatibility aliases are missing: %#v", spans[0].Attributes)
+	assertNoRootUsage(t, spans[0])
+	if spans[1].Attributes["gen_ai.usage.input_tokens"] != int64(17991) || spans[1].Attributes["gen_ai.usage.output_tokens"] != int64(221) {
+		t.Fatalf("token usage missing from llm: %#v", spans[1].Attributes)
 	}
 	if spans[1].Attributes["gen_ai.input.messages"] == nil || spans[1].Attributes["gen_ai.output.messages"] == nil || spans[1].Attributes["usage_input_tokens"] != nil {
-		t.Fatalf("single LLM content or root-only alias policy is incorrect: %#v", spans[1].Attributes)
+		t.Fatalf("single LLM content or usage aliases are incorrect: %#v", spans[1].Attributes)
 	}
 	tokenPoints := 0
 	for _, metric := range coremetrics.Build(spans) {
@@ -646,9 +640,10 @@ func TestReadTurnDoesNotCopyMultiCallAggregateToLLM(t *testing.T) {
 		t.Fatalf("multi-call aggregate was copied to an invented LLM call: %#v", turn.LLMCalls)
 	}
 	spans := (semantic.Builder{}).Build(turn)
-	if len(spans) != 2 || spans[0].Attributes["gen_ai.usage.input_tokens"] != int64(30) {
-		t.Fatalf("multi-call root aggregate was not preserved: %#v", spans)
+	if len(spans) != 2 {
+		t.Fatalf("unexpected multi-call trace shape: %#v", spans)
 	}
+	assertNoRootUsage(t, spans[0])
 	for _, metric := range coremetrics.Build(spans) {
 		if metric.Name == "gen_ai.client.token.usage" {
 			t.Fatalf("multi-call aggregate created an unproven token metric: %#v", metric)
@@ -749,17 +744,7 @@ func TestReadTurnBuildsCallsFromVersionedSessionEvents(t *testing.T) {
 		spans[2].Attributes["gen_ai.input.messages"] == nil || spans[2].Attributes["gen_ai.output.messages"] == nil || spans[2].Attributes["output_kind"] != "text" {
 		t.Fatalf("chat history content was not emitted on both LLM spans: %#v %#v", spans[1].Attributes, spans[2].Attributes)
 	}
-	var gtraceUsage map[string]int64
-	rawGTraceUsage, ok := spans[0].Attributes["gtrace.usage"].(string)
-	if !ok {
-		t.Fatalf("root GTrace usage compatibility payload is missing: %#v", spans[0].Attributes)
-	}
-	if err := json.Unmarshal([]byte(rawGTraceUsage), &gtraceUsage); err != nil {
-		t.Fatalf("root GTrace usage compatibility payload is invalid: %v (%#v)", err, spans[0].Attributes)
-	}
-	if gtraceUsage["input"] != 38315 || gtraceUsage["output"] != 155 || gtraceUsage["total"] != 38470 {
-		t.Fatalf("root GTrace usage compatibility payload is incomplete: %#v", gtraceUsage)
-	}
+	assertNoRootUsage(t, spans[0])
 	for _, llm := range spans[1:3] {
 		if llm.Attributes["gtrace.observation.type"] != "llm" || llm.Attributes["gtrace.observation.input"] == nil || llm.Attributes["gtrace.observation.output"] == nil {
 			t.Fatalf("LLM GTrace input/output compatibility fields are missing: %#v", llm.Attributes)
@@ -1423,4 +1408,13 @@ func mustRFC3339Nano(t *testing.T, value string) int64 {
 		t.Fatal(err)
 	}
 	return parsed.UnixNano()
+}
+
+func assertNoRootUsage(t *testing.T, span model.Span) {
+	t.Helper()
+	for key := range span.Attributes {
+		if strings.HasPrefix(key, "gen_ai.usage.") || strings.HasPrefix(key, "gtrace.usage") || strings.HasPrefix(key, "usage_") {
+			t.Fatalf("invoke_agent must not carry usage attribute %s: %#v", key, span.Attributes)
+		}
+	}
 }

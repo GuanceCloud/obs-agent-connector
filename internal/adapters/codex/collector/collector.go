@@ -19,6 +19,7 @@ import (
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/parse"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/sidecar"
 	previewcore "github.com/GuanceCloud/obs-agent-connector/internal/core/preview"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/semantic"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/util"
 )
 
@@ -274,7 +275,7 @@ func buildTurnSpans(turn *model.Turn, sessionMeta model.SessionMeta, cfg config.
 	setAttr(rootAttrs, "session_create_at", sessionMeta.CreatedAt)
 	setAttr(rootAttrs, "session_updated_at", isoFromMs(turn.EndTime))
 	setAttr(rootAttrs, "session_channel", sessionMeta.Channel)
-	removeUsageAttrs(rootAttrs)
+	semantic.RemoveRootUsageAttrs(rootAttrs)
 
 	spans := []model.Span{
 		makeSpan(traceID, rootSpanID, parentID, "invoke_agent", turn.StartTime, turn.EndTime, rootAttrs, resource, scope, ingest, spanStatus(turn.Aborted, "")),
@@ -830,14 +831,6 @@ func setUsageAttrs(attributes map[string]any, usage usageDetails) {
 	}
 	if usage.HasReasoningOutputTokens {
 		setAttr(attributes, attrUsageReasoningOutput, usage.ReasoningOutputTokens)
-	}
-}
-
-func removeUsageAttrs(attributes map[string]any) {
-	for key := range attributes {
-		if strings.HasPrefix(key, "gen_ai.usage.") {
-			delete(attributes, key)
-		}
 	}
 }
 
