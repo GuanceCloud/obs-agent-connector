@@ -231,24 +231,14 @@ func verifyTraceMessages(t *testing.T, request otlp.ExportTraceServiceRequest) {
 					if attr.Key == "gen_ai.output.messages" {
 						outputs++
 					}
-					if attr.Value.ArrayValue == nil || len(attr.Value.ArrayValue.Values) == 0 {
-						t.Errorf("%s %s is not a structured message array", span.Name, attr.Key)
+					var messages []map[string]any
+					if attr.Value.StringValue == nil || json.Unmarshal([]byte(*attr.Value.StringValue), &messages) != nil || len(messages) == 0 {
+						t.Errorf("%s %s is not a JSON structured message array", span.Name, attr.Key)
 						continue
 					}
-					for _, message := range attr.Value.ArrayValue.Values {
-						if message.KVListValue == nil {
-							t.Error("message is not an object")
-							continue
-						}
-						role, parts := false, false
-						for _, field := range message.KVListValue.Values {
-							if field.Key == "role" && field.Value.StringValue != nil {
-								role = true
-							}
-							if field.Key == "parts" && field.Value.ArrayValue != nil {
-								parts = true
-							}
-						}
+					for _, message := range messages {
+						_, role := message["role"].(string)
+						_, parts := message["parts"].([]any)
 						if !role || !parts {
 							t.Error("message missing role/parts")
 						}
