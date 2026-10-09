@@ -41,6 +41,8 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 	var result RemoveResult
 	var err error
 	switch adapter {
+	case "qwenwork-cn":
+		result, err = removeQwenWork(home, options)
 	case "pi":
 		result, err = removePi(home, options)
 	case "omp":

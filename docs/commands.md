@@ -23,7 +23,7 @@ obs-agent-connector <command> [arguments]
 | `uninstall` | Uninstall all managed built-in adapters and then remove `obs-agent-connector`, its config, and its managed PATH entry. |
 | `version` | Show the current CLI version, check the latest GitHub release, and print or run a matching self-update action when a newer release is available. |
 
-Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, and WorkBuddy are built into the connector. Other Agents use their external plugins.
+Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy are built into the connector. Other Agents use their external plugins.
 
 ## Bootstrap
 
@@ -105,6 +105,11 @@ The output includes:
 
 For plugins such as `hermes`, whose runtime config is YAML, the `enabled` field is reported as `unsupported`.
 
+QwenWork CN status includes read-only native token-flag diagnostics, usage
+observation/source timestamps, separate trace/metric upload outcomes and pending
+queue-file count. Unknown or stale evidence is explicit; HTTP acceptance is not
+proof of backend storage. See [QwenWork diagnostics](product-research/qwenwork-cn.md#read-only-diagnostics).
+
 ## Config
 
 List the current managed runtime config:
@@ -138,7 +143,7 @@ Supported edit parameters:
 Notes:
 
 - `edit` merges the supplied values into the existing config and rewrites the file atomically
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `mimo`, `omp`, `pi`, `opencode`, `qoder`, and `workbuddy`
+- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `mimo`, `omp`, `pi`, `opencode`, `qoder`, `qwenwork-cn`, and `workbuddy`
 - `hermes` and `openclaw` are excluded because they do not use the managed `gtrace.json` layout
 
 ## Install
@@ -184,9 +189,16 @@ By default, `install` reuses the CLI download source recorded in `~/.obs-agent-c
 If that source is unavailable, `install` derives the installer base from `--endpoint`.
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com/agent_plugins`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com/agent_plugins`.
 Use `--static-base` when you need to override the installer base.
-On Windows, Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, and WorkBuddy register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
-Claude, Cursor, CodeBuddy, Codex, Deep Agents Code, Grok Build, Kiro, OMP, Pi, OpenCode, OpenClaw, Qoder, and WorkBuddy are supported on Windows.
+On Windows, Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
+Claude, Cursor, CodeBuddy, Codex, Deep Agents Code, Grok Build, Kiro, OMP, Pi, OpenCode, OpenClaw, Qoder, QwenWork CN, and WorkBuddy are supported on Windows.
 For Grok Build, installation creates the global trusted Hook file at `~/.grok/hooks/obs-agent-connector.json`. Restart Grok, or run `/hooks`, select the Hooks tab, and press `l` to reload it in an active session. Runtime config, Hook logs, and durable queue/upload state are stored under `~/.obs-agent-connector/grok/`.
+
+For QwenWork CN, a normal install registers local Hooks and enables native token
+reporting with `QODERCN_EXPOSE_TOKEN_USAGE=1` in `~/.qwenworkcn/.env`, preserving
+unrelated entries. `--no-config` and explicitly disabled installs do not change
+the dotenv file. Start a new conversation; restart the client if a worker has
+already loaded its environment. Process-environment and project-local dotenv
+overrides can take precedence; see the [QwenWork contract](product-research/qwenwork-cn.md).
 
 When `--agent-id` or `--agent-name` are omitted, the CLI generates them automatically. The default generated `agent_id` uses the format `agid_<uuidv4-without-dashes>`.
 
@@ -310,7 +322,7 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
-- removes the managed Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, and WorkBuddy adapters, including compatible legacy plugin residue where applicable
+- removes the managed Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy adapters, including compatible legacy plugin residue where applicable
 - removes each built-in adapter's connector-managed config, Hook log, and upload state by default
 - removes `~/.obs-agent-connector/config.json` by default
 - keeps connector-managed global and per-Agent configuration when `--keep-config` is used; Hooks, logs, and upload state are still removed

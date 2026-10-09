@@ -41,7 +41,7 @@ func TestRegisteredPluginNames(t *testing.T) {
 }
 
 func TestSupportedNamesForWindows(t *testing.T) {
-	expected := []string{"claude", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "workbuddy"}
+	expected := []string{"claude", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn", "workbuddy"}
 	got := SupportedNames("windows")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Windows supported names %v, got %v", expected, got)

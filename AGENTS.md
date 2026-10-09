@@ -15,6 +15,7 @@ The CLI supports plugin lifecycle operations for:
 - `omp`
 - `qoder`
 - `qoder-cn`
+- `qwenwork-cn`
 
 ## Language
 
