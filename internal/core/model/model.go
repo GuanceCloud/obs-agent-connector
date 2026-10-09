@@ -72,18 +72,20 @@ type ToolCall struct {
 }
 
 type AssistantOutput struct {
-	StartUnixNano   int64
-	EndUnixNano     int64
-	OutputMessages  any
-	OutputPreview   string
-	OutputKind      string
-	Provider        string
-	RequestModel    string
-	ResponseModel   string
-	Status          string
-	ErrorType       string
-	Reason          string
-	ExtraAttributes map[string]any
+	// TriggeringLLMCall optionally links a local output event to its source call.
+	TriggeringLLMCall string
+	StartUnixNano     int64
+	EndUnixNano       int64
+	OutputMessages    any
+	OutputPreview     string
+	OutputKind        string
+	Provider          string
+	RequestModel      string
+	ResponseModel     string
+	Status            string
+	ErrorType         string
+	Reason            string
+	ExtraAttributes   map[string]any
 }
 
 type Turn struct {

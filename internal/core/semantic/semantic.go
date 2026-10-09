@@ -159,6 +159,7 @@ func (b Builder) Build(turn model.Turn) []model.Span {
 		attrs := commonAttrs(turn.SessionID, turn.AgentName, turn.AgentVersion)
 		attrs["status"] = firstNonEmpty(output.Status, operationStatusValue(output.ErrorType))
 		setAttr(attrs, "role", "assistant")
+		setAttr(attrs, "triggered_by.llm_span_id", llmSpanByCallID[output.TriggeringLLMCall])
 		setAttr(attrs, "gen_ai.output.messages", output.OutputMessages)
 		setAttr(attrs, "output_preview", output.OutputPreview)
 		setAttr(attrs, "output_kind", output.OutputKind)
