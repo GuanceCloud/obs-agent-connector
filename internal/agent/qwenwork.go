@@ -12,7 +12,7 @@ import (
 func qwenWorkPlugin() Definition {
 	return Definition{
 		Name: "qwenwork-cn", Backend: BackendBuiltin, PluginName: "obs-agent-connector",
-		AgentCommand: "qwenworkcn", SupportedPlatforms: []string{"darwin", "windows"},
+		AgentCommand: "qwenworkcn", SupportedPlatforms: []string{"darwin", "linux", "windows"},
 		DiscoveryCommandOptional: true,
 		BuiltinHookFile:          "~/.qwenworkcn/settings.json",
 		Markers:                  []string{"~/.qwenworkcn/settings.json"},

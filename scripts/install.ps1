@@ -34,31 +34,21 @@ function Assert-TagAssignments {
   }
 }
 
-# Dot-sourcing exposes the validation helper to the Windows contract test
-# without downloading or installing release assets.
-if ($MyInvocation.InvocationName -eq ".") {
-  return
-}
-
-if (-not $ConfigDir) {
-  $ConfigDir = Join-Path $HOME ".obs-agent-connector"
-}
-$ConfigPath = Join-Path $ConfigDir "config.json"
-
-if (-not $DownloadBaseUrl) {
-  $DownloadBaseUrl = $env:DOWNLOAD_BASE_URL
-}
-if (-not $DownloadBaseUrl) {
-  $DownloadBaseUrl = $env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT
-}
-
 function Get-DownloadBaseFromEndpoint {
   param([string]$Value)
 
-  try {
-    $Uri = [System.Uri]$Value
+  if ([string]::IsNullOrWhiteSpace($Value)) {
+    return ""
   }
-  catch {
+  $Uri = $null
+  if (-not [System.Uri]::TryCreate($Value, [System.UriKind]::Absolute, [ref]$Uri)) {
+    return ""
+  }
+  if (($Uri.Scheme -ne "http") -and ($Uri.Scheme -ne "https")) {
+    return ""
+  }
+  if ([string]::IsNullOrWhiteSpace($Uri.DnsSafeHost) -or
+      ([System.Uri]::CheckHostName($Uri.DnsSafeHost) -ne [System.UriHostNameType]::Dns)) {
     return ""
   }
   $Parts = $Uri.DnsSafeHost.TrimEnd(".").Split(".")
@@ -94,6 +84,24 @@ function Get-NormalizedOssPluginBase {
     return $Trimmed
   }
   return "$Trimmed/agent_plugins"
+}
+
+# Dot-sourcing exposes validation and URL helpers to the Windows contract test
+# without downloading or installing release assets.
+if ($MyInvocation.InvocationName -eq ".") {
+  return
+}
+
+if (-not $ConfigDir) {
+  $ConfigDir = Join-Path $HOME ".obs-agent-connector"
+}
+$ConfigPath = Join-Path $ConfigDir "config.json"
+
+if (-not $DownloadBaseUrl) {
+  $DownloadBaseUrl = $env:DOWNLOAD_BASE_URL
+}
+if (-not $DownloadBaseUrl) {
+  $DownloadBaseUrl = $env:OBS_AGENT_CONNECTOR_OSS_ENDPOINT
 }
 
 if (-not $DownloadBaseUrl) {

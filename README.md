@@ -62,7 +62,7 @@ For a specific version or GitHub download source, see the [distribution guide](d
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
 | `qoder` | `qoder-otel-plugin` | `✅` | `✅` | `✅` | Auto-detects CN vs global layout and passes the matching `--variant` value |
 | `workbuddy` | Built into `obs-agent-connector` | `✅` | `❌` | `✅` | Multi-Hook journal plus JSONL replay; restart after migrating from the external plugin |
-| `qwenwork-cn` | Built into `obs-agent-connector` | `✅` | `❌` | `✅` | Domestic local Hooks; personal free tested, enterprise policies unverified; [setup and limits](docs/product-research/qwenwork-cn.md) |
+| `qwenwork-cn` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Domestic local Hooks; macOS tested, Windows AMD64 user smoke test passed; Linux/Windows ARM64 runtime and enterprise policies unverified; [setup and limits](docs/product-research/qwenwork-cn.md) |
 
 `qoder` automatically selects the global (`~/.qoder`) or CN (`~/.qoder-cn`) layout. The legacy `qoder-cn` target remains available and forces the CN layout.
 

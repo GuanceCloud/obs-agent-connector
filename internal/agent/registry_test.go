@@ -49,7 +49,7 @@ func TestSupportedNamesForWindows(t *testing.T) {
 }
 
 func TestSupportedNamesForLinux(t *testing.T) {
-	expected := []string{"claude", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "hermes", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder"}
+	expected := []string{"claude", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "hermes", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn"}
 	got := SupportedNames("linux")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Linux supported names %v, got %v", expected, got)

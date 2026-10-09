@@ -89,3 +89,37 @@ func TestQwenWorkBuiltinMigration(t *testing.T) {
 		t.Fatal("update changed native token reporting config")
 	}
 }
+
+func TestQwenWorkLinuxInstallRouting(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	previousOS, previousExecutable := currentGOOS, currentExecutable
+	currentGOOS = "linux"
+	currentExecutable = func() (string, error) { return filepath.Join(home, "obs-agent-connector"), nil }
+	t.Cleanup(func() { currentGOOS, currentExecutable = previousOS, previousExecutable })
+	args := []string{"qwenwork-cn", "--endpoint", "https://example.invalid", "--x-token", "test-secret", "--yes"}
+	if err := install(args); err == nil || !strings.Contains(err.Error(), "profile not found") {
+		t.Fatalf("expected profile guard after Linux platform gate, got %v", err)
+	}
+	profile := filepath.Join(home, ".qwenworkcn")
+	if err := os.Mkdir(profile, 0700); err != nil {
+		t.Fatal(err)
+	}
+	output := captureStdout(t, func() {
+		if err := install(args); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if strings.Contains(output, "Download:") || strings.Contains(output, "test-secret") {
+		t.Fatal("external download or secret in output")
+	}
+	for _, path := range []string{
+		filepath.Join(profile, "settings.json"),
+		filepath.Join(home, ".obs-agent-connector", "qwenwork-cn", "gtrace.json"),
+	} {
+		if _, err := os.Stat(path); err != nil {
+			t.Fatalf("built-in installer did not create %s: %v", path, err)
+		}
+	}
+}

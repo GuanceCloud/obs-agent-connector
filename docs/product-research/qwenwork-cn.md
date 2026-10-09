@@ -8,6 +8,16 @@ organizations were not available for testing; their policies may override local
 settings. Enterprise HTTP Hooks are a separate integration and are not installed
 by this adapter.
 
+Connector installation is enabled on macOS, Linux and Windows. The
+[official Linux guide](https://qwenwork.cn/docs/install/linux) provides DEB packages
+for x64 and ARM64 with glibc 2.28 or later. Linux uses `~/.qwenworkcn` for the
+profile and `~/.config/QwenWorkCN` for desktop configuration (or
+`$XDG_CONFIG_HOME/QwenWorkCN` when `XDG_CONFIG_HOME` is set); connector Hooks belong
+in the profile, not the desktop configuration directory. Native Linux and Windows
+ARM64 telemetry acceptance remains unverified; Windows AMD64 user smoke-test
+evidence is recorded below. Linux routing was corrected after
+`v0.1.31-rc1`; the already-published RC1 binaries still exclude this adapter on Linux.
+
 ## Setup and lifecycle
 
 Start the domestic desktop client once, then run:
@@ -179,8 +189,9 @@ The adapter conservatively leaves unproven turns pending. Skill metadata is not
 inferred from generic commands; supported evidence is described above. The transcript's `version` is reported as the
 Agent runtime version; it may differ from the desktop app version. History predating Hook
 registration is not assumed complete. A cancelled task can remain local until a
-later replay trigger. Windows registration is supported by the shared CLI, but the
-desktop runtime probe was macOS only. No cloud-observability delivery is implied
+later replay trigger. Linux and Windows registration are supported by the shared CLI.
+Maintainer desktop probes used macOS; Windows AMD64 evidence is user-reported.
+No cloud-observability delivery is implied
 by local Hook feasibility; configure and validate your own endpoint.
 
 Packaged SDK 1.0.46 has real SubagentStart/Stop callers and explicit
@@ -188,8 +199,7 @@ Packaged SDK 1.0.46 has real SubagentStart/Stop callers and explicit
 have not been accepted end to end. StopFailure and QueryEnd have worker callers
 but are absent from the public SDK Hook allowlist. These events are not registered
 or treated as terminal evidence by this adapter. They must not be inferred from
-time proximity or SessionEnd. See the [Windows acceptance checklist](../qwenwork-windows-acceptance.md)
-for the RC runtime checks still assigned to a Windows tester.
+time proximity or SessionEnd. Native Linux and Windows ARM64 runtime checks remain pending.
 
 The sanitized two-turn fixture under
 `internal/adapters/qwenwork/parse/testdata/` preserves the real record structure
@@ -229,7 +239,29 @@ records, decoded OTLP, backend attributes and the UI attribute panel, while the
 tool-result preview is blank. No parser loss was found. The exact frontend cause
 requires viewer-code inspection; no speculative result wrapping or historical
 reupload was performed. Pure-generation cancellation, provider terminal failures
-and Windows runtime remain separately unverified.
+and Linux/Windows ARM64 runtime remain separately unverified.
+
+### Windows AMD64 user smoke test (2026-10-09)
+
+The user installed the official `v0.1.31-rc1` Windows AMD64 archive with a verified
+SHA-256, discovered `qwenwork-cn` through the existing profile, installed its Hooks,
+and completed a new desktop conversation. Shared status output reported installed
+and enabled, the profile token flag enabled, numeric usage for 1/1 LLM calls,
+traces and metrics accepted, replay complete and no pending queue files. Observed
+fields included input, output and both cache counters; field presence does not
+establish nonzero cache usage. The user subsequently confirmed success after the
+request to check backend data; no independent backend query is attached here.
+HTTP acceptance alone is not proof of storage. This is a single-turn smoke test,
+not full Windows lifecycle, failure-recovery, enterprise or ARM64 acceptance.
+
+RC1's PowerShell installer needs an explicit
+`-PluginBaseUrl https://static.guance.com/agent_plugins` when installing from GitHub
+with `-BinaryOnly` and no endpoint: its empty-endpoint fallback can throw on a null
+URI host. The source correction is subsequent to RC1 and does not replace its
+published installer. `-BinaryOnly` preserves existing telemetry configuration;
+`-NoPathUpdate` leaves the previous PATH executable selected. Use the explicit RC
+path for isolated testing or reinstall into the existing CLI directory to switch
+the normal command without uninstalling existing Hooks or state.
 
 On 2026-10-08, QwenWork CN 1.2.5 on macOS arm64 delivered real local Hook
 events to the built-in adapter and gzip-compressed OTLP/HTTP Protobuf to a
@@ -354,7 +386,7 @@ and model tool-call arguments were correctly assigned, not reversed.
 The shared exporter must encode the two message attributes as JSON strings while
 preserving already serialized values and unrelated attributes. QwenWork pure-text
 LLM previews should be readable text, while mixed/tool-call output retains its
-structure. See [the message wire contract](../message-wire-compatibility.md).
+structure. Existing wire-format regression tests preserve this behavior.
 
 A labelled synthetic regression upload after this correction was rejected with
 HTTP 403 by the configured receiver. A later normally installed run successfully

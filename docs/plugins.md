@@ -24,7 +24,7 @@ Built-in `invoke_agent` spans do not carry token usage. Attributable token usage
 | `openclaw` | OpenClaw | Unix: `https://static.guance.com/agent_plugins/openclaw-otel-plugin/install.sh`  Windows: `https://static.guance.com/agent_plugins/openclaw-otel-plugin/install-release.ps1` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
 | `qoder` | Qoder with automatic CN/global detection | Unix: `https://static.guance.com/agent_plugins/qoder-otel-plugin/qoder-otel-plugin.tar.gz`  Windows: `https://static.guance.com/agent_plugins/qoder-otel-plugin/install-release.ps1` | `~/.qoder/gtrace.json` or `~/.qoder-cn/gtrace.json` | `~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin` or `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
 | `workbuddy` | WorkBuddy with automatic profile-directory detection | Built into `obs-agent-connector` | `~/.obs-agent-connector/workbuddy/gtrace.json` (legacy profile config remains readable) | `<profile>/settings.json` managed Hooks |
-| `qwenwork-cn` | QwenWork CN domestic desktop; [local Hook contract](product-research/qwenwork-cn.md) | Built into `obs-agent-connector` | `~/.obs-agent-connector/qwenwork-cn/gtrace.json` | `~/.qwenworkcn/settings.json` managed Hooks |
+| `qwenwork-cn` | QwenWork CN domestic desktop on macOS, Linux and Windows; Windows AMD64 user smoke test passed, Linux/Windows ARM64 runtime unverified; [local Hook contract](product-research/qwenwork-cn.md) | Built into `obs-agent-connector` | `~/.obs-agent-connector/qwenwork-cn/gtrace.json` | `~/.qwenworkcn/settings.json` managed Hooks |
 
 ## WorkBuddy Migration
 
