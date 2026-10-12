@@ -6,7 +6,7 @@ The current stable release is [v0.1.30](https://github.com/GuanceCloud/obs-agent
 
 ## Features
 
-- Built-in telemetry adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, Pi, and WorkBuddy, with one binary and one version.
+- Built-in telemetry adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, Pi, QwenWork CN, and WorkBuddy, with one binary and one version.
 - External plugin installation through standard OSS or GitHub Release installers.
 - Local Agent discovery, installation, updates, status, configuration, enable/disable, and removal.
 - Shared endpoint and X-Token defaults, automatically generated Agent identities, and configuration-preserving plugin updates.
@@ -62,6 +62,7 @@ For a specific version or GitHub download source, see the [distribution guide](d
 | `openclaw` | `openclaw-otel-plugin` | `✅` | `✅` | `✅` | OpenClaw plugin |
 | `qoder` | `qoder-otel-plugin` | `✅` | `✅` | `✅` | Auto-detects CN vs global layout and passes the matching `--variant` value |
 | `workbuddy` | Built into `obs-agent-connector` | `✅` | `❌` | `✅` | Multi-Hook journal plus JSONL replay; restart after migrating from the external plugin |
+| `qwenwork-cn` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Domestic local Hooks; macOS tested, Windows AMD64 user smoke test passed; Linux/Windows ARM64 runtime and enterprise policies unverified; [setup and limits](docs/product-research/qwenwork-cn.md) |
 
 `qoder` automatically selects the global (`~/.qoder`) or CN (`~/.qoder-cn`) layout. The legacy `qoder-cn` target remains available and forces the CN layout.
 

@@ -13,6 +13,7 @@ import (
 	kirohook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/kiro/hook"
 	omphook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/omp/hook"
 	pihook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/pi/hook"
+	qwenworkhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/qwenwork/hook"
 	workbuddyhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/workbuddy/hook"
 	"github.com/GuanceCloud/obs-agent-connector/internal/app"
 )
@@ -26,6 +27,8 @@ func main() {
 			os.Exit(omphook.RunCLI(os.Args[3:]))
 		case "workbuddy":
 			os.Exit(workbuddyhook.RunCLI(os.Args[3:]))
+		case "qwenwork-cn":
+			os.Exit(qwenworkhook.RunCLI(os.Args[3:]))
 		case "claude":
 			os.Exit(claudehook.RunCLI())
 		case "codebuddy":

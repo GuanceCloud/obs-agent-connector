@@ -137,7 +137,7 @@ func InstallWorkBuddy(o WorkBuddyOptions) (CodeBuddyResult, error) {
 	if configure {
 		paths = append(paths, configPath)
 	}
-	restore, err := snapshotWorkBuddyFiles(paths)
+	restore, err := snapshotManagedFiles(paths)
 	if err != nil {
 		return result, err
 	}
@@ -193,7 +193,7 @@ func InstallWorkBuddy(o WorkBuddyOptions) (CodeBuddyResult, error) {
 	return result, nil
 }
 
-func snapshotWorkBuddyFiles(paths []string) (func(), error) {
+func snapshotManagedFiles(paths []string) (func(), error) {
 	type snapshot struct {
 		path    string
 		body    []byte

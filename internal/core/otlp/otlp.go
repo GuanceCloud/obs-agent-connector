@@ -361,6 +361,15 @@ func attributesToOTLP(attributes map[string]any) []KeyValue {
 		if value == nil {
 			continue
 		}
+		// GTrace message fields expect JSON text, not nested OTLP AnyValue
+		// wrappers. Preserve already serialized messages without double encoding.
+		if key == "gen_ai.input.messages" || key == "gen_ai.output.messages" {
+			if _, ok := value.(string); !ok {
+				if encoded, err := json.Marshal(value); err == nil {
+					value = string(encoded)
+				}
+			}
+		}
 		out = append(out, KeyValue{Key: key, Value: anyValue(value)})
 	}
 	return out

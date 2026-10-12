@@ -20,6 +20,22 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 	}
 	printSingleDetail("Runtime", executable)
 	switch p.Name {
+	case "qwenwork-cn":
+		_, err = telemetryinstall.InstallQwenWork(telemetryinstall.QwenWorkOptions{
+			CodeBuddyOptions: telemetryinstall.CodeBuddyOptions{
+				SourceExecutable: executable, DestinationExecutable: executable,
+				Endpoint: input.Endpoint, TracePath: input.TracePath, MetricsPath: input.MetricsPath,
+				InstallType: fixedType, XToken: input.XToken, Headers: input.Headers,
+				ResourceAttributes: builtinResourceAttributes(input), CaptureContent: input.CaptureContent,
+				MaxChars: input.MaxChars, Enabled: input.Enabled, NoConfig: noConfig,
+			},
+		})
+		if err == nil {
+			if !noConfig && (input.Enabled == nil || *input.Enabled) {
+				printSingleDetail("Token usage", "Enabled QODERCN_EXPOSE_TOKEN_USAGE=1 in the QwenWork CN profile .env. Process or project overrides may take precedence.")
+			}
+			printSingleDetail("Note", "Start a new QwenWork CN conversation to load local Hooks. Personal free was verified on 1.2.5; enterprise policies may override local settings.")
+		}
 	case "pi":
 		piVersion, versionErr := agent.PiVersion(p.AgentCommand)
 		if versionErr != nil {

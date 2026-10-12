@@ -51,6 +51,9 @@ func status(args []string) error {
 		{"Enabled", enabledStatus},
 	}
 
+	if p.StatusDetails != nil {
+		rows = append(rows, p.StatusDetails(p)...)
+	}
 	printDetails(rows)
 	return nil
 }
