@@ -7,6 +7,41 @@ import (
 	"testing"
 )
 
+func TestCodexSandboxProfileRoutesAndOverrides(t *testing.T) {
+	for _, tc := range []struct {
+		name, installType, tracePath, metricsPath, logsPath, logsURL, want string
+	}{
+		{name: "new-gtrace", want: "v1/write/otel-logs"},
+		{name: "new-otlp", installType: "otlp", want: "v1/logs"},
+		{name: "existing-gtrace", tracePath: "v1/write/otel-llm", metricsPath: "v1/write/otel-metrics", want: "v1/write/otel-logs"},
+		{name: "custom-path", tracePath: "v1/write/otel-llm", metricsPath: "v1/write/otel-metrics", logsPath: "custom/logs", want: "custom/logs"},
+		{name: "custom-url", logsURL: "https://logs.example/custom", want: ""},
+		{name: "unknown-profile", tracePath: "custom/traces", metricsPath: "custom/metrics", want: ""},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			current := map[string]any{"logsPath": tc.logsPath, "otel_logs_url": tc.logsURL}
+			if tc.tracePath != "" {
+				current["tracePath"], current["metricsPath"] = tc.tracePath, tc.metricsPath
+			}
+			next, err := MergeCodexRuntimeConfig(current, CodexOptions{Endpoint: "https://collector.example", InstallType: tc.installType}, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if next["logsPath"] != tc.want || next["otel_logs_url"] != tc.logsURL {
+				t.Fatal("incorrect profile route or lost URL override")
+			}
+			if next["sandbox"].(map[string]any)["enabled"] != false {
+				t.Fatal("route defaults enabled collection")
+			}
+		})
+	}
+	empty := ""
+	next, err := MergeCodexRuntimeConfig(nil, CodexOptions{Endpoint: "https://collector.example", Sandbox: CodexSandboxOptions{LogsPath: &empty}}, false)
+	if err != nil || next["logsPath"] != "" {
+		t.Fatal("explicit empty path did not override the profile default")
+	}
+}
+
 func TestCodexSandboxDefaultsAndExplicitRouteSwitchPreserveConfig(t *testing.T) {
 	current := map[string]any{"endpoint": "https://collector.example", "headers": map[string]any{"X-Token": "fixture"}, "tracePath": "traces", "metricsPath": "metrics"}
 	defaults, err := MergeCodexRuntimeConfig(current, CodexOptions{}, true)
@@ -79,7 +114,8 @@ func TestCodexSandboxFlagsAndInvalidConfigAreRejectedBeforeInstallation(t *testi
 		t.Fatal(err)
 	}
 	enabled := true
-	_, err = InstallCodex(CodexOptions{Home: root, SourceExecutable: source, DestinationExecutable: destination, HooksFile: hooks, ConfigFile: filepath.Join(root, "gtrace.json"), Endpoint: "https://trace.example", SkipTrust: true, Sandbox: CodexSandboxOptions{Enabled: &enabled}})
+	emptyPath := ""
+	_, err = InstallCodex(CodexOptions{Home: root, SourceExecutable: source, DestinationExecutable: destination, HooksFile: hooks, ConfigFile: filepath.Join(root, "gtrace.json"), Endpoint: "https://trace.example", SkipTrust: true, Sandbox: CodexSandboxOptions{Enabled: &enabled, LogsPath: &emptyPath}})
 	if err == nil {
 		t.Fatal("enabled bridge without a Logs route")
 	}
@@ -103,7 +139,7 @@ func TestInstallCodexSeedsVisibleSandboxDefaultsAndNoConfigPreservesBytes(t *tes
 	}
 	var config map[string]any
 	readTestJSON(t, path, &config)
-	if config["sandbox"] == nil || config["otel_logs_url"] != "" || config["logsPath"] != "" {
+	if config["sandbox"] == nil || config["otel_logs_url"] != "" || config["logsPath"] != "v1/write/otel-logs" {
 		t.Fatal("installer did not write visible Logs fields")
 	}
 	before, err := os.ReadFile(path)

@@ -22,6 +22,7 @@ import (
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/proto"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/state"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
+	"github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
 func sampleEvent(id, name string) Event {
@@ -38,11 +39,16 @@ type sink struct {
 	bodies   [][]byte
 	status   int
 	response []byte
+	path     string
 }
 
 func (s *sink) handler(t *testing.T) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/otel/v1/logs" || r.Header.Get("Content-Type") != "application/x-protobuf" {
+		path := s.path
+		if path == "" {
+			path = "/otel/v1/logs"
+		}
+		if r.URL.Path != path || r.Header.Get("Content-Type") != "application/x-protobuf" {
 			t.Errorf("wrong OTLP request: %s", r.URL.Path)
 			w.WriteHeader(400)
 			return
@@ -89,6 +95,51 @@ func attr(r otlp.LogRecord, key string) string {
 		}
 	}
 	return ""
+}
+
+func TestInstalledProfileExportsLogsToConfiguredRoute(t *testing.T) {
+	for _, tc := range []struct{ profile, path string }{
+		{"gtrace", "/v1/write/otel-logs"},
+		{"otlp", "/v1/logs"},
+	} {
+		t.Run(tc.profile, func(t *testing.T) {
+			sink := &sink{path: tc.path}
+			server := httptest.NewServer(sink.handler(t))
+			defer server.Close()
+			home := t.TempDir()
+			t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
+			enabled := true
+			next, err := install.MergeCodexRuntimeConfig(nil, install.CodexOptions{Endpoint: server.URL, InstallType: tc.profile, Sandbox: install.CodexSandboxOptions{Enabled: &enabled}}, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			path := filepath.Join(home, ".obs-agent-connector", "codex", "gtrace.json")
+			if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			body, err := json.Marshal(next)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, body, 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := config.Resolve(config.ResolveOptions{Home: home, Cwd: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			event, err := json.Marshal(sampleEvent("create", "obs.sandbox.created"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := Run(context.Background(), strings.NewReader(string(event)+"\n"), cfg, server.Client()); err != nil {
+				t.Fatal(err)
+			}
+			if len(sink.records) != 1 || attr(sink.records[0], "source") != "agent_sandbox" {
+				t.Fatal("profile route did not receive the sandbox OTLP record")
+			}
+		})
+	}
 }
 
 func TestLifecycleAndDelayedManyToManyBindingSurviveRestart(t *testing.T) {

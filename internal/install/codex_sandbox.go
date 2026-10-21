@@ -71,6 +71,18 @@ func MergeCodexRuntimeConfig(current map[string]any, options CodexOptions, exist
 	if _, ok := next["logsPath"]; !ok {
 		next["logsPath"] = ""
 	}
+	// Seed only recognized upload profiles. Preserve custom routes, and apply
+	// explicit edits below so an empty route reset is still honored.
+	if firstJSONObjectString(next, "otel_logs_url", "logsPath") == "" {
+		tracePath := strings.Trim(strings.TrimSpace(firstJSONObjectString(next, "tracePath", "trace_path")), "/")
+		metricsPath := strings.Trim(strings.TrimSpace(firstJSONObjectString(next, "metricsPath", "metrics_path")), "/")
+		switch {
+		case tracePath == "v1/write/otel-llm" && metricsPath == "v1/write/otel-metrics":
+			next["logsPath"] = "v1/write/otel-logs"
+		case tracePath == "v1/traces" && metricsPath == "v1/metrics":
+			next["logsPath"] = "v1/logs"
+		}
+	}
 	if value, ok := next["sandbox"]; ok {
 		if _, valid := value.(map[string]any); !valid {
 			return nil, fmt.Errorf("Codex sandbox config must be an object")

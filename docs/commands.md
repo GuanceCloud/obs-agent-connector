@@ -135,7 +135,7 @@ Supported edit parameters:
 | `--trace-path` | Set the trace upload path |
 | `--metrics-path` | Set the metrics upload path |
 | `--logs-url` | Codex only: set a full OTLP Logs URL and clear a relative Logs path |
-| `--logs-path` | Codex only: set a relative Logs path and clear a full Logs URL override |
+| `--logs-path` | Codex only: set a relative Logs path and clear a full Logs URL override; GTrace default: `v1/write/otel-logs` |
 | `--sandbox-enabled=<true|false>` | Codex only: configure the experimental bridge; requires an external runtime producer |
 | `--sandbox-max-pending` | Codex only: set the pending Logs limit, from 1 to 4096 |
 | `--x-token` | Set the `X-Token` header |
@@ -149,7 +149,7 @@ Notes:
 - `edit` merges the supplied values into the existing config and rewrites the file atomically
 - supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `mimo`, `omp`, `pi`, `opencode`, `qoder`, `qwenwork-cn`, and `workbuddy`
 - `hermes` and `openclaw` are excluded because they do not use the managed `gtrace.json` layout
-- Codex lists Logs/sandbox defaults even when an older file omits those keys. A config edit writes the defaults; `update codex` preserves the file without adding keys. The same sandbox flags are available on `install codex`. Configuring an endpoint does not start sandbox collection; see [sandbox bridge requirements](codex-sandbox-observability.md).
+- Codex lists Logs/sandbox defaults even when an older file omits those keys. A config edit writes defaults, including `v1/write/otel-logs` for the recognized GTrace profile and `v1/logs` for standard OTLP; custom routes are preserved. `update codex` preserves the file without adding keys. The same sandbox flags are available on `install codex`. Configuring an endpoint does not start sandbox collection; see [sandbox bridge requirements](codex-sandbox-observability.md).
 
 ## Install
 

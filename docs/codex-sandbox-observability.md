@@ -32,9 +32,27 @@ Exports use OTLP/HTTP Protobuf with gzip. Merge these fields into `~/.obs-agent-
 }
 ```
 
-Alternatively, set `logsPath` relative to the existing `endpoint`; `otel_logs_url` takes precedence. No Logs route is inferred from the GTrace Trace endpoint. Existing headers and Basic Auth settings apply to Logs; provision a receiver that accepts them. URLs containing user information are rejected.
+For the GTrace upload profile, the confirmed Logs route is `v1/write/otel-logs`, relative to the existing `endpoint`:
 
-Starting with RC2, normal `install codex` writes visible empty `otel_logs_url` and `logsPath` fields plus `sandbox.enabled=false` and `sandbox.max_pending=1024`. These are configuration defaults, not an active runtime producer. RC1 did not generate these fields automatically.
+```json
+{
+  "logsPath": "v1/write/otel-logs",
+  "otel_logs_url": "",
+  "sandbox": { "enabled": false, "max_pending": 1024 }
+}
+```
+
+Starting with RC3, normal installation and config edits seed this route when the existing Trace/Metrics paths match the GTrace profile (`v1/write/otel-llm`, `v1/write/otel-metrics`). The standard OTLP profile (`v1/traces`, `v1/metrics`) uses `v1/logs`. Missing or empty Logs routes are filled only for these recognized profiles. Custom Logs paths and full URLs are preserved; unknown profiles require an explicit route. Explicit empty route edits are honored for that edit. Existing headers and Basic Auth settings apply to Logs. URLs containing user information are rejected. `otel_logs_url` takes precedence over a relative `logsPath`.
+
+For an existing GTrace installation, set the route explicitly:
+
+```bash
+obs-agent-connector config codex edit --logs-path=v1/write/otel-logs
+```
+
+This preserves the sandbox enable state. The source `agent_sandbox` remains fixed in LogRecord attributes.
+
+RC2 introduced visible empty `otel_logs_url` and `logsPath` fields plus `sandbox.enabled=false` and `sandbox.max_pending=1024`. RC3 fills the recognized profile route as described above. These are configuration defaults, not an active runtime producer. RC1 did not generate these fields automatically.
 
 `update codex` preserves the existing runtime file byte-for-byte through `--no-config`, so upgrading an older installation can legitimately leave the new fields absent. `config codex list` shows the Logs fields and sandbox defaults even for that older file. Use explicit configuration edits to add them. For example, **if a local DataKit OTLP receiver is configured**:
 
@@ -46,7 +64,7 @@ obs-agent-connector config codex edit \
   --sandbox-max-pending=1024
 ```
 
-The same four sandbox flags are accepted by `install codex`. `--logs-url` and `--logs-path` are mutually exclusive; setting a nonempty value clears the alternative route to prevent an old URL from masking a path edit. To clear a URL and disable the bridge, use `config codex edit --logs-url= --sandbox-enabled=false`. Enabling requires an explicit effective Logs route. Invalid settings are rejected before configuration is written, and installation validates them before registering Hooks or copying the binary. No other Agent receives Codex sandbox defaults.
+The same four sandbox flags are accepted by `install codex`. `--logs-url` and `--logs-path` are mutually exclusive; setting a nonempty value clears the alternative route to prevent an old URL from masking a path edit. To disable the bridge, use `config codex edit --sandbox-enabled=false`. Setting `--logs-url=` clears only the URL override; a subsequent configuration edit can seed the profile route again if both routes are empty. Enabling requires a valid effective Logs route, either a recognized profile default or an explicit route. Invalid settings are rejected before configuration is written, and installation validates them before registering Hooks or copying the binary. No other Agent receives Codex sandbox defaults.
 
 These commands save configuration only. A separate producer still needs to feed `internal codex-sandbox`; neither the configuration edit nor installation starts automatic Codex sandbox collection. The log `source=agent_sandbox` is fixed in the bridge and does not require a source setting in `gtrace.json`.
 
