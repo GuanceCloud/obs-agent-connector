@@ -16,6 +16,10 @@ type Config struct {
 	BaseURL            string
 	TracePath          string
 	MetricsPath        string
+	LogsPath           string
+	OtelLogsURL        string
+	SandboxEnabled     bool
+	SandboxMaxPending  int
 	OtelTracesURL      string
 	OtelMetricsURL     string
 	PublicKey          string
@@ -102,12 +106,21 @@ func Resolve(options ResolveOptions) (Config, error) {
 	if captureContent != "none" && captureContent != "full" {
 		captureContent = "preview"
 	}
+	sandbox, _ := merged["sandbox"].(map[string]any)
+	maxPending := parseInteger(sandbox["max_pending"], 1024)
+	if maxPending < 1 || maxPending > 4096 {
+		maxPending = 1024
+	}
 	return Config{
 		Enabled:            parseBoolean(merged["enabled"], false),
 		Endpoint:           normalizeEndpoint(asString(merged["endpoint"]), asString(merged["base_url"])),
 		BaseURL:            normalizeEndpoint(asString(merged["base_url"]), ""),
 		TracePath:          normalizeSignalPath(asString(merged["tracePath"]), "api/public/otel/v1/traces"),
 		MetricsPath:        normalizeSignalPath(asString(merged["metricsPath"]), "api/public/otel/v1/metrics"),
+		LogsPath:           strings.Trim(strings.TrimSpace(asString(merged["logsPath"])), "/"),
+		OtelLogsURL:        strings.TrimSpace(asString(merged["otel_logs_url"])),
+		SandboxEnabled:     parseBoolean(sandbox["enabled"], false),
+		SandboxMaxPending:  maxPending,
 		OtelTracesURL:      asString(merged["otel_traces_url"]),
 		OtelMetricsURL:     asString(merged["otel_metrics_url"]),
 		PublicKey:          asString(merged["public_key"]),

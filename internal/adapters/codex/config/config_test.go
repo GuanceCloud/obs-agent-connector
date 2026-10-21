@@ -6,6 +6,35 @@ import (
 	"testing"
 )
 
+func TestSandboxIsOptInAndRequiresAnExplicitLogsRoute(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
+	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(home, ".codex", "gtrace.json")
+	if err := os.WriteFile(path, []byte(`{"enabled":true}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := Resolve(ResolveOptions{Home: home, Cwd: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SandboxEnabled || cfg.LogsPath != "" || cfg.OtelLogsURL != "" {
+		t.Fatal("sandbox logs enabled implicitly")
+	}
+	if err := os.WriteFile(path, []byte(`{"enabled":true,"otel_logs_url":"https://collector.example/otel/v1/logs","sandbox":{"enabled":true,"max_pending":64}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err = Resolve(ResolveOptions{Home: home, Cwd: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.SandboxEnabled || cfg.SandboxMaxPending != 64 || cfg.OtelLogsURL != "https://collector.example/otel/v1/logs" {
+		t.Fatal("sandbox config not loaded")
+	}
+}
+
 func TestResolvePrefersLocalGtraceConfig(t *testing.T) {
 	base := t.TempDir()
 	home := filepath.Join(base, "home")
