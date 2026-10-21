@@ -34,6 +34,22 @@ Exports use OTLP/HTTP Protobuf with gzip. Merge these fields into `~/.obs-agent-
 
 Alternatively, set `logsPath` relative to the existing `endpoint`; `otel_logs_url` takes precedence. No Logs route is inferred from the GTrace Trace endpoint. Existing headers and Basic Auth settings apply to Logs; provision a receiver that accepts them. URLs containing user information are rejected.
 
+Starting with RC2, normal `install codex` writes visible empty `otel_logs_url` and `logsPath` fields plus `sandbox.enabled=false` and `sandbox.max_pending=1024`. These are configuration defaults, not an active runtime producer. RC1 did not generate these fields automatically.
+
+`update codex` preserves the existing runtime file byte-for-byte through `--no-config`, so upgrading an older installation can legitimately leave the new fields absent. `config codex list` shows the Logs fields and sandbox defaults even for that older file. Use explicit configuration edits to add them. For example, **if a local DataKit OTLP receiver is configured**:
+
+```bash
+obs-agent-connector config codex list
+obs-agent-connector config codex edit \
+  --logs-url http://127.0.0.1:9529/otel/v1/logs \
+  --sandbox-enabled=true \
+  --sandbox-max-pending=1024
+```
+
+The same four sandbox flags are accepted by `install codex`. `--logs-url` and `--logs-path` are mutually exclusive; setting a nonempty value clears the alternative route to prevent an old URL from masking a path edit. To clear a URL and disable the bridge, use `config codex edit --logs-url= --sandbox-enabled=false`. Enabling requires an explicit effective Logs route. Invalid settings are rejected before configuration is written, and installation validates them before registering Hooks or copying the binary. No other Agent receives Codex sandbox defaults.
+
+These commands save configuration only. A separate producer still needs to feed `internal codex-sandbox`; neither the configuration edit nor installation starts automatic Codex sandbox collection. The log `source=agent_sandbox` is fixed in the bridge and does not require a source setting in `gtrace.json`.
+
 Both enable flags must be true. When disabled, the bridge does not read input or create sandbox state. `max_pending` accepts 1 through 4,096, defaulting to 1,024 for missing/out-of-range values. `captureContent: "none"` suppresses free-text reasons; other modes redact and limit reasons to 1,024 characters. Names, types, and configured resource values are sanitized and bounded. Normal installer updates preserve these configuration keys without automatically enabling or starting the bridge.
 
 ## Runtime producer contract
