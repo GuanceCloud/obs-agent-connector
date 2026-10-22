@@ -29,14 +29,14 @@ import (
 const maxEventBytes = 64 << 10
 
 func Configured(cfg config.Config) bool {
-	return cfg.Enabled && cfg.SandboxEnabled && cfg.StateDir != "" && (cfg.LogsPath != "" || cfg.OtelLogsURL != "")
+	return cfg.Enabled && cfg.SandboxEnabled && cfg.StateDir != "" && cfg.LogsPath != ""
 }
 
 func NewStore(cfg config.Config) Store {
 	resource, _ := privacy.Sanitize(cfg.ResourceAttributes, 256).(map[string]any)
 	// Reserve source for the log contract rather than conflicting user tags.
 	delete(resource, "source")
-	return Store{Root: filepath.Join(cfg.StateDir, "sandbox", Scope(cfg)), MaxPending: cfg.SandboxMaxPending, Resource: resource, CaptureContent: cfg.CaptureContent != "none"}
+	return Store{Root: filepath.Join(cfg.StateDir, "sandbox", Scope(cfg)), MaxPending: cfg.SandboxMaxPending, HookLogFile: cfg.HookLogFile, Resource: resource, CaptureContent: cfg.CaptureContent != "none"}
 }
 
 // Scope isolates queued records and recovered trace bindings when destinations
@@ -45,10 +45,12 @@ func Scope(cfg config.Config) string {
 	if !Configured(cfg) {
 		return ""
 	}
+	// Keep the empty legacy LogsURL hash slot so existing endpoint/path queues
+	// and confirmed bindings retain their destination scope. It is not a setting.
 	body, _ := json.Marshal(struct {
 		Endpoint, TracePath, TraceURL, LogsPath, LogsURL, PublicKey, SecretKey string
 		Headers                                                                map[string]string
-	}{cfg.Endpoint, cfg.TracePath, cfg.OtelTracesURL, cfg.LogsPath, cfg.OtelLogsURL, cfg.PublicKey, cfg.SecretKey, cfg.Headers})
+	}{cfg.Endpoint, cfg.TracePath, cfg.OtelTracesURL, cfg.LogsPath, "", cfg.PublicKey, cfg.SecretKey, cfg.Headers})
 	return digest(string(body))
 }
 
@@ -65,7 +67,7 @@ func NewClient(cfg config.Config, client *http.Client) transport.Client {
 		client = &bounded
 	}
 	return transport.Client{HTTPClient: client, Config: transport.Config{
-		Endpoint: cfg.Endpoint, LogsPath: cfg.LogsPath, LogsURL: cfg.OtelLogsURL,
+		Endpoint: cfg.Endpoint, LogsPath: cfg.LogsPath,
 		Headers: cfg.Headers, PublicKey: cfg.PublicKey, SecretKey: cfg.SecretKey, Timeout: timeout,
 	}}
 }
@@ -115,10 +117,7 @@ func Run(ctx context.Context, reader io.Reader, cfg config.Config, httpClient *h
 	if !Configured(cfg) {
 		return fmt.Errorf("sandbox collection requires state_dir and an explicit Logs endpoint")
 	}
-	endpoint := cfg.OtelLogsURL
-	if endpoint == "" {
-		endpoint = transport.JoinEndpoint(cfg.Endpoint, cfg.LogsPath)
-	}
+	endpoint := transport.JoinEndpoint(cfg.Endpoint, cfg.LogsPath)
 	u, err := url.Parse(endpoint)
 	if err != nil || u.Host == "" || (u.Scheme != "http" && u.Scheme != "https") || u.User != nil {
 		return fmt.Errorf("invalid sandbox Logs endpoint")

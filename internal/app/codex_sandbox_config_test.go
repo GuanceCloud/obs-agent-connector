@@ -26,7 +26,7 @@ func TestCodexLogsConfigListEditAndValidation(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	for _, text := range []string{"logs-url", "logs-path", "sandbox-enabled", "false (default)", "agent_sandbox (fixed)", "automatic Codex sandbox collection is unavailable"} {
+	for _, text := range []string{"logs-path", "sandbox-enabled", "false (default)", "agent_sandbox (fixed)", "automatic Codex sandbox collection is unavailable"} {
 		if !strings.Contains(output, text) {
 			t.Fatalf("missing %s in config list", text)
 		}
@@ -45,7 +45,7 @@ func TestCodexLogsConfigListEditAndValidation(t *testing.T) {
 		t.Fatal("invalid edit changed runtime config")
 	}
 	output = captureStdout(t, func() {
-		if err := configCommand([]string{"codex", "edit", "--logs-url=https://logs.example/otel/v1/logs", "--sandbox-enabled=true", "--sandbox-max-pending=128"}); err != nil {
+		if err := configCommand([]string{"codex", "edit", "--logs-path=v1/write/otel-logs", "--sandbox-enabled=true", "--sandbox-max-pending=128"}); err != nil {
 			t.Fatal(err)
 		}
 	})
@@ -53,7 +53,7 @@ func TestCodexLogsConfigListEditAndValidation(t *testing.T) {
 		t.Fatal("configuration implied automatic collection")
 	}
 	updated := readJSONFile(t, path)
-	if updated["otel_logs_url"] != "https://logs.example/otel/v1/logs" || updated["sandbox"].(map[string]any)["enabled"] != true {
+	if updated["logsPath"] != "v1/write/otel-logs" || updated["sandbox"].(map[string]any)["enabled"] != true {
 		t.Fatal("Logs settings not persisted")
 	}
 	if updated["headers"].(map[string]any)["X-Token"] != "fixture-secret" || updated["tracePath"] != "traces" || updated["metricsPath"] != "metrics" {
@@ -63,19 +63,19 @@ func TestCodexLogsConfigListEditAndValidation(t *testing.T) {
 		t.Fatal(err)
 	}
 	updated = readJSONFile(t, path)
-	if updated["otel_logs_url"] != "" || updated["logsPath"] != "otel/v1/logs" {
-		t.Fatal("relative path masked by URL override")
+	if updated["otel_logs_url"] != nil || updated["logsPath"] != "otel/v1/logs" {
+		t.Fatal("retired URL setting remains in config")
 	}
-	if err := install([]string{"claude", "--logs-url=https://logs.example/v1/logs", "--dry-run"}); err == nil {
+	if err := install([]string{"claude", "--logs-path=v1/logs", "--dry-run"}); err == nil {
 		t.Fatal("silently accepted Codex-only options for another Agent")
 	}
 }
 
-func TestCodexSandboxLogsConfigDisplayRedactsURLCredentials(t *testing.T) {
+func TestCodexSandboxConfigDoesNotDisplayRetiredURL(t *testing.T) {
 	rows := codexSandboxConfigRows(map[string]any{"otel_logs_url": "https://user:password@logs.example/v1/logs?access_token=fixture-secret"})
 	for _, row := range rows {
 		for _, value := range row {
-			if strings.Contains(value, "password") || strings.Contains(value, "fixture-secret") {
+			if strings.Contains(value, "password") || strings.Contains(value, "fixture-secret") || strings.Contains(value, "logs-url") {
 				t.Fatal("displayed URL authentication")
 			}
 		}
@@ -90,11 +90,11 @@ func TestCodexBuiltinInstallForwardsSandboxOptions(t *testing.T) {
 		return installpkg.CodexResult{TrustSkipped: true}, nil
 	}
 	t.Cleanup(func() { installCodexAdapter = old })
-	logsURL, enabled := "https://logs.example/v1/logs", true
-	if err := installBuiltinAdapter(agent.Get("codex"), installInput{CodexSandbox: installpkg.CodexSandboxOptions{LogsURL: &logsURL, Enabled: &enabled}}, false); err != nil {
+	logsPath, enabled := "v1/logs", true
+	if err := installBuiltinAdapter(agent.Get("codex"), installInput{CodexSandbox: installpkg.CodexSandboxOptions{LogsPath: &logsPath, Enabled: &enabled}}, false); err != nil {
 		t.Fatal(err)
 	}
-	if captured.LogsURL == nil || *captured.LogsURL != logsURL || captured.Enabled == nil || !*captured.Enabled {
+	if captured.LogsPath == nil || *captured.LogsPath != logsPath || captured.Enabled == nil || !*captured.Enabled {
 		t.Fatal("installer lost explicit sandbox options")
 	}
 }

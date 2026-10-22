@@ -22,51 +22,40 @@ A process exit, Tool completion, Session ID, or turn boundary is never substitut
 
 Identity/state snapshots, lifecycle events, and trace associations use OTLP Logs. Existing Agent/Tool spans retain OTLP Traces and their actual OBS hierarchy. No full-lifetime sandbox span or duplicate inferred operation span is generated. Process/file/network auditing and resource Metrics are out of scope.
 
-Exports use OTLP/HTTP Protobuf with gzip. Merge these fields into `~/.obs-agent-connector/codex/gtrace.json`, preserving installed trace/metric settings:
+Exports use OTLP/HTTP Protobuf with gzip. Logs use the same `endpoint`, headers, and Basic Auth settings as the existing GTrace upload configuration. Configure a relative `logsPath` in `~/.obs-agent-connector/codex/gtrace.json`:
 
 ```json
 {
   "enabled": true,
-  "otel_logs_url": "http://127.0.0.1:9529/otel/v1/logs",
-  "sandbox": { "enabled": true, "max_pending": 1024 }
-}
-```
-
-For the GTrace upload profile, the confirmed Logs route is `v1/write/otel-logs`, relative to the existing `endpoint`:
-
-```json
-{
+  "endpoint": "https://llm-openway.guance.com",
   "logsPath": "v1/write/otel-logs",
-  "otel_logs_url": "",
   "sandbox": { "enabled": false, "max_pending": 1024 }
 }
 ```
 
-Starting with RC3, normal installation and config edits seed this route when the existing Trace/Metrics paths match the GTrace profile (`v1/write/otel-llm`, `v1/write/otel-metrics`). The standard OTLP profile (`v1/traces`, `v1/metrics`) uses `v1/logs`. Missing or empty Logs routes are filled only for these recognized profiles. Custom Logs paths and full URLs are preserved; unknown profiles require an explicit route. Explicit empty route edits are honored for that edit. Existing headers and Basic Auth settings apply to Logs. URLs containing user information are rejected. `otel_logs_url` takes precedence over a relative `logsPath`.
+Merge these settings into the existing file without replacing Trace/Metrics routes, credentials, or Agent identity. The GTrace profile uses `v1/write/otel-logs`; standard OTLP uses `v1/logs`. Normal installation and config edits seed the Logs path only when the existing Trace/Metrics paths match a recognized profile. Custom relative Logs paths are preserved; unknown profiles require an explicit path.
 
-For an existing GTrace installation, set the route explicitly:
+Starting with RC4, `otel_logs_url` and `--logs-url` are removed. The runtime ignores the retired key, and normal installation/config edits delete it. `update codex` continues preserving the runtime file byte-for-byte through `--no-config`, so an old ignored key can remain until an explicit configuration edit. Retired full-URL-only configurations require a valid `endpoint` and `logsPath` before Logs can be sent. Existing queues scoped to a former full-URL destination are not migrated to another destination.
 
-```bash
-obs-agent-connector config codex edit --logs-path=v1/write/otel-logs
-```
-
-This preserves the sandbox enable state. The source `agent_sandbox` remains fixed in LogRecord attributes.
-
-RC2 introduced visible empty `otel_logs_url` and `logsPath` fields plus `sandbox.enabled=false` and `sandbox.max_pending=1024`. RC3 fills the recognized profile route as described above. These are configuration defaults, not an active runtime producer. RC1 did not generate these fields automatically.
-
-`update codex` preserves the existing runtime file byte-for-byte through `--no-config`, so upgrading an older installation can legitimately leave the new fields absent. `config codex list` shows the Logs fields and sandbox defaults even for that older file. Use explicit configuration edits to add them. For example, **if a local DataKit OTLP receiver is configured**:
+For an existing GTrace installation:
 
 ```bash
 obs-agent-connector config codex list
+obs-agent-connector config codex edit --logs-path=v1/write/otel-logs
+```
+
+The edit preserves the sandbox enable state. Enable the bridge only after an independent authoritative producer is available:
+
+```bash
 obs-agent-connector config codex edit \
-  --logs-url http://127.0.0.1:9529/otel/v1/logs \
+  --logs-path=v1/write/otel-logs \
   --sandbox-enabled=true \
   --sandbox-max-pending=1024
 ```
 
-The same four sandbox flags are accepted by `install codex`. `--logs-url` and `--logs-path` are mutually exclusive; setting a nonempty value clears the alternative route to prevent an old URL from masking a path edit. To disable the bridge, use `config codex edit --sandbox-enabled=false`. Setting `--logs-url=` clears only the URL override; a subsequent configuration edit can seed the profile route again if both routes are empty. Enabling requires a valid effective Logs route, either a recognized profile default or an explicit route. Invalid settings are rejected before configuration is written, and installation validates them before registering Hooks or copying the binary. No other Agent receives Codex sandbox defaults.
+The same three sandbox flags are accepted by `install codex`. Explicit empty path edits are honored for that edit; later config edits can seed the recognized profile default again. Enabling requires a valid endpoint and effective relative Logs path. Invalid settings are rejected before configuration writes or installation changes. No other Agent receives Codex sandbox defaults.
 
-These commands save configuration only. A separate producer still needs to feed `internal codex-sandbox`; neither the configuration edit nor installation starts automatic Codex sandbox collection. The log `source=agent_sandbox` is fixed in the bridge and does not require a source setting in `gtrace.json`.
+These commands save configuration only. A separate producer still needs to feed `internal codex-sandbox`; neither configuration edits nor installation starts automatic Codex sandbox collection. `source=agent_sandbox` is fixed in the bridge and needs no source setting in `gtrace.json`.
 
 Both enable flags must be true. When disabled, the bridge does not read input or create sandbox state. `max_pending` accepts 1 through 4,096, defaulting to 1,024 for missing/out-of-range values. `captureContent: "none"` suppresses free-text reasons; other modes redact and limit reasons to 1,024 characters. Names, types, and configured resource values are sanitized and bounded. Normal installer updates preserve these configuration keys without automatically enabling or starting the bridge.
 
@@ -137,6 +126,16 @@ obs-agent-connector internal codex-sandbox --flush
 ```
 
 The bridge returns nonzero on input/export failure; its producer must isolate this exit from Codex. The terminal Hook remains fail-open by default. Sandbox association errors can be recovered from confirmed identity files without changing Agent Trace status.
+
+## Local delivery diagnostics
+
+`gtrace.json` contains configuration only. Each Logs delivery attempt records its outcome in `~/.obs-agent-connector/codex/gtrace-hooks.json`, alongside existing Trace/Metrics diagnostics:
+
+- `uploaded logs`: successful OTLP response, including HTTP status, `signal=logs`, `source=agent_sandbox`, record count, and rejected-record count.
+- `logs upload failed`: delivery failure with HTTP status (0 when unavailable), bounded error category, retryability, and rejected-record count. HTTP 200 with OTLP partial rejection is a failure, not a successful upload.
+- `logs retry scheduled`: persisted next retry time in UTC and retry delay in milliseconds.
+
+No successful delivery is recorded for an empty queue or a retry that is not yet due. Entries exclude payloads, sandbox reasons, destination URLs, authentication, and server response bodies. Diagnostic write failures do not block delivery or change its outcome. Existing Hook-level export warnings can also describe a failed pass. These local diagnostics are not exported as sandbox lifecycle Logs.
 
 ## Receiver/product acceptance still required
 

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/journal"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/model"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
@@ -27,6 +28,7 @@ type Store struct {
 	MaxPending     int
 	Resource       map[string]any
 	CaptureContent bool
+	HookLogFile    string
 	Now            func() time.Time
 }
 
@@ -288,9 +290,19 @@ func (s Store) Flush(ctx context.Context, client transport.Client) error {
 			return ErrDeferred
 		}
 		payload := proto.EncodeExportLogsServiceRequest(otlp.LogsToProtoRequest([]model.LogRecord{next.Record}))
-		_, uploadErr := client.UploadContext(ctx, "logs", payload)
+		result, uploadErr := client.UploadContext(ctx, "logs", payload)
 		var statusErr *transport.UploadError
 		permanent := errors.As(uploadErr, &statusErr) && !statusErr.Retryable()
+		extra := map[string]any{"signal": "logs", "source": Source, "log_count": 1, "status": result.StatusCode, "rejected_log_records": result.RejectedLogRecords}
+		message := hooklog.UploadedLogs
+		if uploadErr != nil {
+			message = "logs upload failed"
+			extra["category"] = errorCategory(uploadErr)
+			extra["retryable"] = !permanent && ctx.Err() == nil
+		}
+		// Record only delivery metadata. Payloads, URLs, credentials, and server
+		// response bodies must never enter the local diagnostic file.
+		_ = hooklog.Append(s.HookLogFile, message, extra)
 		if uploadErr != nil && !permanent {
 			if ctx.Err() != nil {
 				return uploadErr
@@ -300,11 +312,12 @@ func (s Store) Flush(ctx context.Context, client transport.Client) error {
 			if statusErr != nil && statusErr.RetryAfter > delay {
 				delay = statusErr.RetryAfter
 			}
+			retryAt := s.now().Add(delay)
 			if err := s.update(func(l *ledger) error {
 				for i := range l.Queue {
 					if l.Queue[i].Key == next.Key {
 						l.Queue[i].Attempts = min(l.Queue[i].Attempts+1, 6)
-						l.Queue[i].RetryAt = s.now().Add(delay)
+						l.Queue[i].RetryAt = retryAt
 						break
 					}
 				}
@@ -312,6 +325,7 @@ func (s Store) Flush(ctx context.Context, client transport.Client) error {
 			}); err != nil {
 				return errors.Join(uploadErr, err)
 			}
+			_ = hooklog.Append(s.HookLogFile, "logs retry scheduled", map[string]any{"signal": "logs", "source": Source, "retry_delay_ms": delay.Milliseconds(), "retry_at": retryAt.UTC().Format(time.RFC3339Nano)})
 			return uploadErr
 		}
 		if err := s.update(func(l *ledger) error {

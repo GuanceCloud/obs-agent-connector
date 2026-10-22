@@ -9,17 +9,16 @@ import (
 
 func TestCodexSandboxProfileRoutesAndOverrides(t *testing.T) {
 	for _, tc := range []struct {
-		name, installType, tracePath, metricsPath, logsPath, logsURL, want string
+		name, installType, tracePath, metricsPath, logsPath, want string
 	}{
 		{name: "new-gtrace", want: "v1/write/otel-logs"},
 		{name: "new-otlp", installType: "otlp", want: "v1/logs"},
 		{name: "existing-gtrace", tracePath: "v1/write/otel-llm", metricsPath: "v1/write/otel-metrics", want: "v1/write/otel-logs"},
 		{name: "custom-path", tracePath: "v1/write/otel-llm", metricsPath: "v1/write/otel-metrics", logsPath: "custom/logs", want: "custom/logs"},
-		{name: "custom-url", logsURL: "https://logs.example/custom", want: ""},
 		{name: "unknown-profile", tracePath: "custom/traces", metricsPath: "custom/metrics", want: ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			current := map[string]any{"logsPath": tc.logsPath, "otel_logs_url": tc.logsURL}
+			current := map[string]any{"logsPath": tc.logsPath, "otel_logs_url": "https://retired.example/logs"}
 			if tc.tracePath != "" {
 				current["tracePath"], current["metricsPath"] = tc.tracePath, tc.metricsPath
 			}
@@ -27,8 +26,8 @@ func TestCodexSandboxProfileRoutesAndOverrides(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if next["logsPath"] != tc.want || next["otel_logs_url"] != tc.logsURL {
-				t.Fatal("incorrect profile route or lost URL override")
+			if next["logsPath"] != tc.want || next["otel_logs_url"] != nil {
+				t.Fatal("incorrect profile route or retained retired URL setting")
 			}
 			if next["sandbox"].(map[string]any)["enabled"] != false {
 				t.Fatal("route defaults enabled collection")
@@ -48,18 +47,18 @@ func TestCodexSandboxDefaultsAndExplicitRouteSwitchPreserveConfig(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if defaults["otel_logs_url"] != "" || defaults["logsPath"] != "" {
+	if defaults["otel_logs_url"] != nil || defaults["logsPath"] != "" {
 		t.Fatal("guessed a Logs endpoint")
 	}
 	if defaults["sandbox"].(map[string]any)["enabled"] != false {
 		t.Fatal("enabled bridge without a producer")
 	}
-	logsURL, enabled, limit := "https://logs.example/otel/v1/logs", true, 64
-	configured, err := MergeCodexRuntimeConfig(defaults, CodexOptions{Sandbox: CodexSandboxOptions{LogsURL: &logsURL, Enabled: &enabled, MaxPending: &limit}}, true)
+	logsPath, enabled, limit := "first/logs", true, 64
+	configured, err := MergeCodexRuntimeConfig(defaults, CodexOptions{Sandbox: CodexSandboxOptions{LogsPath: &logsPath, Enabled: &enabled, MaxPending: &limit}}, true)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if configured["otel_logs_url"] != logsURL || configured["sandbox"].(map[string]any)["max_pending"] != limit {
+	if configured["logsPath"] != logsPath || configured["sandbox"].(map[string]any)["max_pending"] != limit {
 		t.Fatal("explicit Logs config missing")
 	}
 	if defaults["sandbox"].(map[string]any)["enabled"] != false {
@@ -71,8 +70,8 @@ func TestCodexSandboxDefaultsAndExplicitRouteSwitchPreserveConfig(t *testing.T) 
 	if err != nil {
 		t.Fatal(err)
 	}
-	if switched["otel_logs_url"] != "" || switched["logsPath"] != path {
-		t.Fatal("URL override masked relative route edit")
+	if switched["otel_logs_url"] != nil || switched["logsPath"] != path {
+		t.Fatal("retired URL setting survived relative route edit")
 	}
 	wire, _ := json.Marshal(switched)
 	var normalized map[string]any
@@ -102,7 +101,7 @@ func TestCodexSandboxFlagsAndInvalidConfigAreRejectedBeforeInstallation(t *testi
 			t.Fatalf("accepted invalid flags %v", args)
 		}
 	}
-	options, err := ParseCodexInstallArgs([]string{"--logs-url=https://logs.example/v1/logs", "--sandbox-enabled=true", "--sandbox-max-pending=32"})
+	options, err := ParseCodexInstallArgs([]string{"--logs-path=v1/logs", "--sandbox-enabled=true", "--sandbox-max-pending=32"})
 	if err != nil || options.Sandbox.Enabled == nil || !*options.Sandbox.Enabled || *options.Sandbox.MaxPending != 32 {
 		t.Fatalf("flags not parsed: %v", err)
 	}
@@ -139,16 +138,16 @@ func TestInstallCodexSeedsVisibleSandboxDefaultsAndNoConfigPreservesBytes(t *tes
 	}
 	var config map[string]any
 	readTestJSON(t, path, &config)
-	if config["sandbox"] == nil || config["otel_logs_url"] != "" || config["logsPath"] != "v1/write/otel-logs" {
+	if config["sandbox"] == nil || config["otel_logs_url"] != nil || config["logsPath"] != "v1/write/otel-logs" {
 		t.Fatal("installer did not write visible Logs fields")
 	}
 	before, err := os.ReadFile(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	logsURL, enabled := "https://logs.example/v1/logs", true
+	logsPath, enabled := "custom/logs", true
 	o.NoConfig = true
-	o.Sandbox = CodexSandboxOptions{LogsURL: &logsURL, Enabled: &enabled}
+	o.Sandbox = CodexSandboxOptions{LogsPath: &logsPath, Enabled: &enabled}
 	if _, err := InstallCodex(o); err != nil {
 		t.Fatal(err)
 	}

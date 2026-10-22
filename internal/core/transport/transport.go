@@ -23,7 +23,6 @@ type Config struct {
 	TraceURL    string
 	MetricsURL  string
 	LogsPath    string
-	LogsURL     string
 	Headers     map[string]string
 	PublicKey   string
 	SecretKey   string
@@ -226,9 +225,6 @@ func (c Client) signalURL(signal string) string {
 		}
 		return JoinEndpoint(c.Config.Endpoint, c.Config.MetricsPath)
 	case "logs":
-		if c.Config.LogsURL != "" {
-			return c.Config.LogsURL
-		}
 		// A logs route must be explicit: GTrace trace endpoints need not accept logs.
 		if strings.TrimSpace(c.Config.LogsPath) == "" {
 			return ""

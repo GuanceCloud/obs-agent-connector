@@ -47,14 +47,10 @@ func TestLogsUseExplicitRouteAndRespectPartialSuccess(t *testing.T) {
 	if _, err := client.Upload("logs", nil); err == nil {
 		t.Fatal("invented a Logs endpoint")
 	}
-	client.Config.LogsURL = "https://logs.example/v1/logs"
-	if client.signalURL("logs") != client.Config.LogsURL {
-		t.Fatal("explicit URL not honored")
-	}
 }
 
 func TestLogsRetryAfterSurvivesTheTransportBoundary(t *testing.T) {
-	client := Client{Config: Config{LogsURL: "https://collector.example/v1/logs"}, HTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+	client := Client{Config: Config{Endpoint: "https://collector.example", LogsPath: "v1/logs"}, HTTPClient: &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader("")), Header: http.Header{"Retry-After": []string{"120"}}}, nil
 	})}}
 	_, err := client.Upload("logs", nil)
@@ -67,7 +63,7 @@ func TestLogsRetryAfterSurvivesTheTransportBoundary(t *testing.T) {
 func TestLogsCancellationAndRetryPolicy(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	client := Client{Config: Config{LogsURL: "https://collector.example/v1/logs"}}
+	client := Client{Config: Config{Endpoint: "https://collector.example", LogsPath: "v1/logs"}}
 	if _, err := client.UploadContext(ctx, "logs", nil); !errors.Is(err, context.Canceled) {
 		t.Fatalf("lost cancellation: %v", err)
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	installpkg "github.com/GuanceCloud/obs-agent-connector/internal/install"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -214,23 +213,7 @@ func codexSandboxConfigRows(current map[string]any) [][]string {
 	if maxPending == "-" {
 		maxPending = "1024 (default)"
 	}
-	logsURL := runtimeConfigStringValue(current, "otel_logs_url")
-	if logsURL != "-" {
-		// Do not display credentials embedded in a configured URL query.
-		if u, err := url.Parse(logsURL); err == nil {
-			if u.RawQuery != "" {
-				u.RawQuery = "REDACTED"
-			}
-			if u.User != nil {
-				u.User = url.User("REDACTED")
-			}
-			logsURL = u.String()
-		} else {
-			logsURL = "<invalid URL>"
-		}
-	}
 	return [][]string{
-		{"logs-url", logsURL},
 		{"logs-path", runtimeConfigStringValue(current, "logsPath")},
 		{"sandbox-enabled", enabled},
 		{"sandbox-max-pending", maxPending},

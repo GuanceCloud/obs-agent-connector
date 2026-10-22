@@ -10,20 +10,18 @@ import (
 
 type CodexSandboxOptions struct {
 	LogsPath   *string
-	LogsURL    *string
 	Enabled    *bool
 	MaxPending *int
 }
 
 func (o CodexSandboxOptions) Specified() bool {
-	return o.LogsPath != nil || o.LogsURL != nil || o.Enabled != nil || o.MaxPending != nil
+	return o.LogsPath != nil || o.Enabled != nil || o.MaxPending != nil
 }
 
 // RegisterCodexSandboxFlags parses explicit edits, including empty route resets.
 // Runtime config generation remains owned by this installer.
 func RegisterCodexSandboxFlags(fs *flag.FlagSet) func() (CodexSandboxOptions, error) {
-	path := fs.String("logs-path", "", "Codex sandbox Logs path relative to endpoint; clears a Logs URL override")
-	endpoint := fs.String("logs-url", "", "Codex sandbox full OTLP Logs URL; clears a relative Logs path")
+	path := fs.String("logs-path", "", "Codex sandbox Logs path relative to endpoint")
 	enabled := fs.String("sandbox-enabled", "", "Codex sandbox bridge true or false; an external runtime producer is required")
 	maxPending := fs.String("sandbox-max-pending", "", "Codex sandbox pending Logs limit, from 1 to 4096")
 	return func() (CodexSandboxOptions, error) {
@@ -34,9 +32,6 @@ func RegisterCodexSandboxFlags(fs *flag.FlagSet) func() (CodexSandboxOptions, er
 			case "logs-path":
 				value := strings.Trim(strings.TrimSpace(*path), "/")
 				out.LogsPath = &value
-			case "logs-url":
-				value := strings.TrimSpace(*endpoint)
-				out.LogsURL = &value
 			case "sandbox-enabled":
 				value, err := strconv.ParseBool(*enabled)
 				if err != nil {
@@ -53,9 +48,6 @@ func RegisterCodexSandboxFlags(fs *flag.FlagSet) func() (CodexSandboxOptions, er
 				}
 			}
 		})
-		if out.LogsURL != nil && out.LogsPath != nil {
-			return out, fmt.Errorf("--logs-url and --logs-path cannot be combined")
-		}
 		return out, parseErr
 	}
 }
@@ -65,15 +57,13 @@ func MergeCodexRuntimeConfig(current map[string]any, options CodexOptions, exist
 	if err != nil {
 		return nil, err
 	}
-	if _, ok := next["otel_logs_url"]; !ok {
-		next["otel_logs_url"] = ""
-	}
+	delete(next, "otel_logs_url")
 	if _, ok := next["logsPath"]; !ok {
 		next["logsPath"] = ""
 	}
 	// Seed only recognized upload profiles. Preserve custom routes, and apply
 	// explicit edits below so an empty route reset is still honored.
-	if firstJSONObjectString(next, "otel_logs_url", "logsPath") == "" {
+	if firstJSONObjectString(next, "logsPath") == "" {
 		tracePath := strings.Trim(strings.TrimSpace(firstJSONObjectString(next, "tracePath", "trace_path")), "/")
 		metricsPath := strings.Trim(strings.TrimSpace(firstJSONObjectString(next, "metricsPath", "metrics_path")), "/")
 		switch {
@@ -96,27 +86,12 @@ func MergeCodexRuntimeConfig(current map[string]any, options CodexOptions, exist
 		sandbox["max_pending"] = 1024
 	}
 	o := options.Sandbox
-	if o.LogsURL != nil && o.LogsPath != nil {
-		return nil, fmt.Errorf("choose a full Logs URL or a relative Logs path")
-	}
-	if o.LogsURL != nil {
-		if *o.LogsURL != "" && !validCodexLogsURL(*o.LogsURL) {
-			return nil, fmt.Errorf("Logs URL must be an absolute HTTP(S) URL without user information or a fragment")
-		}
-		next["otel_logs_url"] = *o.LogsURL
-		if *o.LogsURL != "" {
-			next["logsPath"] = ""
-		}
-	}
 	if o.LogsPath != nil {
 		value := *o.LogsPath
 		if !validCodexLogsPath(value) {
 			return nil, fmt.Errorf("Logs path must be a relative path without whitespace, query, or fragment")
 		}
 		next["logsPath"] = value
-		if value != "" {
-			next["otel_logs_url"] = ""
-		}
 	}
 	if o.Enabled != nil {
 		sandbox["enabled"] = *o.Enabled
@@ -128,15 +103,10 @@ func MergeCodexRuntimeConfig(current map[string]any, options CodexOptions, exist
 		sandbox["max_pending"] = *o.MaxPending
 	}
 	if o.Specified() && sandbox["enabled"] == true {
-		endpoint, _ := next["otel_logs_url"].(string)
-		if endpoint == "" {
-			path, _ := next["logsPath"].(string)
-			base := firstJSONObjectString(next, "endpoint", "base_url")
-			if path == "" || !validCodexLogsPath(path) || !validCodexLogsURL(base) {
-				return nil, fmt.Errorf("sandbox bridge requires --logs-url or --logs-path with a valid endpoint")
-			}
-		} else if !validCodexLogsURL(endpoint) {
-			return nil, fmt.Errorf("invalid configured Codex Logs URL")
+		path, _ := next["logsPath"].(string)
+		base := firstJSONObjectString(next, "endpoint", "base_url")
+		if path == "" || !validCodexLogsPath(path) || !validCodexLogsEndpoint(base) {
+			return nil, fmt.Errorf("sandbox bridge requires a Logs path with a valid endpoint")
 		}
 	}
 	next["sandbox"] = sandbox
@@ -148,7 +118,7 @@ func validCodexLogsPath(value string) bool {
 	return err == nil && !u.IsAbs() && u.Host == "" && u.RawQuery == "" && u.Fragment == "" && !strings.ContainsAny(value, "\r\n\t ")
 }
 
-func validCodexLogsURL(value string) bool {
+func validCodexLogsEndpoint(value string) bool {
 	u, err := url.Parse(value)
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.User == nil && u.Fragment == ""
 }

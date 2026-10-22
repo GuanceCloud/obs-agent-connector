@@ -58,7 +58,6 @@ Options:
   --endpoint <url>           GTrace or OTLP HTTP endpoint
   --trace-path <path>        override the trace upload path
   --metrics-path <path>      override the metrics upload path
-  --logs-url <url>           Codex sandbox full OTLP Logs URL
   --logs-path <path>         Codex sandbox Logs path relative to endpoint
   --sandbox-enabled <bool>   configure the Codex sandbox bridge; requires a producer
   --sandbox-max-pending <n>  Codex sandbox pending Logs limit, from 1 to 4096

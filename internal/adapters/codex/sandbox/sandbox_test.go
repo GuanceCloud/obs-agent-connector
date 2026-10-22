@@ -155,7 +155,7 @@ func TestLifecycleAndDelayedManyToManyBindingSurviveRestart(t *testing.T) {
 	sink := &sink{}
 	server := httptest.NewServer(sink.handler(t))
 	defer server.Close()
-	client := transport.Client{Config: transport.Config{LogsURL: server.URL + "/otel/v1/logs"}}
+	client := transport.Client{Config: transport.Config{Endpoint: server.URL, LogsPath: "otel/v1/logs"}}
 	if err := store.Flush(context.Background(), client); err != nil {
 		t.Fatal(err)
 	}
@@ -223,7 +223,7 @@ func TestRetryAndPermanentRejectionHaveExplicitOutcomes(t *testing.T) {
 	sink := &sink{status: 503}
 	server := httptest.NewServer(sink.handler(t))
 	defer server.Close()
-	client := transport.Client{Config: transport.Config{LogsURL: server.URL + "/otel/v1/logs"}}
+	client := transport.Client{Config: transport.Config{Endpoint: server.URL, LogsPath: "otel/v1/logs"}}
 	if err := store.Flush(context.Background(), client); err == nil {
 		t.Fatal("expected retryable failure")
 	}
@@ -299,7 +299,7 @@ func TestCapacityOneDefersAssociationUntilLifecycleIsAcknowledged(t *testing.T) 
 	sink := &sink{}
 	server := httptest.NewServer(sink.handler(t))
 	defer server.Close()
-	if err := store.Flush(context.Background(), transport.Client{Config: transport.Config{LogsURL: server.URL + "/otel/v1/logs"}}); err != nil {
+	if err := store.Flush(context.Background(), transport.Client{Config: transport.Config{Endpoint: server.URL, LogsPath: "otel/v1/logs"}}); err != nil {
 		t.Fatal(err)
 	}
 	if len(sink.records) != 2 || sink.records[1].EventName != "obs.sandbox.trace.bound" {
@@ -368,7 +368,7 @@ func TestBridgeConsumesStrictEventsAndFlushesOTLP(t *testing.T) {
 	sink := &sink{}
 	server := httptest.NewServer(sink.handler(t))
 	defer server.Close()
-	cfg := config.Config{Enabled: true, SandboxEnabled: true, StateDir: t.TempDir(), OtelLogsURL: server.URL + "/otel/v1/logs", CaptureContent: "none", HookLogFile: filepath.Join(t.TempDir(), "hook.jsonl")}
+	cfg := config.Config{Enabled: true, SandboxEnabled: true, StateDir: t.TempDir(), Endpoint: server.URL, LogsPath: "otel/v1/logs", CaptureContent: "none", HookLogFile: filepath.Join(t.TempDir(), "hook.jsonl")}
 	e := sampleEvent("bridge", "obs.sandbox.snapshot")
 	e.State = "running"
 	body, _ := json.Marshal(e)
@@ -413,7 +413,7 @@ func (r failReader) Read([]byte) (int, error) {
 }
 
 func TestRecoveryIsScopedToTheConfirmedDestination(t *testing.T) {
-	cfg := config.Config{Enabled: true, SandboxEnabled: true, StateDir: t.TempDir(), Endpoint: "https://trace.example", TracePath: "v1/traces", OtelLogsURL: "https://logs.example/v1/logs", Headers: map[string]string{"X-Token": "fixture-only"}}
+	cfg := config.Config{Enabled: true, SandboxEnabled: true, StateDir: t.TempDir(), Endpoint: "https://trace.example", TracePath: "v1/traces", LogsPath: "v1/logs", Headers: map[string]string{"X-Token": "fixture-only"}}
 	manager := state.Manager{Root: filepath.Join(cfg.StateDir, "uploads")}
 	claim, err := manager.Claim("session", "turn", "")
 	if err != nil || claim == nil {
