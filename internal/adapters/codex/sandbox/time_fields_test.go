@@ -35,7 +35,7 @@ func TestSandboxLifecycleTimesArePrefixedAndQueryable(t *testing.T) {
 				t.Fatal(err)
 			}
 			record := e.record(destroyed.Add(time.Second), nil, false)
-			body := record.Body.(map[string]any)
+			body := jsonBody(t, record.Body)
 			for _, key := range []string{"created_at", "destroyed_at"} {
 				if body[key] != nil || record.Attributes[key] != nil {
 					t.Fatal("unprefixed lifecycle field escaped")
@@ -89,8 +89,14 @@ func TestSandboxTraceRelationsDoNotRepeatLifecycleTimes(t *testing.T) {
 		t.Fatal("missing lifecycle or relation record")
 	}
 	for _, record := range receiver.records {
-		if record.EventName == "obs.sandbox.trace.bound" && (attr(record, "sandbox_created_at") != "" || attr(record, "sandbox_destroyed_at") != "") {
-			t.Fatal("trace relation repeated lifecycle timestamps")
+		if record.EventName == "obs.sandbox.trace.bound" {
+			if record.Body.StringValue == nil {
+				t.Fatal("trace relation requires a readable body")
+			}
+			body := jsonBody(t, *record.Body.StringValue)
+			if attr(record, "sandbox_created_at") != "" || attr(record, "sandbox_destroyed_at") != "" || body["sandbox_created_at"] != nil || body["sandbox_destroyed_at"] != nil || body["state"] != nil || body["last_observed_at"] != nil {
+				t.Fatal("trace relation repeated lifecycle assertions")
+			}
 		}
 	}
 }

@@ -141,16 +141,13 @@ func (e Event) record(now time.Time, resource map[string]any, capture bool) mode
 		"obs.sandbox.id": e.SandboxID, "obs.executor.id": e.ExecutorID,
 		"obs.sandbox.identity_source": e.IdentitySource, "obs.collection.source": e.RuntimeSource,
 	}
-	body := map[string]any{"last_observed_at": now.UTC().Format(time.RFC3339Nano)}
+	body := map[string]any{}
 	setLifecycleTime := func(key string, value time.Time) {
 		formatted := value.UTC().Format(time.RFC3339Nano)
-		body[key] = formatted
 		attrs[key] = formatted
 	}
 	state := e.State
 	switch e.EventName {
-	case "obs.sandbox.discovered":
-		body["first_seen_at"] = now.UTC().Format(time.RFC3339Nano)
 	case "obs.sandbox.created":
 		state = "created"
 		setLifecycleTime("sandbox_created_at", e.Timestamp)
@@ -194,5 +191,5 @@ func (e Event) record(now time.Time, resource map[string]any, capture bool) mode
 	if e.EventName == "obs.sandbox.failed" {
 		level, severity = "ERROR", 17
 	}
-	return model.LogRecord{EventName: e.EventName, TimeUnixNano: uint64(e.Timestamp.UnixNano()), ObservedTimeUnixNano: uint64(now.UnixNano()), SeverityNumber: severity, SeverityText: level, Attributes: attrs, Body: body, Resource: r, Scope: model.Scope{Name: "obs-codex-sandbox", Version: "1"}}
+	return exportRecord(model.LogRecord{EventName: e.EventName, TimeUnixNano: uint64(e.Timestamp.UnixNano()), ObservedTimeUnixNano: uint64(now.UnixNano()), SeverityNumber: severity, SeverityText: level, Attributes: attrs, Body: body, Resource: r, Scope: model.Scope{Name: "obs-codex-sandbox", Version: "1"}})
 }

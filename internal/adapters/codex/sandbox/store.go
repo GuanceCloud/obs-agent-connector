@@ -184,11 +184,7 @@ func (s Store) Apply(event Event) error {
 				record.Attributes = attrs
 				record.EventName = "obs.sandbox.trace.bound"
 				record.Attributes["obs.event.id"] = digest("relation", relationKey)
-				// Binding records carry identity, not a second lifecycle update.
-				delete(record.Attributes, "obs.sandbox.state")
-				delete(record.Attributes, "sandbox_created_at")
-				delete(record.Attributes, "sandbox_destroyed_at")
-				record.Body = nil
+				record = exportRecord(record)
 				l.Relations = append(l.Relations, relation{Key: relationKey, ToolKey: toolKey, Record: record, Observed: now})
 			}
 		}
@@ -291,7 +287,7 @@ func (s Store) Flush(ctx context.Context, client transport.Client) error {
 		if s.now().Before(next.RetryAt) {
 			return ErrDeferred
 		}
-		payload := proto.EncodeExportLogsServiceRequest(otlp.LogsToProtoRequest([]model.LogRecord{next.Record}))
+		payload := proto.EncodeExportLogsServiceRequest(otlp.LogsToProtoRequest([]model.LogRecord{exportRecord(next.Record)}))
 		result, uploadErr := client.UploadContext(ctx, "logs", payload)
 		var statusErr *transport.UploadError
 		permanent := errors.As(uploadErr, &statusErr) && !statusErr.Retryable()

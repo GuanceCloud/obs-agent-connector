@@ -98,8 +98,51 @@ States are `unknown`, `creating`, `created`, `ready`, `running`, `destroying`, `
 
 ## OTLP data and trace binding
 
-Stable Resource fields include sandbox/executor identity and sanitized configured resource attributes, with default `service.name=codex-sandbox-runtime`. LogRecords carry EventName, separate occurrence/observed timestamps, `source=agent_sandbox`, `obs.schema.version=1`, `obs.event.id`, sandbox/executor IDs, and provenance. Mutable state belongs in record attributes. Known lifecycle timestamps use `sandbox_created_at` and `sandbox_destroyed_at` in both LogRecord attributes and the structured Body, formatted as UTC RFC 3339 strings. Unknown timestamps are omitted; they must not be inferred from platform ingestion times. The producer input fields remain `created_at` and `destroyed_at`. The optional reason remains in the Body. Trace-association-only records do not repeat lifecycle timestamps. Previously exported or queued records are not rewritten.
+The fixed source is sent as **Resource `log.source=agent_sandbox`**, while `service.name` retains the configured service identity (default `codex-sandbox-runtime`). The record also carries `source=agent_sandbox`. Resource `log.source` is reserved by the bridge and cannot be overridden by configured tags. No additional source option is needed. Guance's OTLP receiver selects Resource `log.source` before `service.name`; a record-only `source` attribute does not select the log source.
 
+Every record carries the native OTLP `EventName` **and** a matching `event_name` attribute. This preserves a queryable event type on receivers that do not extract the newer native field. `obs.event.id` is a deduplication identity, not an event type.
+
+The Body is a **UTF-8 JSON string in OTLP `AnyValue.string_value`**, not a KVList or a JSON-encoded protobuf object. It provides a readable summary. Fields needed for inventory and association remain independently queryable attributes; consumers must not depend on parsing `message` to obtain them.
+
+| Meaning | OTLP location | Guance stored field |
+| --- | --- | --- |
+| Log source | Resource `log.source`, fixed `agent_sandbox` | `source` |
+| Service identity | Resource `service.name` | `service` |
+| Agent identity | Resource `agent_id`, `agent_name` when configured | `agent_id`, `agent_name` |
+| Contract version | Attribute `obs.schema.version=1` | `obs_schema_version` |
+| Event type | Native EventName and attribute `event_name` | `event_name` |
+| Scoped event identity | Attribute `obs.event.id` | `obs_event_id` |
+| Sandbox identity | Attribute `obs.sandbox.id` and Resource copy | `obs_sandbox_id` |
+| Executor identity | Attribute `obs.executor.id` and Resource copy | `obs_executor_id` |
+| Optional name/type | Attributes `obs.sandbox.name`, `obs.sandbox.type` | `obs_sandbox_name`, `obs_sandbox_type` |
+| Optional observed state | Attribute `obs.sandbox.state` | `obs_sandbox_state` |
+| Known creation/destruction | Attributes `sandbox_created_at`, `sandbox_destroyed_at` | Same names |
+| Identity provenance | Attribute `obs.sandbox.identity_source` | `obs_sandbox_identity_source` |
+| Collector provenance | Attribute `obs.collection.source` | `obs_collection_source` |
+| Optional execution identity | Attribute `obs.execution.id` | `obs_execution_id` |
+| Association lookup keys | Attributes `gen_ai.conversation.id`, `run_id`, `gen_ai.tool.call.id` | `gen_ai_conversation_id`, `run_id`, `gen_ai_tool_call_id` |
+| Confirmed OBS trace context | Native TraceId and SpanId on the association record | `trace_id`, `span_id` |
+| Event occurrence time | Native TimeUnixNano | Native log timestamp |
+| Bridge observation time | Native ObservedTimeUnixNano | Receiver-dependent; also in lifecycle Body `last_observed_at` |
+| Readable summary | Body string | `message` |
+
+Dots in custom attribute names are normalized to underscores by the Guance receiver. Other OTLP receivers may preserve dotted names. Lifecycle timestamps are UTC RFC 3339 strings with available fractional-second precision; unknown times are omitted, never inferred from ingestion time. Producer input fields remain `created_at` and `destroyed_at`. The event timestamp means occurrence time; `created` and `destroyed` establish the corresponding time, while `ready` and `snapshot` do not invent creation. Body `first_seen_at` on discovery means the bridge's first observation of that discovery event, not sandbox creation or a global first-ever sighting.
+
+A creation Body example (illustrative identities):
+
+```json
+{"event_name":"obs.sandbox.created","sandbox_id":"sbx-001","executor_id":"executor-001","state":"created","sandbox_created_at":"2026-10-23T04:00:00Z","last_observed_at":"2026-10-23T04:00:00.1Z"}
+```
+
+An association Body contains only event type and sandbox/executor identity:
+
+```json
+{"event_name":"obs.sandbox.trace.bound","sandbox_id":"sbx-001","executor_id":"executor-001"}
+```
+
+Association records carry lookup keys and confirmed native trace/span IDs outside the Body. They never repeat lifecycle state, lifecycle dates, or reasons. The optional sanitized reason appears only in lifecycle Body when content capture permits it.
+
+Starting with RC6, pending records from earlier releases acquire the same source, event-type, and string-Body contract at export. Legacy Body-only lifecycle dates become prefixed queryable attributes. Event IDs and both native clocks are preserved. Already ingested records are not rewritten; query new records to validate the corrected source and schema.
 Producer event IDs are scoped by executor/provenance and hashed into `obs.event.id`. Generated relations have stable derived IDs. Retries retain the same normalized record and clocks.
 
 The terminal Hook pins OBS trace/span IDs before first upload. Only identities and association keys are persisted, not messages, arguments, or results. Successful Trace export confirms those IDs. Metrics retries reuse them without resending successful Traces.
@@ -137,10 +180,12 @@ The bridge returns nonzero on input/export failure; its producer must isolate th
 
 No successful delivery is recorded for an empty queue or a retry that is not yet due. Entries exclude payloads, sandbox reasons, destination URLs, authentication, and server response bodies. Diagnostic write failures do not block delivery or change its outcome. Existing Hook-level export warnings can also describe a failed pass. These local diagnostics are not exported as sandbox lifecycle Logs.
 
-## Receiver/product acceptance still required
+## Data-side acceptance and remaining integration
 
-Verify the target route preserves EventName, both clocks, custom attributes, structured Body, and trace context. Map the LogRecord attribute `source` to the Guance log source and confirm records are queryable as `source=agent_sandbox`. OTLP request acceptance alone does not verify this mapping.
+Data acceptance must confirm the actual target route stores new records under `source=agent_sandbox`, with a readable JSON `message`, queryable `event_name`, prefixed lifecycle dates, identity/provenance attributes, and actual trace context on resolved associations. HTTP success alone does not establish receiver compatibility.
 
-Build the workspace-scoped inventory from snapshots/lifecycle records; preserve immutable history, deduplicate events, and handle out-of-order delivery without regressing terminal state. Observation loss must not overwrite confirmed destruction. Trace relations must support either side arriving first and navigation in both directions.
+The compatibility rules above follow [DataKit source selection](https://github.com/GuanceCloud/datakit/blob/master/internal/plugins/inputs/opentelemetry/logs.go) and [the OTLP Logs parser](https://github.com/GuanceCloud/cliutils/blob/master/otlp/logs_parse.go). The receiver renders a string Body directly, while a KVList can become protobuf diagnostic text. Contract tests model source precedence and verify decoded outgoing protobuf; deployment acceptance must additionally inspect stored records.
 
-Local tests cover protocol fields, a test receiver, concurrency, cross-turn/delayed associations, restart/replay, capacity, partial rejection, and Trace/Metrics retries. They do not prove an authoritative stock Codex producer or live Guance inventory support. These remain acceptance gates for completing issue #34.
+Local tests cover all supported event types, privacy, receiver fields, legacy queued records, concurrency, cross-turn/delayed associations, restart/replay, capacity, partial rejection, and Trace/Metrics retries. They do not prove an authoritative stock Codex producer. That producer and its startup/recovery lifecycle remain a separate data-collection integration gate for issue #34.
+
+Platform inventory, deduplication/materialization, out-of-order state projection, and bidirectional navigation are deferred. This document defines the input and exported data contract for that later design; no platform implementation is included here.

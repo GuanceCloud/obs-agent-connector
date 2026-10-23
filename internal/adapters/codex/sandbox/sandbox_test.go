@@ -97,6 +97,19 @@ func attr(r otlp.LogRecord, key string) string {
 	return ""
 }
 
+func jsonBody(t *testing.T, value any) map[string]any {
+	t.Helper()
+	text, ok := value.(string)
+	if !ok {
+		t.Fatal("sandbox Body must be a JSON string")
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(text), &body); err != nil {
+		t.Fatalf("invalid sandbox JSON body: %v", err)
+	}
+	return body
+}
+
 func TestInstalledProfileExportsLogsToConfiguredRoute(t *testing.T) {
 	for _, tc := range []struct{ profile, path string }{
 		{"gtrace", "/v1/write/otel-logs"},
@@ -188,6 +201,9 @@ func TestLifecycleAndDelayedManyToManyBindingSurviveRestart(t *testing.T) {
 	for _, record := range sink.records {
 		if attr(record, "source") != Source {
 			t.Fatal("lost agent_sandbox source")
+		}
+		if attr(record, "event_name") != record.EventName || record.Body.StringValue == nil || jsonBody(t, *record.Body.StringValue)["event_name"] != record.EventName {
+			t.Fatal("event type disagrees between native field, queryable attribute, and body")
 		}
 		if record.EventName == "obs.sandbox.destroyed" {
 			t.Fatal("turn completion destroyed sandbox")
@@ -310,7 +326,7 @@ func TestCapacityOneDefersAssociationUntilLifecycleIsAcknowledged(t *testing.T) 
 func TestEventEvidenceValidationAndContentMinimization(t *testing.T) {
 	e := sampleEvent("event", "obs.sandbox.discovered")
 	r := e.record(time.Now(), nil, false)
-	body := r.Body.(map[string]any)
+	body := jsonBody(t, r.Body)
 	if body["created_at"] != nil || body["destroyed_at"] != nil || body["sandbox_created_at"] != nil || body["sandbox_destroyed_at"] != nil {
 		t.Fatal("discovery invented lifecycle")
 	}
@@ -335,7 +351,7 @@ func TestEventEvidenceValidationAndContentMinimization(t *testing.T) {
 		t.Fatal("reason leaked a credential")
 	}
 	r = e.record(time.Now(), nil, false)
-	if r.Body.(map[string]any)["reason"] != nil {
+	if jsonBody(t, r.Body)["reason"] != nil {
 		t.Fatal("captureContent=none kept error details")
 	}
 }
