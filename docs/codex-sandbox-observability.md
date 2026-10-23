@@ -98,7 +98,7 @@ States are `unknown`, `creating`, `created`, `ready`, `running`, `destroying`, `
 
 ## OTLP data and trace binding
 
-Stable Resource fields include sandbox/executor identity and sanitized configured resource attributes, with default `service.name=codex-sandbox-runtime`. LogRecords carry EventName, separate occurrence/observed timestamps, `source=agent_sandbox`, `obs.schema.version=1`, `obs.event.id`, sandbox/executor IDs, and provenance. Mutable state belongs in record attributes, while known lifecycle timestamps and optional reason use the structured Body.
+Stable Resource fields include sandbox/executor identity and sanitized configured resource attributes, with default `service.name=codex-sandbox-runtime`. LogRecords carry EventName, separate occurrence/observed timestamps, `source=agent_sandbox`, `obs.schema.version=1`, `obs.event.id`, sandbox/executor IDs, and provenance. Mutable state belongs in record attributes. Known lifecycle timestamps use `sandbox_created_at` and `sandbox_destroyed_at` in both LogRecord attributes and the structured Body, formatted as UTC RFC 3339 strings. Unknown timestamps are omitted; they must not be inferred from platform ingestion times. The producer input fields remain `created_at` and `destroyed_at`. The optional reason remains in the Body. Trace-association-only records do not repeat lifecycle timestamps. Previously exported or queued records are not rewritten.
 
 Producer event IDs are scoped by executor/provenance and hashed into `obs.event.id`. Generated relations have stable derived IDs. Retries retain the same normalized record and clocks.
 

@@ -311,7 +311,7 @@ func TestEventEvidenceValidationAndContentMinimization(t *testing.T) {
 	e := sampleEvent("event", "obs.sandbox.discovered")
 	r := e.record(time.Now(), nil, false)
 	body := r.Body.(map[string]any)
-	if body["created_at"] != nil || body["destroyed_at"] != nil {
+	if body["created_at"] != nil || body["destroyed_at"] != nil || body["sandbox_created_at"] != nil || body["sandbox_destroyed_at"] != nil {
 		t.Fatal("discovery invented lifecycle")
 	}
 	for _, mutate := range []func(*Event){

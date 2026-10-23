@@ -142,18 +142,23 @@ func (e Event) record(now time.Time, resource map[string]any, capture bool) mode
 		"obs.sandbox.identity_source": e.IdentitySource, "obs.collection.source": e.RuntimeSource,
 	}
 	body := map[string]any{"last_observed_at": now.UTC().Format(time.RFC3339Nano)}
+	setLifecycleTime := func(key string, value time.Time) {
+		formatted := value.UTC().Format(time.RFC3339Nano)
+		body[key] = formatted
+		attrs[key] = formatted
+	}
 	state := e.State
 	switch e.EventName {
 	case "obs.sandbox.discovered":
 		body["first_seen_at"] = now.UTC().Format(time.RFC3339Nano)
 	case "obs.sandbox.created":
 		state = "created"
-		body["created_at"] = e.Timestamp.UTC().Format(time.RFC3339Nano)
+		setLifecycleTime("sandbox_created_at", e.Timestamp)
 	case "obs.sandbox.ready":
 		state = "ready"
 	case "obs.sandbox.destroyed":
 		state = "destroyed"
-		body["destroyed_at"] = e.Timestamp.UTC().Format(time.RFC3339Nano)
+		setLifecycleTime("sandbox_destroyed_at", e.Timestamp)
 	case "obs.sandbox.failed":
 		state = "failed"
 	case "obs.sandbox.observation.lost":
@@ -169,10 +174,10 @@ func (e Event) record(now time.Time, resource map[string]any, capture bool) mode
 		attrs["obs.sandbox.type"] = privacy.Text(e.Type, 128)
 	}
 	if e.CreatedAt != nil {
-		body["created_at"] = e.CreatedAt.UTC().Format(time.RFC3339Nano)
+		setLifecycleTime("sandbox_created_at", *e.CreatedAt)
 	}
 	if e.DestroyedAt != nil {
-		body["destroyed_at"] = e.DestroyedAt.UTC().Format(time.RFC3339Nano)
+		setLifecycleTime("sandbox_destroyed_at", *e.DestroyedAt)
 	}
 	if e.ExecutionID != "" {
 		attrs["obs.execution.id"] = e.ExecutionID

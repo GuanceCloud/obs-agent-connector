@@ -186,6 +186,8 @@ func (s Store) Apply(event Event) error {
 				record.Attributes["obs.event.id"] = digest("relation", relationKey)
 				// Binding records carry identity, not a second lifecycle update.
 				delete(record.Attributes, "obs.sandbox.state")
+				delete(record.Attributes, "sandbox_created_at")
+				delete(record.Attributes, "sandbox_destroyed_at")
 				record.Body = nil
 				l.Relations = append(l.Relations, relation{Key: relationKey, ToolKey: toolKey, Record: record, Observed: now})
 			}
