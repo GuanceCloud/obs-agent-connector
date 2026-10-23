@@ -60,16 +60,24 @@ func listAgentConfig(target string, args []string) error {
 		{"Exists", yesNo(exists)},
 	})
 	fmt.Println()
-	printTable([]string{"Parameter", "Current Value"}, runtimeConfigRows(current))
+	rows := runtimeConfigRows(current)
+	if p.Name == "codex" {
+		rows = append(rows, codexSandboxConfigRows(current)...)
+	}
+	printTable([]string{"Parameter", "Current Value"}, rows)
 	fmt.Println()
 	fmt.Printf("Use \"obs-agent-connector config %s edit\" to update one or more parameters.\n", p.Name)
 	fmt.Println("--header and --tag both support one or more KEY=VALUE parameters.")
+	if p.Name == "codex" {
+		fmt.Println("Sandbox Logs require an explicit Logs endpoint and an independent runtime producer; automatic Codex sandbox collection is unavailable.")
+	}
 	return nil
 }
 
 func editAgentConfig(target string, args []string) error {
 	fs := flag.NewFlagSet("config edit", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	readSandboxOptions := installpkg.RegisterCodexSandboxFlags(fs)
 	enabledValue := fs.String("enabled", "", "Set runtime enabled to true or false")
 	endpoint := fs.String("endpoint", "", "Set the OBS / GTrace endpoint")
 	tracePath := fs.String("trace-path", "", "Set the trace upload path")
@@ -84,6 +92,10 @@ func editAgentConfig(target string, args []string) error {
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
+	sandboxOptions, err := readSandboxOptions()
+	if err != nil {
+		return err
+	}
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unrecognized config edit arguments: %s", strings.Join(fs.Args(), " "))
 	}
@@ -94,8 +106,8 @@ func editAgentConfig(target string, args []string) error {
 		return err
 	}
 
-	options := installpkg.CodexOptions{InstallType: fixedType}
-	changed := false
+	options := installpkg.CodexOptions{InstallType: fixedType, Sandbox: sandboxOptions}
+	changed := sandboxOptions.Specified()
 
 	if value := strings.TrimSpace(*enabledValue); value != "" {
 		parsed, err := strconv.ParseBool(value)
@@ -155,6 +167,9 @@ func editAgentConfig(target string, args []string) error {
 	if err != nil {
 		return err
 	}
+	if sandboxOptions.Specified() && p.Name != "codex" {
+		return fmt.Errorf("sandbox Logs options are supported only for codex")
+	}
 	configPath := effectiveConfigPath
 	if p.IsBuiltin() && len(p.ConfigFiles) > 0 {
 		configPath = agent.ExpandHome(p.ConfigFiles[0])
@@ -169,7 +184,11 @@ func editAgentConfig(target string, args []string) error {
 			return fmt.Errorf("read legacy %s runtime config: %w", p.Name, err)
 		}
 	}
-	next, err := installpkg.MergeRuntimeConfig(current, options, exists)
+	merge := installpkg.MergeRuntimeConfig
+	if p.Name == "codex" {
+		merge = installpkg.MergeCodexRuntimeConfig
+	}
+	next, err := merge(current, options, exists)
 	if err != nil {
 		return fmt.Errorf("merge %s runtime config: %w", p.Name, err)
 	}
@@ -178,7 +197,29 @@ func editAgentConfig(target string, args []string) error {
 	}
 
 	fmt.Printf("Updated %s config in %s\n", p.Name, agent.DisplayPath(configPath))
+	if p.Name == "codex" && sandboxOptions.Specified() {
+		fmt.Println("Sandbox configuration saved. Automatic Codex sandbox collection is unavailable; an independent runtime producer must feed the bridge.")
+	}
 	return nil
+}
+
+func codexSandboxConfigRows(current map[string]any) [][]string {
+	sandbox := objectValue(current["sandbox"])
+	enabled := runtimeConfigBoolValue(sandbox, "enabled")
+	if enabled == "-" {
+		enabled = "false (default)"
+	}
+	maxPending := runtimeConfigIntValue(sandbox, "max_pending")
+	if maxPending == "-" {
+		maxPending = "1024 (default)"
+	}
+	return [][]string{
+		{"logs-path", runtimeConfigStringValue(current, "logsPath")},
+		{"sandbox-enabled", enabled},
+		{"sandbox-max-pending", maxPending},
+		{"sandbox-log-source", "agent_sandbox (fixed)"},
+		{"sandbox-runtime-producer", "external; not auto-managed"},
+	}
 }
 
 func resolveEditableRuntimeConfig(target string) (agent.Definition, string, error) {

@@ -13,6 +13,7 @@ const (
 	ParsedTranscript = "parsed transcript"
 	UploadedSpans    = "uploaded spans"
 	UploadedMetrics  = "uploaded metrics"
+	UploadedLogs     = "uploaded logs"
 )
 
 // Append writes one structured JSONL Hook event. All built-in adapters use

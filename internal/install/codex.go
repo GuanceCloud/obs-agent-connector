@@ -26,6 +26,7 @@ type CodexOptions struct {
 	Endpoint              string
 	TracePath             string
 	MetricsPath           string
+	Sandbox               CodexSandboxOptions
 	InstallType           string
 	XToken                string
 	Headers               []string
@@ -57,6 +58,9 @@ Options:
   --endpoint <url>           GTrace or OTLP HTTP endpoint
   --trace-path <path>        override the trace upload path
   --metrics-path <path>      override the metrics upload path
+  --logs-path <path>         Codex sandbox Logs path relative to endpoint
+  --sandbox-enabled <bool>   configure the Codex sandbox bridge; requires a producer
+  --sandbox-max-pending <n>  Codex sandbox pending Logs limit, from 1 to 4096
   --x-token <token>          add the GTrace X-Token header
   --header <KEY=VALUE>       add an HTTP header; may be repeated
   --tag <KEY=VALUE>          add a resource attribute; may be repeated
@@ -137,6 +141,14 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 			return CodexResult{}, fmt.Errorf("parse legacy Codex GTrace config: %w", err)
 		}
 	}
+	configure := !options.NoConfig && shouldConfigureGTrace(configExists, options)
+	var nextConfig map[string]any
+	if configure {
+		nextConfig, err = MergeCodexRuntimeConfig(configValue, options, configExists)
+		if err != nil {
+			return CodexResult{}, err
+		}
+	}
 
 	absoluteSource, err := filepath.Abs(source)
 	if err != nil {
@@ -160,11 +172,7 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 		HooksFile:  hooksFile,
 		ConfigFile: configFile,
 	}
-	if !options.NoConfig && shouldConfigureGTrace(configExists, options) {
-		nextConfig, mergeErr := mergeCodexGTraceConfig(configValue, options, configExists)
-		if mergeErr != nil {
-			return result, mergeErr
-		}
+	if configure {
 		if err := writeJSONAtomic(configFile, nextConfig); err != nil {
 			return result, err
 		}
@@ -192,6 +200,7 @@ func ParseInstallArgs(args []string) (CodexOptions, error) {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var options CodexOptions
+	readSandboxOptions := RegisterCodexSandboxFlags(fs)
 	var headers stringList
 	var attributes stringList
 	var enable bool
@@ -213,6 +222,11 @@ func ParseInstallArgs(args []string) (CodexOptions, error) {
 	fs.Var(&attributes, "tag", "resource attribute KEY=VALUE")
 	if err := fs.Parse(args); err != nil {
 		return CodexOptions{}, err
+	}
+	var sandboxErr error
+	options.Sandbox, sandboxErr = readSandboxOptions()
+	if sandboxErr != nil {
+		return CodexOptions{}, sandboxErr
 	}
 	if fs.NArg() != 0 {
 		return CodexOptions{}, fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
@@ -314,7 +328,7 @@ func managedCodexHook(value any) bool {
 func shouldConfigureGTrace(configExists bool, options CodexOptions) bool {
 	return configExists || options.Endpoint != "" || options.Enabled != nil ||
 		len(options.Headers) > 0 || len(options.ResourceAttributes) > 0 || options.XToken != "" ||
-		options.CaptureContent != "" || options.MaxChars > 0
+		options.CaptureContent != "" || options.MaxChars > 0 || options.Sandbox.Specified()
 }
 
 func mergeCodexGTraceConfig(current map[string]any, options CodexOptions, existed bool) (map[string]any, error) {
