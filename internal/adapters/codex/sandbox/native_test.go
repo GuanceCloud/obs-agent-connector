@@ -183,3 +183,23 @@ func TestNativeOutboxRecoversAfterSandboxQueueIsFull(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestTerminalHookClosesOnlyItsOwnToolContexts(t *testing.T) {
+	store := Store{Root: t.TempDir()}
+	for _, turn := range []string{"one", "two"} {
+		if err := RecordNativeHook(store, NativeHook{Event: "PreToolUse", SessionID: "session", TurnID: turn, ToolCallID: turn, ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"same"}`)}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := RecordNativeHook(store, NativeHook{Event: "Stop", SessionID: "session", TurnID: "one"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := nativeFile(store).View(func(s *nativeState) error {
+		if s.Tools[0].Ended.IsZero() || !s.Tools[1].Ended.IsZero() {
+			t.Fatal("terminal Hook crossed a turn boundary")
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

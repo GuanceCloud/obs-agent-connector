@@ -61,6 +61,21 @@ func updateNative(store Store, update func(*nativeState) error) error {
 // RecordNativeHook persists identifiers and exact command hashes, never commands
 // or tool results. Ambiguous simultaneous identical commands remain unlinked.
 func RecordNativeHook(store Store, input NativeHook) error {
+	if input.Event == "Stop" || input.Event == "Interrupt" {
+		if input.SessionID == "" || input.TurnID == "" {
+			return nil
+		}
+		now := store.now()
+		return updateNative(store, func(s *nativeState) error {
+			for i := range s.Tools {
+				tool := &s.Tools[i]
+				if tool.SessionID == input.SessionID && tool.TurnID == input.TurnID && tool.Ended.IsZero() {
+					tool.Ended = now
+				}
+			}
+			return nil
+		})
+	}
 	if input.Event != "PreToolUse" && input.Event != "PostToolUse" && input.Event != "PostToolUseFailure" {
 		return nil
 	}
