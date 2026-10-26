@@ -188,6 +188,9 @@ func TestNativeCodexSandboxCLIEndToEnd(t *testing.T) {
 		if attr(r, "obs.collection.source") != "codex.native.linux.proc" || attr(r, "obs.sandbox.type") != "linux-pid-namespace" {
 			t.Fatal("not native kernel evidence")
 		}
+		if attr(r, "gen_ai.conversation.id") != "obs-native-integration" {
+			t.Fatal("native session identity was lost")
+		}
 		id := attr(r, "obs.sandbox.id")
 		if sandboxID != "" && id != sandboxID {
 			t.Fatal("native identity changed")

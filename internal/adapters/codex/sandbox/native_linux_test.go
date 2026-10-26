@@ -22,7 +22,7 @@ func fakeNativeProcess(t *testing.T, root string, pid, parent int, start, argv0,
 		fields[i] = "0"
 	}
 	fields[0], fields[1], fields[19] = "S", strconv.Itoa(parent), start
-	files := map[string]string{"stat": fmt.Sprintf("%d (codex) %s", pid, strings.Join(fields, " ")), "comm": "codex\n", "status": "Uid:\t" + strconv.Itoa(os.Getuid()) + "\nNoNewPrivs:\t1\nSeccomp:\t2\nNSpid:\t" + strconv.Itoa(pid) + " 1\n", "cmdline": argv0 + "\x00--\x00/bin/sh\x00-c\x00sleep 2\x00", "environ": "X_TOKEN=never-persist-this\x00CODEX_THREAD_ID=session\x00"}
+	files := map[string]string{"stat": fmt.Sprintf("%d (codex) %s", pid, strings.Join(fields, " ")), "comm": "codex\n", "status": "Uid:\t" + strconv.Itoa(os.Getuid()) + "\nNoNewPrivs:\t1\nSeccomp:\t2\nNSpid:\t" + strconv.Itoa(pid) + " 1\n", "cmdline": argv0 + "\x00--\x00/bin/sh\x00-c\x00sleep 2\x00", "environ": "X_TOKEN=never-persist-this\x00CODEX_THREAD_ID=session\x00HOME=/test-home\x00CODEX_HOME=/test-codex\x00"}
 	for name, value := range files {
 		if err := os.WriteFile(filepath.Join(dir, name), []byte(value), 0600); err != nil {
 			t.Fatal(err)
@@ -54,6 +54,15 @@ func TestLinuxNativeRequiresKernelIsolationAndRealCodexInit(t *testing.T) {
 		t.Fatalf("observations=%d err=%v", len(found), err)
 	}
 	instance := found[0]
+	for _, tc := range []struct {
+		home string
+		want int
+	}{{"/test-codex", 1}, {"/other-codex", 0}} {
+		matched, err := scanNative(root, "boot", tc.home)
+		if err != nil || len(matched) != tc.want {
+			t.Fatalf("Codex home scope %q: count=%d err=%v", tc.home, len(matched), err)
+		}
+	}
 	if instance.PID != 101 || instance.ThreadID != "session" || instance.CommandHash != digest("shell", "sleep 2") || len(instance.ID) != 64 {
 		t.Fatal("native identity or command matching differs")
 	}

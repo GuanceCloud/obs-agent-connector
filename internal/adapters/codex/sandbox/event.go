@@ -37,6 +37,7 @@ type Event struct {
 	ExecutionID       string     `json:"execution_id,omitempty"`
 	Reason            string     `json:"reason,omitempty"`
 	AssociationMethod string     `json:"association_method,omitempty"`
+	ObservedSessionID string     `json:"observed_session_id,omitempty"`
 }
 
 func (e Event) Validate() error {
@@ -117,6 +118,12 @@ func (e Event) Validate() error {
 	if e.AssociationMethod != "" && e.AssociationMethod != "runtime_keys" && e.AssociationMethod != "native_thread_command_digest" {
 		return fmt.Errorf("invalid sandbox association method")
 	}
+	if len(e.ObservedSessionID) > 256 || strings.ContainsAny(e.ObservedSessionID, "\r\n\x00") {
+		return fmt.Errorf("invalid observed sandbox session identity")
+	}
+	if e.ObservedSessionID != "" && e.SessionID != "" && e.ObservedSessionID != e.SessionID {
+		return fmt.Errorf("observed and associated sandbox sessions disagree")
+	}
 	return nil
 }
 
@@ -195,6 +202,9 @@ func (e Event) record(now time.Time, resource map[string]any, capture bool) mode
 		if method == "native_thread_command_digest" {
 			attrs["obs.sandbox.association.confidence"] = "inferred"
 		}
+	}
+	if e.ObservedSessionID != "" {
+		attrs["gen_ai.conversation.id"] = e.ObservedSessionID
 	}
 	if capture && e.Reason != "" {
 		body["reason"] = privacy.Text(e.Reason, 1024)

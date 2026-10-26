@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/config"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/journal"
 )
@@ -124,7 +125,7 @@ func namespaceKey(p nativeProcess) string { return p.MountNS + "|" + p.PIDNS + "
 
 // scanNative identifies the actual Codex sandbox namespace-init, not arbitrary
 // descendants or a configured permission mode. No command/environment is saved.
-func scanNative(root, boot string) ([]nativeInstance, error) {
+func scanNative(root, boot string, codexHomes ...string) ([]nativeInstance, error) {
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -168,12 +169,26 @@ func scanNative(root, boot string) ([]nativeInstance, error) {
 		}
 		// Read only the native thread identity from the child's environment.
 		env, err := readBounded(filepath.Join(dir, "environ"), 1<<20)
+		processHome, processCodexHome := "", ""
 		if err == nil {
 			for _, item := range strings.Split(string(env), "\x00") {
+				if value, ok := strings.CutPrefix(item, "HOME="); ok {
+					processHome = value
+				}
+				if value, ok := strings.CutPrefix(item, "CODEX_HOME="); ok {
+					processCodexHome = value
+				}
 				if value, ok := strings.CutPrefix(item, "CODEX_THREAD_ID="); ok && len(value) <= 256 && !strings.ContainsAny(value, "\r\n") {
 					p.Thread = value
-					break
 				}
+			}
+		}
+		if len(codexHomes) > 0 {
+			if processCodexHome == "" && processHome != "" {
+				processCodexHome = filepath.Join(processHome, ".codex")
+			}
+			if processCodexHome == "" || filepath.Clean(processCodexHome) != filepath.Clean(codexHomes[0]) {
+				continue
 			}
 		}
 		id := digest("codex-native-linux", boot, strconv.Itoa(pid), p.Start, namespaceKey(p))
@@ -303,6 +318,14 @@ func RunNative(ctx context.Context, cfg config.Config) error {
 	if err != nil {
 		return err
 	}
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	image, err := os.Stat("/proc/self/exe")
+	if err != nil {
+		return err
+	}
 	publish := func() error {
 		b, _ := json.Marshal(observerStatus{PID: own.PID, StartTicks: own.Start, Updated: time.Now().UTC(), Scope: Scope(cfg)})
 		return journal.WriteAtomic(observerStatusPath(store), b)
@@ -353,8 +376,17 @@ func RunNative(ctx context.Context, cfg config.Config) error {
 	lastSignature := ""
 	var nativeModified time.Time
 	fastUntil := time.Now().Add(2 * time.Second)
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return err
+	}
+	codexHome := agentfiles.CodexHome(home)
 	for {
 		if time.Since(lastCheck) >= time.Second {
+			currentImage, err := os.Stat(executable)
+			if err != nil || !os.SameFile(image, currentImage) {
+				return nil
+			}
 			current, err := config.Resolve(config.ResolveOptions{})
 			if err != nil || !Configured(current) || Scope(current) != Scope(cfg) || current.StateDir != cfg.StateDir {
 				return nil
@@ -385,7 +417,7 @@ func RunNative(ctx context.Context, cfg config.Config) error {
 			continue
 		}
 		lastScan = time.Now()
-		observed, scanErr := scanNative("/proc", strings.TrimSpace(string(boot)))
+		observed, scanErr := scanNative("/proc", strings.TrimSpace(string(boot)), codexHome)
 		if len(observed) > 0 {
 			idleSince = time.Now()
 		}

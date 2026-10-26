@@ -225,7 +225,7 @@ func reconcileNative(store Store, observed []nativeInstance, alive func(nativeIn
 				continue
 			}
 			live, err := alive(instance)
-			event := Event{SchemaVersion: 1, SandboxID: id, ExecutorID: instance.ExecutorID, IdentitySource: "observer", RuntimeSource: "codex.native.linux.proc", Name: "codex-linux-" + id[:min(12, len(id))], Type: "linux-pid-namespace", Timestamp: now, ExecutionID: id}
+			event := Event{SchemaVersion: 1, SandboxID: id, ExecutorID: instance.ExecutorID, IdentitySource: "observer", RuntimeSource: "codex.native.linux.proc", Name: "codex-linux-" + id[:min(12, len(id))], Type: "linux-pid-namespace", Timestamp: now, ExecutionID: id, ObservedSessionID: instance.ThreadID}
 			if err != nil {
 				// A temporary permission/read failure is not destruction.
 				if !instance.Lost {

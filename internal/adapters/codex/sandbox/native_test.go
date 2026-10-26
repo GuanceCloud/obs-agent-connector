@@ -203,3 +203,24 @@ func TestTerminalHookClosesOnlyItsOwnToolContexts(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestObservedSessionDoesNotInventToolAssociation(t *testing.T) {
+	s := Store{Root: t.TempDir()}
+	e := sampleEvent("observed-session", "obs.sandbox.discovered")
+	e.ObservedSessionID = "known-session"
+	if err := s.Apply(e); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.access(func(l *ledger) error {
+		if len(l.Relations) != 0 || l.Queue[0].Record.Attributes["gen_ai.conversation.id"] != "known-session" || l.Queue[0].Record.TraceID != "" {
+			t.Fatal("session context was lost or converted into a guessed Tool binding")
+		}
+		return nil
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+	e.SessionID, e.TurnID, e.ToolCallID = "different-session", "turn", "call"
+	if e.Validate() == nil {
+		t.Fatal("accepted inconsistent runtime and Tool session identities")
+	}
+}
