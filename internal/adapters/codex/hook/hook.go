@@ -25,6 +25,7 @@ import (
 
 type Input struct {
 	TranscriptPath string `json:"transcript_path"`
+	sandbox.NativeHook
 }
 
 type Summary struct {
@@ -37,10 +38,11 @@ type Summary struct {
 }
 
 type RunOptions struct {
-	Config    *config.Config
-	Input     *Input
-	ReadInput func() (Input, error)
-	Client    *http.Client
+	Config        *config.Config
+	Input         *Input
+	ReadInput     func() (Input, error)
+	Client        *http.Client
+	StartObserver func(config.Config) error
 }
 
 func RunCLI() int {
@@ -84,6 +86,23 @@ func RunWithOptions(options RunOptions) error {
 	input, err := resolveRunInput(options)
 	if err != nil {
 		return err
+	}
+	if sandbox.Configured(cfg) && input.Event != "" {
+		if sandbox.NativeSupported() {
+			if err := sandbox.RecordNativeHook(sandbox.NewStore(cfg), input.NativeHook); err != nil {
+				_ = appendLog(cfg, "native sandbox Hook deferred", map[string]any{"phase": "association"})
+			}
+		}
+		start := options.StartObserver
+		if start == nil {
+			start = func(cfg config.Config) error { return sandbox.EnsureNative(cfg, "") }
+		}
+		if err := start(cfg); err != nil {
+			_ = appendLog(cfg, "native sandbox Hook deferred", map[string]any{"phase": "observer_start"})
+		}
+	}
+	if input.Event != "" && input.Event != "Stop" {
+		return nil
 	}
 	if err := appendLog(cfg, hooklog.HookInvoked, map[string]any{
 		"pid":             os.Getpid(),

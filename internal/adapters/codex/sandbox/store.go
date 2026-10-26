@@ -234,8 +234,31 @@ func (s Store) BindSpans(spans []model.Span) error {
 				if old.TraceID != span.TraceID || old.SpanID != span.SpanID {
 					return fmt.Errorf("conflicting OBS trace binding")
 				}
-			} else if len(l.Bindings) >= 2*s.limit() {
-				return ErrFull
+			} else {
+				for len(l.Bindings) >= 2*s.limit() {
+					// Confirmed identities remain recoverable in the upload journal.
+					// Keep a bounded warm cache without blocking every later turn once
+					// it fills. Unresolved relations protect their required bindings.
+					protected := map[string]bool{}
+					for _, r := range l.Relations {
+						if !r.Bound {
+							protected[r.ToolKey] = true
+						}
+					}
+					oldest := ""
+					for candidate, value := range l.Bindings {
+						if protected[candidate] {
+							continue
+						}
+						if oldest == "" || value.Observed.Before(l.Bindings[oldest].Observed) || (value.Observed.Equal(l.Bindings[oldest].Observed) && candidate < oldest) {
+							oldest = candidate
+						}
+					}
+					if oldest == "" {
+						return ErrFull
+					}
+					delete(l.Bindings, oldest)
+				}
 			}
 			l.Bindings[key] = binding{span.TraceID, span.SpanID, now}
 		}

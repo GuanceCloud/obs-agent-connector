@@ -26,7 +26,7 @@ func TestCodexLogsConfigListEditAndValidation(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	for _, text := range []string{"logs-path", "sandbox-enabled", "false (default)", "agent_sandbox (fixed)", "automatic Codex sandbox collection is unavailable"} {
+	for _, text := range []string{"logs-path", "sandbox-enabled", "false (default)", "agent_sandbox (fixed)", "Native Linux namespace observation"} {
 		if !strings.Contains(output, text) {
 			t.Fatalf("missing %s in config list", text)
 		}
@@ -50,7 +50,7 @@ func TestCodexLogsConfigListEditAndValidation(t *testing.T) {
 		}
 	})
 	if !strings.Contains(output, "independent runtime producer") {
-		t.Fatal("configuration implied automatic collection")
+		t.Fatal("configuration omitted unsupported-runtime guidance")
 	}
 	updated := readJSONFile(t, path)
 	if updated["logsPath"] != "v1/write/otel-logs" || updated["sandbox"].(map[string]any)["enabled"] != true {

@@ -2,21 +2,22 @@
 
 This is an **experimental connector-side runtime bridge** for [issue #34](https://github.com/GuanceCloud/obs-agent-connector/issues/34). It accepts explicit sandbox evidence, exports OTLP Logs with `source=agent_sandbox`, and associates sandboxes with successfully exported OBS Tool spans.
 
-**Automatic stock Codex local sandbox collection is not implemented.** A producer that owns or observes the sandbox must supply the bridge events below. Enabling the bridge does not make the Stop Hook discover sandboxes. Guance inventory materialization and navigation UI are separate receiver/product work, outside this repository.
+**Automatic Linux Codex namespace observation is implemented.** Installed native lifecycle Hooks start a managed observer when both enable flags are true. It observes actual Codex PID-namespace sandbox instances, not permission settings or ordinary tools. Other operating systems, legacy Landlock-only isolation, and remote sandboxes still require an independent authoritative producer. Guance inventory materialization and navigation UI remain outside this repository.
 
 ## Collection feasibility
 
-Source inspection targets Codex `rust-v0.162.1`; the locally available CLI reports `codex-cli 0.162.1`. This is source inspection, not verification that a live deployment exports all events.
+Source inspection and the opt-in real-helper integration test target Codex `rust-v0.163.0` / `codex-cli 0.163.0`. The integration test executes the real Linux sandbox helper without model/API credentials and verifies automatic OTLP Logs and association to a normally exported OBS Tool span.
 
 | Source | Available evidence | Limitation |
 | --- | --- | --- |
 | Existing transcript adapter | Session, turn, tool call, terminal turn, emitted OBS span identities | No authoritative sandbox identity or destruction event |
 | Native exec-server telemetry | Process start, spawn failure, inferred sandbox denial, exit; launch context, conversation/tool ID, executor registration/environment, sandbox type | Does not establish sandbox instance ID, OS PID bridge, or isolation-resource destruction |
-| This runtime bridge | Explicit producer identity, lifecycle evidence, tool association keys | Requires a separately integrated authoritative producer |
+| Native Linux observer | Kernel namespace-init identity, actual security restrictions, observed lifecycle, exact Hook command/session match | Polling can miss very short executions; exact creation/destruction clocks are unavailable |
+| External runtime bridge | Explicit producer identity, lifecycle evidence, tool association keys | Requires a separately integrated authoritative producer |
 
-Sources: [process telemetry](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/exec-server/src/process_telemetry.rs), [sandbox preparation](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/exec-server/src/process_sandbox.rs), [process management](https://github.com/openai/codex/blob/rust-v0.162.1/codex-rs/core/src/unified_exec/process_manager.rs).
+Sources: [process telemetry](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec-server/src/process_telemetry.rs), [sandbox preparation](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/exec-server/src/process_sandbox.rs), [process management](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/core/src/unified_exec/process_manager.rs).
 
-A process exit, Tool completion, Session ID, or turn boundary is never substituted for sandbox identity or destruction. Local OS isolation and managed containers/VMs have different lifecycle evidence. This change installs no Codex fork, wrapper, native exporter rewrite, or additional Hook registration.
+A process exit, Tool completion, Session ID, or turn boundary is never substituted for sandbox identity or destruction. Local OS isolation and managed containers/VMs have different lifecycle evidence. This integration installs no Codex fork, command wrapper, or native exporter rewrite. It registers native lifecycle Hooks with the existing connector command.
 
 ## Scope and configuration
 
@@ -44,7 +45,7 @@ obs-agent-connector config codex list
 obs-agent-connector config codex edit --logs-path=v1/write/otel-logs
 ```
 
-The edit preserves the sandbox enable state. Enable the bridge only after an independent authoritative producer is available:
+The edit preserves the sandbox enable state. Enable native Linux observation and the optional bridge:
 
 ```bash
 obs-agent-connector config codex edit \
@@ -55,9 +56,26 @@ obs-agent-connector config codex edit \
 
 The same three sandbox flags are accepted by `install codex`. Explicit empty path edits are honored for that edit; later config edits can seed the recognized profile default again. Enabling requires a valid endpoint and effective relative Logs path. Invalid settings are rejected before configuration writes or installation changes. No other Agent receives Codex sandbox defaults.
 
-These commands save configuration only. A separate producer still needs to feed `internal codex-sandbox`; neither configuration edits nor installation starts automatic Codex sandbox collection. `source=agent_sandbox` is fixed in the bridge and needs no source setting in `gtrace.json`.
+Configuration commands save settings. Run `obs-agent-connector update codex` once to install the new lifecycle registrations while preserving the runtime configuration. The next SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, or Interrupt Hook starts or recovers the observer. `source=agent_sandbox` is fixed and needs no source setting in `gtrace.json`.
 
-Both enable flags must be true. When disabled, the bridge does not read input or create sandbox state. `max_pending` accepts 1 through 4,096, defaulting to 1,024 for missing/out-of-range values. `captureContent: "none"` suppresses free-text reasons; other modes redact and limit reasons to 1,024 characters. Names, types, and configured resource values are sanitized and bounded. Normal installer updates preserve these configuration keys without automatically enabling or starting the bridge.
+Both enable flags must be true. When disabled, the bridge does not read input or create sandbox state. `max_pending` accepts 1 through 4,096, defaulting to 1,024 for missing/out-of-range values. `captureContent: "none"` suppresses free-text reasons; other modes redact and limit reasons to 1,024 characters. Names, types, and configured resource values are sanitized and bounded. Normal installer updates preserve these configuration keys and never automatically enable observation. Enabled lifecycle Hooks start the observer as needed.
+
+
+## Native Linux collection
+
+The boundary is Codex's actual isolated PID 1 supervisor (`argv[0]=codex-linux-sandbox`), running the Codex executable in a separate mount and PID namespace with `no_new_privs=1` and seccomp filtering active. Its Codex ancestor is verified. A command, session, configured permission mode, arbitrary child PID, or generic container is insufficient evidence.
+
+The observer derives a stable **observer identity** from the kernel boot ID, namespace-init PID/start ticks, and mount/PID/user namespace identities. Executor identity uses the actual Codex ancestor PID/start ticks and boot ID. PID reuse creates a different instance; multiple namespace children do not create extra inventory resources. Provenance is `obs.collection.source=codex.native.linux.proc`, `obs.sandbox.identity_source=observer`, type `linux-pid-namespace`.
+
+- First sight emits `obs.sandbox.discovered`, state `running`; continuing observations produce at most one running snapshot per minute.
+- Confirmed exit/disappearance of this previously observed **namespace-init**, including PID reuse, produces a terminal **snapshot** with state `destroyed`. A PID-namespace init is the supervising boundary, rather than an arbitrary Tool child process. Unknown exact creation/destruction dates remain omitted. Detection time is the snapshot occurrence time, not a fabricated destruction timestamp.
+- Permission/read failures emit `obs.sandbox.observation.lost`, state `unknown`; they do not imply destruction. Recovery restores running observation.
+- Native Hooks persist session/turn/call IDs and a command digest. Commands, results and environment contents are never persisted. Association requires the same native `CODEX_THREAD_ID` and an exact command digest within that Hook's execution window. Concurrent identical candidates remain unlinked. This is explicitly marked `obs.sandbox.association.method=native_thread_command_digest` and `obs.sandbox.association.confidence=inferred`: the kernel does not expose a native Tool call ID. Missing OBS Tool identity remains pending; native launch trace IDs are never substituted.
+- Hooks perform no network I/O for collection startup. A detached singleton uses a kernel file lock (released on crash) and a bounded readiness wait. Scanning and Logs delivery run independently. Configuration disable/destination changes stop it; later Hooks restart it. It exits after 30 minutes without activity.
+- Polling is 20 ms shortly after Hook activity and 100 ms otherwise. Commands that live entirely between scans may be missed. This is best-effort observation, not a complete kernel execution audit. Full-access execution correctly creates no sandbox instance. Non-Linux and Landlock-only modes are not automatically observed.
+- A private producer outbox preserves stable events across a crash between observer state and the delivery journal. Native state is bounded to 1,024 tool contexts, 1,024 instance entries, 1,024 producer events, and 4 MiB. Old terminal instance metadata can be evicted; live instances and undelivered events are not silently displaced.
+
+Linux implementation evidence: [native Hook input](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/hooks/src/events/pre_tool_use.rs), [namespace supervision and sandbox enforcement](https://github.com/openai/codex/blob/rust-v0.163.0/codex-rs/linux-sandbox/src/linux_run_main.rs). Existing Codex processes may need a new turn/session for updated Hook registrations to take effect; the collector does not reconstruct missed historical sandbox instances.
 
 ## Runtime producer contract
 
@@ -81,7 +99,7 @@ This is a **synthetic contract example**, not a native Codex payload:
 
 Required fields are `schema_version=1`, `event_id`, `event_name`, actual occurrence `timestamp` in RFC 3339, `sandbox_id`, `executor_id`, `identity_source` (`native` or `observer`), and producer provenance `runtime_source`. An observer ID must represent an actual identified isolation instance with a documented boundary. Instance IDs must be workspace-unique, including executor namespace where necessary.
 
-Optional fields are `name`, `type`, `state`, `created_at`, `destroyed_at`, `execution_id`, `reason`, and the association triple `session_id`, `turn_id`, `tool_call_id`. Supply all three association keys together or omit them all. Identity fields are bounded to 256 bytes. Unknown fields, including arbitrary native trace contexts and command/output payloads, are rejected.
+Optional fields are `name`, `type`, `state`, `created_at`, `destroyed_at`, `execution_id`, `reason`, `association_method`, and the association triple `session_id`, `turn_id`, `tool_call_id`. Supply all three association keys together or omit them all. Association method is `runtime_keys` (default for supplied keys) or `native_thread_command_digest`; the latter is marked inferred. Identity fields are bounded to 256 bytes. Unknown fields, including arbitrary native trace contexts and command/output payloads, are rejected.
 
 | EventName | Meaning |
 | --- | --- |
@@ -121,6 +139,7 @@ The Body is a **UTF-8 JSON string in OTLP `AnyValue.string_value`**, not a KVLis
 | Collector provenance | Attribute `obs.collection.source` | `obs_collection_source` |
 | Optional execution identity | Attribute `obs.execution.id` | `obs_execution_id` |
 | Association lookup keys | Attributes `gen_ai.conversation.id`, `run_id`, `gen_ai.tool.call.id` | `gen_ai_conversation_id`, `run_id`, `gen_ai_tool_call_id` |
+| Association evidence | Attributes `obs.sandbox.association.method`, optional `obs.sandbox.association.confidence` | `obs_sandbox_association_method`, `obs_sandbox_association_confidence` |
 | Confirmed OBS trace context | Native TraceId and SpanId on the association record | `trace_id`, `span_id` |
 | Event occurrence time | Native TimeUnixNano | Native log timestamp |
 | Bridge observation time | Native ObservedTimeUnixNano | Receiver-dependent; also in lifecycle Body `last_observed_at` |
@@ -154,7 +173,7 @@ The bridge recovers confirmed identities on startup and every 15 seconds. Events
 State lives under `<state_dir>/sandbox/<destination-scope>/`. Scope is a digest of destination/authentication settings; credentials are never stored in the sandbox journal. Changing either creates a separate queue and prevents applying old trace bindings to a new target. Old queues require the original configuration to drain; credential rotation does not automatically migrate records.
 
 - Pending Logs are capped by `max_pending`; old unsent events are never evicted to admit new ones.
-- Binding and relation tables are each capped at twice `max_pending`. Confirmed bindings/completed relations have a seven-day inactivity window; unresolved relations do not silently expire.
+- Binding and relation tables are each capped at twice `max_pending`. The confirmed binding warm cache evicts the oldest recoverable entries when full, while protecting unresolved associations. Recovery loads only identities requested by unresolved relations from confirmed upload files. Completed relations have a seven-day inactivity window; unresolved relations do not silently expire.
 - Recent deduplication receipts retain approximately twice `max_pending`. Replays outside this window may be delivered again; receiver-side deduplication is required.
 - The JSON journal is capped at 16 MiB. Updates use a short cross-process claim and atomic synced replacement. Crash-held claims expire after ten minutes. Network I/O runs outside the claim.
 - Collection and delivery run independently. Each delivery pass sends at most 16 individual records. Timeouts are capped at ten seconds; EOF gets one bounded final pass. Remaining records survive restart.
@@ -186,6 +205,17 @@ Data acceptance must confirm the actual target route stores new records under `s
 
 The compatibility rules above follow [DataKit source selection](https://github.com/GuanceCloud/datakit/blob/master/internal/plugins/inputs/opentelemetry/logs.go) and [the OTLP Logs parser](https://github.com/GuanceCloud/cliutils/blob/master/otlp/logs_parse.go). The receiver renders a string Body directly, while a KVList can become protobuf diagnostic text. Contract tests model source precedence and verify decoded outgoing protobuf; deployment acceptance must additionally inspect stored records.
 
-Local tests cover all supported event types, privacy, receiver fields, legacy queued records, concurrency, cross-turn/delayed associations, restart/replay, capacity, partial rejection, and Trace/Metrics retries. They do not prove an authoritative stock Codex producer. That producer and its startup/recovery lifecycle remain a separate data-collection integration gate for issue #34.
+Local tests cover all supported event types, privacy, receiver fields, kernel evidence, PID reuse, command ambiguity, native producer outbox recovery, cache rotation, legacy queued records, concurrency, cross-turn/delayed associations, restart/replay, partial rejection, and Trace/Metrics retries. The opt-in integration test executes the actual Codex Linux sandbox and the connector CLI against a protobuf receiver, including Hook startup and association to the normally exported Tool span. Other isolation/runtime types and exhaustive short-process capture remain outside this native implementation.
 
 Platform inventory, deduplication/materialization, out-of-order state projection, and bidirectional navigation are deferred. This document defines the input and exported data contract for that later design; no platform implementation is included here.
+
+To run the real-helper acceptance test after building the connector:
+
+```bash
+go build -o /tmp/obs-native-connector ./cmd/obs-agent-connector
+OBS_CONNECTOR_TEST_BINARY=/tmp/obs-native-connector \
+OBS_CODEX_TEST_BINARY=/absolute/path/to/codex \
+go test ./internal/adapters/codex/sandbox -run TestNativeCodexSandboxCLIEndToEnd -v -count=1
+```
+
+It uses a private temporary HOME, a local OTLP receiver, the native sandbox helper, and a marked transcript fixture. It requires no model call or real upload credentials.

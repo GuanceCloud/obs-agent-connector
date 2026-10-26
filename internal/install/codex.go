@@ -59,7 +59,7 @@ Options:
   --trace-path <path>        override the trace upload path
   --metrics-path <path>      override the metrics upload path
   --logs-path <path>         Codex sandbox Logs path relative to endpoint
-  --sandbox-enabled <bool>   configure the Codex sandbox bridge; requires a producer
+  --sandbox-enabled <bool>   enable native Linux sandbox observation and runtime bridge
   --sandbox-max-pending <n>  Codex sandbox pending Logs limit, from 1 to 4096
   --x-token <token>          add the GTrace X-Token header
   --header <KEY=VALUE>       add an HTTP header; may be repeated
@@ -163,7 +163,12 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 			return CodexResult{}, err
 		}
 	}
-	if err := writeCodexHooks(hooksFile, hooks, absoluteDestination); err != nil {
+	effectiveConfig := configValue
+	if configure {
+		effectiveConfig = nextConfig
+	}
+	nativeEnabled := objectValue(effectiveConfig["sandbox"])["enabled"] == true
+	if err := writeCodexHooksWithNative(hooksFile, hooks, absoluteDestination, nativeEnabled); err != nil {
 		return CodexResult{}, err
 	}
 
@@ -261,6 +266,10 @@ func ParseInstallArgs(args []string) (CodexOptions, error) {
 }
 
 func writeCodexHooks(path string, settings map[string]any, command string) error {
+	return writeCodexHooksWithNative(path, settings, command, false)
+}
+
+func writeCodexHooksWithNative(path string, settings map[string]any, command string, native bool) error {
 	if settings == nil {
 		settings = map[string]any{}
 	}
@@ -269,24 +278,51 @@ func writeCodexHooks(path string, settings map[string]any, command string) error
 		hooks = map[string]any{}
 		settings["hooks"] = hooks
 	}
-	groups, _ := hooks["Stop"].([]any)
-	next := make([]any, 0, len(groups)+1)
-	for _, group := range groups {
-		if !managedCodexHook(group) {
-			next = append(next, group)
+	for _, event := range []string{"Stop", "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Interrupt"} {
+		groups, _ := hooks[event].([]any)
+		next := make([]any, 0, len(groups)+1)
+		for _, group := range groups {
+			object, ok := group.(map[string]any)
+			if !ok {
+				next = append(next, group)
+				continue
+			}
+			handlers, ok := object["hooks"].([]any)
+			if !ok {
+				next = append(next, group)
+				continue
+			}
+			remaining := make([]any, 0, len(handlers))
+			for _, handler := range handlers {
+				if !managedCodexHook(map[string]any{"hooks": []any{handler}}) {
+					remaining = append(remaining, handler)
+				}
+			}
+			if len(remaining) > 0 || len(handlers) == 0 {
+				object["hooks"] = remaining
+				next = append(next, object)
+			}
 		}
+		message := "Observing native Codex sandbox execution"
+		if event != "Stop" && !native {
+			if len(next) == 0 {
+				delete(hooks, event)
+			} else {
+				hooks[event] = next
+			}
+			continue
+		}
+		if event == "Stop" {
+			message = "Uploading Codex telemetry to GTrace"
+		}
+		next = append(next, map[string]any{
+			"hooks": []any{map[string]any{
+				"type": "command", "command": codexHookCommand(command),
+				"timeout": 60, "statusMessage": message,
+			}},
+		})
+		hooks[event] = next
 	}
-	next = append(next, map[string]any{
-		"hooks": []any{
-			map[string]any{
-				"type":          "command",
-				"command":       codexHookCommand(command),
-				"timeout":       60,
-				"statusMessage": "Uploading Codex telemetry to GTrace",
-			},
-		},
-	})
-	hooks["Stop"] = next
 	return writeJSONAtomic(path, settings)
 }
 

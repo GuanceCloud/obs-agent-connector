@@ -135,7 +135,7 @@ Supported edit parameters:
 | `--trace-path` | Set the trace upload path |
 | `--metrics-path` | Set the metrics upload path |
 | `--logs-path` | Codex only: set a Logs path relative to the shared endpoint; GTrace default: `v1/write/otel-logs` |
-| `--sandbox-enabled=<true|false>` | Codex only: configure the experimental bridge; requires an external runtime producer |
+| `--sandbox-enabled=<true|false>` | Codex only: enable the native Linux namespace observer and experimental runtime bridge |
 | `--sandbox-max-pending` | Codex only: set the pending Logs limit, from 1 to 4096 |
 | `--x-token` | Set the `X-Token` header |
 | `--header` | Add one HTTP header. Supports one or more `--header` parameters |

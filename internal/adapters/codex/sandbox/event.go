@@ -18,24 +18,25 @@ const Source = "agent_sandbox"
 // Event is the versioned runtime bridge contract, not a native Codex schema.
 // The producer must own or observe the claimed isolation instance.
 type Event struct {
-	SchemaVersion  int        `json:"schema_version"`
-	EventID        string     `json:"event_id"`
-	EventName      string     `json:"event_name"`
-	Timestamp      time.Time  `json:"timestamp"`
-	SandboxID      string     `json:"sandbox_id"`
-	ExecutorID     string     `json:"executor_id"`
-	IdentitySource string     `json:"identity_source"`
-	RuntimeSource  string     `json:"runtime_source"`
-	Name           string     `json:"name,omitempty"`
-	Type           string     `json:"type,omitempty"`
-	State          string     `json:"state,omitempty"`
-	CreatedAt      *time.Time `json:"created_at,omitempty"`
-	DestroyedAt    *time.Time `json:"destroyed_at,omitempty"`
-	SessionID      string     `json:"session_id,omitempty"`
-	TurnID         string     `json:"turn_id,omitempty"`
-	ToolCallID     string     `json:"tool_call_id,omitempty"`
-	ExecutionID    string     `json:"execution_id,omitempty"`
-	Reason         string     `json:"reason,omitempty"`
+	SchemaVersion     int        `json:"schema_version"`
+	EventID           string     `json:"event_id"`
+	EventName         string     `json:"event_name"`
+	Timestamp         time.Time  `json:"timestamp"`
+	SandboxID         string     `json:"sandbox_id"`
+	ExecutorID        string     `json:"executor_id"`
+	IdentitySource    string     `json:"identity_source"`
+	RuntimeSource     string     `json:"runtime_source"`
+	Name              string     `json:"name,omitempty"`
+	Type              string     `json:"type,omitempty"`
+	State             string     `json:"state,omitempty"`
+	CreatedAt         *time.Time `json:"created_at,omitempty"`
+	DestroyedAt       *time.Time `json:"destroyed_at,omitempty"`
+	SessionID         string     `json:"session_id,omitempty"`
+	TurnID            string     `json:"turn_id,omitempty"`
+	ToolCallID        string     `json:"tool_call_id,omitempty"`
+	ExecutionID       string     `json:"execution_id,omitempty"`
+	Reason            string     `json:"reason,omitempty"`
+	AssociationMethod string     `json:"association_method,omitempty"`
 }
 
 func (e Event) Validate() error {
@@ -113,6 +114,9 @@ func (e Event) Validate() error {
 	if len(e.ExecutionID) > 256 {
 		return fmt.Errorf("execution identifier exceeds limit")
 	}
+	if e.AssociationMethod != "" && e.AssociationMethod != "runtime_keys" && e.AssociationMethod != "native_thread_command_digest" {
+		return fmt.Errorf("invalid sandbox association method")
+	}
 	return nil
 }
 
@@ -183,6 +187,14 @@ func (e Event) record(now time.Time, resource map[string]any, capture bool) mode
 		attrs["gen_ai.conversation.id"] = e.SessionID
 		attrs["run_id"] = e.TurnID
 		attrs["gen_ai.tool.call.id"] = e.ToolCallID
+		method := e.AssociationMethod
+		if method == "" {
+			method = "runtime_keys"
+		}
+		attrs["obs.sandbox.association.method"] = method
+		if method == "native_thread_command_digest" {
+			attrs["obs.sandbox.association.confidence"] = "inferred"
+		}
 	}
 	if capture && e.Reason != "" {
 		body["reason"] = privacy.Text(e.Reason, 1024)

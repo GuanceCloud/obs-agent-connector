@@ -69,7 +69,7 @@ func listAgentConfig(target string, args []string) error {
 	fmt.Printf("Use \"obs-agent-connector config %s edit\" to update one or more parameters.\n", p.Name)
 	fmt.Println("--header and --tag both support one or more KEY=VALUE parameters.")
 	if p.Name == "codex" {
-		fmt.Println("Sandbox Logs require an explicit Logs endpoint and an independent runtime producer; automatic Codex sandbox collection is unavailable.")
+		fmt.Println("Sandbox Logs require an explicit Logs endpoint. Native Linux namespace observation starts from Codex Hooks; other runtimes require an independent producer.")
 	}
 	return nil
 }
@@ -198,7 +198,7 @@ func editAgentConfig(target string, args []string) error {
 
 	fmt.Printf("Updated %s config in %s\n", p.Name, agent.DisplayPath(configPath))
 	if p.Name == "codex" && sandboxOptions.Specified() {
-		fmt.Println("Sandbox configuration saved. Automatic Codex sandbox collection is unavailable; an independent runtime producer must feed the bridge.")
+		fmt.Println("Sandbox configuration saved. Run update codex to refresh lifecycle Hooks for native Linux observation; other runtimes require an independent runtime producer.")
 	}
 	return nil
 }
@@ -218,7 +218,7 @@ func codexSandboxConfigRows(current map[string]any) [][]string {
 		{"sandbox-enabled", enabled},
 		{"sandbox-max-pending", maxPending},
 		{"sandbox-log-source", "agent_sandbox (fixed)"},
-		{"sandbox-runtime-producer", "external; not auto-managed"},
+		{"sandbox-runtime-producer", "native Linux namespace observer; external bridge also available"},
 	}
 }
 

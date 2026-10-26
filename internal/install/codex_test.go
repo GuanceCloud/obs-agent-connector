@@ -453,3 +453,34 @@ func readTestJSON(t *testing.T, path string, target any) {
 		t.Fatal(err)
 	}
 }
+
+func TestNativeCodexHooksAreIdempotentAndPreserveMixedHandlers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hooks.json")
+	settings := map[string]any{"hooks": map[string]any{"PreToolUse": []any{map[string]any{"matcher": "Bash", "hooks": []any{map[string]any{"type": "command", "command": "/bin/custom-audit"}, map[string]any{"type": "command", "command": "obs-agent-connector hook codex"}}}}}}
+	for i := 0; i < 2; i++ {
+		if err := writeCodexHooksWithNative(path, settings, "/opt/obs-agent-connector", true); err != nil {
+			t.Fatal(err)
+		}
+	}
+	hooks := settings["hooks"].(map[string]any)
+	for _, event := range []string{"Stop", "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Interrupt"} {
+		groups := hooks[event].([]any)
+		count := 0
+		for _, group := range groups {
+			g := group.(map[string]any)
+			for _, handler := range g["hooks"].([]any) {
+				h := handler.(map[string]any)
+				if h["command"] == "/opt/obs-agent-connector hook codex" {
+					count++
+				}
+			}
+		}
+		if count != 1 {
+			t.Fatalf("%s has %d managed handlers", event, count)
+		}
+	}
+	group := hooks["PreToolUse"].([]any)[0].(map[string]any)
+	if group["matcher"] != "Bash" || len(group["hooks"].([]any)) != 1 || group["hooks"].([]any)[0].(map[string]any)["command"] != "/bin/custom-audit" {
+		t.Fatal("overwrote a mixed user Hook group")
+	}
+}

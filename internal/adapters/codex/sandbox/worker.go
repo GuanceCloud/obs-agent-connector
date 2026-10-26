@@ -21,6 +21,7 @@ import (
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/config"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/journal"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/model"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/privacy"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/state"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
@@ -72,12 +73,12 @@ func NewClient(cfg config.Config, client *http.Client) transport.Client {
 	}}
 }
 
-// RunCLI is an internal producer bridge. No hooks or Codex configuration are
-// automatically changed; native Codex 0.162.1 cannot supply this full contract.
+// RunCLI runs the explicit producer bridge or the native Linux observer.
 func RunCLI(args []string) int {
 	fs := flag.NewFlagSet("internal codex-sandbox", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	flushOnly := fs.Bool("flush", false, "attempt queued sandbox log delivery without reading stdin")
+	observe := fs.Bool("observe", false, "observe native Linux Codex sandbox instances")
 	if err := fs.Parse(args); err != nil {
 		return 1
 	}
@@ -95,6 +96,13 @@ func RunCLI(args []string) int {
 	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	if *observe {
+		if err := RunNative(ctx, cfg); err != nil {
+			_ = hooklog.Append(cfg.HookLogFile, "native sandbox observer stopped", map[string]any{"category": errorCategory(err)})
+			return 1
+		}
+		return 0
+	}
 	var reader io.Reader = os.Stdin
 	if *flushOnly {
 		reader = bytes.NewReader(nil)
@@ -173,7 +181,35 @@ func Run(ctx context.Context, reader io.Reader, cfg config.Config, httpClient *h
 }
 
 func recoverBindings(cfg config.Config, store Store) error {
-	return state.VisitUploadedSpans(filepath.Join(cfg.StateDir, "uploads"), store.now().Add(-retention), Scope(cfg), store.BindSpans)
+	needed := map[string]bool{}
+	if err := store.access(func(l *ledger) error {
+		for _, r := range l.Relations {
+			if !r.Bound {
+				needed[r.ToolKey] = true
+			}
+		}
+		return nil
+	}, false); err != nil {
+		return err
+	}
+	if len(needed) == 0 {
+		return nil
+	}
+	return state.VisitUploadedSpans(filepath.Join(cfg.StateDir, "uploads"), store.now().Add(-retention), Scope(cfg), func(spans []model.Span) error {
+		var selected []model.Span
+		for _, span := range spans {
+			session, _ := span.Attributes["gen_ai.conversation.id"].(string)
+			turn, _ := span.Attributes["run_id"].(string)
+			call, _ := span.Attributes["gen_ai.tool.call.id"].(string)
+			if needed[digest(session, turn, call)] {
+				selected = append(selected, span)
+			}
+		}
+		if len(selected) == 0 {
+			return nil
+		}
+		return store.BindSpans(selected)
+	})
 }
 
 func errorCategory(err error) string {

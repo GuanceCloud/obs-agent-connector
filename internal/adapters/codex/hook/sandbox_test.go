@@ -96,3 +96,22 @@ func TestSandboxBindingUsesUploadedTraceAcrossMetricsRetry(t *testing.T) {
 		t.Fatal("sandbox linked to regenerated or native trace IDs")
 	}
 }
+
+func TestNativeToolHookStartsObserverWithoutParsingTranscript(t *testing.T) {
+	cfg := config.Config{Enabled: true, SandboxEnabled: true, StateDir: t.TempDir(), Endpoint: "http://127.0.0.1:1", LogsPath: "v1/logs"}
+	starts := 0
+	input := Input{TranscriptPath: "/missing-rollout", NativeHook: sandbox.NativeHook{Event: "PreToolUse", SessionID: "session", TurnID: "turn", ToolCallID: "call", ToolName: "Bash", ToolInput: []byte(`{"command":"printf synthetic"}`)}}
+	if err := RunWithOptions(RunOptions{Config: &cfg, Input: &input, StartObserver: func(config.Config) error { starts++; return nil }}); err != nil {
+		t.Fatal(err)
+	}
+	if starts != 1 {
+		t.Fatal("native Hook did not start observer")
+	}
+	cfg.SandboxEnabled = false
+	if err := RunWithOptions(RunOptions{Config: &cfg, Input: &input, StartObserver: func(config.Config) error { starts++; return nil }}); err != nil {
+		t.Fatal(err)
+	}
+	if starts != 1 {
+		t.Fatal("disabled sandbox started observer")
+	}
+}
