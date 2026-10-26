@@ -135,7 +135,7 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 			} else {
 				printSingleDetail("Trust", "granted")
 			}
-			printSingleDetail("Sandbox Logs", "Experimental; requires an explicit Logs endpoint and an independent runtime producer. Use config codex list/edit.")
+			printSingleDetail("Sandbox Logs", "Experimental; supports native Linux observation and an independent runtime producer. Enable and configure logsPath with config codex list/edit.")
 		}
 	case "cursor":
 		_, err = telemetryinstall.InstallCursor(telemetryinstall.CursorOptions{
