@@ -224,3 +224,54 @@ func TestObservedSessionDoesNotInventToolAssociation(t *testing.T) {
 		t.Fatal("accepted inconsistent runtime and Tool session identities")
 	}
 }
+
+func TestNativeToolIDDisambiguatesConcurrentIdenticalCommands(t *testing.T) {
+	now := time.Now().UTC()
+	tools := []nativeTool{{SessionID: "session", TurnID: "turn", CallID: "first", CommandHash: digest("shell", "same"), Started: now.Add(-time.Second)}, {SessionID: "session", TurnID: "turn", CallID: "second", CommandHash: digest("shell", "same"), Started: now.Add(-time.Second)}}
+	i := nativeInstance{ThreadID: "session", ToolCallID: "second", CommandHash: digest("shell", "different"), FirstObserved: now}
+	if tool := matchingTool(tools, i); tool == nil || tool.CallID != "second" {
+		t.Fatal("exact native Tool ID did not disambiguate commands")
+	}
+	i.ToolCallID = "missing"
+	if matchingTool(tools, i) != nil {
+		t.Fatal("unknown native Tool ID fell back to a guessed command")
+	}
+	i.ToolCallID = "second"
+	i.ContextConflict = true
+	if matchingTool(tools, i) != nil {
+		t.Fatal("conflicting runtime metadata was associated")
+	}
+}
+
+func TestNativeContextEnrichmentAndBindingAfterExit(t *testing.T) {
+	now := time.Now().UTC()
+	s := Store{Root: t.TempDir(), Now: func() time.Time { return now }}
+	if err := RecordNativeHook(s, NativeHook{Event: "PreToolUse", SessionID: "session", TurnID: "turn", ToolCallID: "call", ToolName: "Bash", ToolInput: json.RawMessage(`{"command":"same"}`)}); err != nil {
+		t.Fatal(err)
+	}
+	now = now.Add(time.Second)
+	i := nativeInstance{ID: strings.Repeat("e", 64), ExecutorID: "executor", CommandHash: digest("shell", "same")}
+	if err := reconcileNative(s, []nativeInstance{i}, func(nativeInstance) (bool, error) { return true, nil }); err != nil {
+		t.Fatal(err)
+	}
+	i.ThreadID, i.ToolCallID = "session", "call"
+	now = now.Add(time.Second)
+	if err := reconcileNative(s, []nativeInstance{i}, func(nativeInstance) (bool, error) { return false, nil }); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.BindSpans([]model.Span{toolSpan("turn", "call", "b")}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.access(func(l *ledger) error {
+		if len(l.Relations) != 1 || !l.Relations[0].Bound {
+			t.Fatal("late context did not bind the completed instance")
+		}
+		r := l.Relations[0].Record
+		if r.Attributes["obs.sandbox.association.method"] != "native_process_tool_id" || r.Attributes["obs.sandbox.association.confidence"] != "observed" {
+			t.Fatal("native evidence was mislabeled")
+		}
+		return nil
+	}, false); err != nil {
+		t.Fatal(err)
+	}
+}

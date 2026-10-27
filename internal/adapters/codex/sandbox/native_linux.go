@@ -123,6 +123,96 @@ func nativeAncestor(root string, p nativeProcess) (nativeProcess, bool) {
 
 func namespaceKey(p nativeProcess) string { return p.MountNS + "|" + p.PIDNS + "|" + p.UserNS }
 
+type nativeContext struct {
+	Home, CodexHome, Thread, Call string
+}
+
+func nativeCommandDigest(argv []string) string {
+	// The exec-server's verified arg0 trampoline execs argv[3] with argv[2]
+	// as its custom argv[0]. Match that command, not the bootstrap executable.
+	if len(argv) >= 4 && filepath.Base(argv[0]) == "codex" && argv[1] == "--codex-run-as-arg0-exec-helper" {
+		command := append([]string(nil), argv[3:]...)
+		command[0] = argv[2]
+		return argvHash(command)
+	}
+	return argvHash(argv)
+}
+
+func processContext(root string, pid int) nativeContext {
+	var result nativeContext
+	env, err := readBounded(filepath.Join(root, strconv.Itoa(pid), "environ"), 1<<20)
+	if err != nil {
+		return result
+	}
+	for _, item := range strings.Split(string(env), "\x00") {
+		key, value, ok := strings.Cut(item, "=")
+		if !ok || len(value) > 4096 || strings.ContainsAny(value, "\r\n\x00") {
+			continue
+		}
+		switch key {
+		case "HOME":
+			result.Home = value
+		case "CODEX_HOME":
+			result.CodexHome = value
+		case "CODEX_THREAD_ID":
+			if len(value) <= 256 {
+				result.Thread = value
+			}
+		case "CODEX_TOOL_CALL_ID":
+			if len(value) <= 256 {
+				result.Call = value
+			}
+		}
+	}
+	return result
+}
+
+// Some launch paths initialize the namespace before injecting command metadata.
+// Read only the direct command child, with matching UID, ancestry, argv digest
+// and all namespace identities. Unrelated descendants cannot supply context.
+func commandContext(root string, init nativeProcess, commandHash string, initial nativeContext) (nativeContext, bool) {
+	if initial.Thread != "" && initial.Call != "" {
+		return initial, false
+	}
+	raw, err := readBounded(filepath.Join(root, strconv.Itoa(init.PID), "task", strconv.Itoa(init.PID), "children"), 4096)
+	if err != nil {
+		return initial, false
+	}
+	children := strings.Fields(string(raw))
+	if len(children) > 32 {
+		return initial, true
+	}
+	result := initial
+	for _, child := range children {
+		pid, err := strconv.Atoi(child)
+		if err != nil {
+			continue
+		}
+		p, err := processInfo(root, pid, true)
+		if err != nil || p.UID != init.UID || p.Parent != init.PID || namespaceKey(p) != namespaceKey(init) || argvHash(p.Args) != commandHash {
+			continue
+		}
+		start, err := strconv.ParseUint(p.Start, 10, 64)
+		parentStart, parentErr := strconv.ParseUint(init.Start, 10, 64)
+		if err != nil || parentErr != nil || start < parentStart {
+			continue
+		}
+		ctx := processContext(root, pid)
+		if ctx.Thread == "" || ctx.Call == "" {
+			continue
+		}
+		current, err := processInfo(root, pid, false)
+		if err != nil || current.Start != p.Start || current.Parent != init.PID {
+			continue
+		}
+		if result.Thread != "" && ctx.Thread != result.Thread || result.Call != "" && ctx.Call != result.Call {
+			return nativeContext{Home: initial.Home, CodexHome: initial.CodexHome}, true
+		}
+		result.Thread, result.Call = ctx.Thread, ctx.Call
+	}
+	return result, false
+}
+
 // scanNative identifies the actual Codex sandbox namespace-init, not arbitrary
 // descendants or a configured permission mode. No command/environment is saved.
 func scanNative(root, boot string, codexHomes ...string) ([]nativeInstance, error) {
@@ -167,32 +257,23 @@ func scanNative(root, boot string, codexHomes ...string) ([]nativeInstance, erro
 		if split < 0 || split+1 >= len(p.Args) {
 			continue
 		}
-		// Read only the native thread identity from the child's environment.
-		env, err := readBounded(filepath.Join(dir, "environ"), 1<<20)
-		processHome, processCodexHome := "", ""
-		if err == nil {
-			for _, item := range strings.Split(string(env), "\x00") {
-				if value, ok := strings.CutPrefix(item, "HOME="); ok {
-					processHome = value
-				}
-				if value, ok := strings.CutPrefix(item, "CODEX_HOME="); ok {
-					processCodexHome = value
-				}
-				if value, ok := strings.CutPrefix(item, "CODEX_THREAD_ID="); ok && len(value) <= 256 && !strings.ContainsAny(value, "\r\n") {
-					p.Thread = value
-				}
-			}
-		}
+		ctx := processContext(root, pid)
 		if len(codexHomes) > 0 {
-			if processCodexHome == "" && processHome != "" {
-				processCodexHome = filepath.Join(processHome, ".codex")
+			if ctx.CodexHome == "" && ctx.Home != "" {
+				ctx.CodexHome = filepath.Join(ctx.Home, ".codex")
 			}
-			if processCodexHome == "" || filepath.Clean(processCodexHome) != filepath.Clean(codexHomes[0]) {
+			if ctx.CodexHome == "" || filepath.Clean(ctx.CodexHome) != filepath.Clean(codexHomes[0]) {
 				continue
 			}
 		}
+		commandHash := nativeCommandDigest(p.Args[split+1:])
+		ctx, conflict := commandContext(root, p, commandHash, ctx)
+		current, err := processInfo(root, pid, false)
+		if err != nil || current.Start != p.Start {
+			continue
+		}
 		id := digest("codex-native-linux", boot, strconv.Itoa(pid), p.Start, namespaceKey(p))
-		found = append(found, nativeInstance{ID: id, ExecutorID: "linux:" + digest(boot, strconv.Itoa(ancestor.PID), ancestor.Start), PID: pid, StartTicks: p.Start, KernelKey: namespaceKey(p), ThreadID: p.Thread, CommandHash: argvHash(p.Args[split+1:])})
+		found = append(found, nativeInstance{ID: id, ExecutorID: "linux:" + digest(boot, strconv.Itoa(ancestor.PID), ancestor.Start), PID: pid, StartTicks: p.Start, KernelKey: namespaceKey(p), ThreadID: ctx.Thread, ToolCallID: ctx.Call, ContextConflict: conflict, CommandHash: commandHash})
 	}
 	return found, nil
 }
@@ -426,7 +507,7 @@ func RunNative(ctx context.Context, cfg config.Config) error {
 		}
 		ids := make([]string, 0, len(observed))
 		for _, instance := range observed {
-			ids = append(ids, instance.ID)
+			ids = append(ids, digest(instance.ID, instance.ThreadID, instance.ToolCallID, strconv.FormatBool(instance.ContextConflict)))
 		}
 		sort.Strings(ids)
 		signature := digest(ids...)

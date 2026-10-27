@@ -28,6 +28,8 @@ type nativeTool struct {
 
 type nativeInstance struct {
 	ID, ExecutorID, ThreadID, CommandHash string
+	ToolCallID                            string
+	ContextConflict                       bool
 	PID                                   int
 	StartTicks                            string
 	KernelKey                             string
@@ -164,9 +166,19 @@ func argvHash(argv []string) string {
 }
 
 func matchingTool(tools []nativeTool, instance nativeInstance) *nativeTool {
+	if instance.ThreadID == "" || instance.ContextConflict {
+		return nil
+	}
 	var match *nativeTool
 	for _, tool := range tools {
-		if tool.SessionID != instance.ThreadID || tool.CommandHash != instance.CommandHash || instance.FirstObserved.Before(tool.Started) || (!tool.Ended.IsZero() && instance.FirstObserved.After(tool.Ended)) {
+		if tool.SessionID != instance.ThreadID || instance.FirstObserved.Before(tool.Started) || (!tool.Ended.IsZero() && instance.FirstObserved.After(tool.Ended)) {
+			continue
+		}
+		if instance.ToolCallID != "" {
+			if tool.CallID != instance.ToolCallID {
+				continue
+			}
+		} else if tool.CommandHash != instance.CommandHash {
 			continue
 		}
 		if match != nil {
@@ -176,6 +188,14 @@ func matchingTool(tools []nativeTool, instance nativeInstance) *nativeTool {
 		match = &copy
 	}
 	return match
+}
+
+func (instance nativeInstance) event(now time.Time) Event {
+	session := instance.ThreadID
+	if instance.ContextConflict {
+		session = ""
+	}
+	return Event{SchemaVersion: 1, SandboxID: instance.ID, ExecutorID: instance.ExecutorID, IdentitySource: "observer", RuntimeSource: "codex.native.linux.proc", Name: "codex-linux-" + instance.ID[:min(12, len(instance.ID))], Type: "linux-pid-namespace", Timestamp: now, ExecutionID: instance.ID, ObservedSessionID: session}
 }
 
 // reconcileNative is shared by the observer and deterministic evidence tests.
@@ -197,7 +217,20 @@ func reconcileNative(store Store, observed []nativeInstance, alive func(nativeIn
 			}
 		}
 		for _, instance := range observed {
-			if _, exists := s.Instances[instance.ID]; !exists {
+			if old, exists := s.Instances[instance.ID]; exists {
+				// The command process may become visible after namespace discovery.
+				// Enrich the same kernel identity, never silently replace its context.
+				if old.ThreadID != "" && instance.ThreadID != "" && old.ThreadID != instance.ThreadID || old.ToolCallID != "" && instance.ToolCallID != "" && old.ToolCallID != instance.ToolCallID || instance.ContextConflict {
+					old.ContextConflict = true
+				}
+				if old.ThreadID == "" {
+					old.ThreadID = instance.ThreadID
+				}
+				if old.ToolCallID == "" {
+					old.ToolCallID = instance.ToolCallID
+				}
+				s.Instances[instance.ID] = old
+			} else {
 				if len(s.Instances) >= 1024 {
 					oldest := ""
 					for id, candidate := range s.Instances {
@@ -218,6 +251,23 @@ func reconcileNative(store Store, observed []nativeInstance, alive func(nativeIn
 			if instance.Relations == nil {
 				instance.Relations = map[string]bool{}
 			}
+			// Correlation may complete after a short sandbox has already exited.
+			// Keep its original observation clock and require the same Hook window.
+			if tool := matchingTool(s.Tools, instance); tool != nil {
+				key := digest(tool.SessionID, tool.TurnID, tool.CallID)
+				if !instance.Relations[key] {
+					event := instance.event(now)
+					event.EventID, event.EventName = digest(id, key), "obs.sandbox.trace.bound"
+					event.SessionID, event.TurnID, event.ToolCallID = tool.SessionID, tool.TurnID, tool.CallID
+					event.AssociationMethod = "native_thread_command_digest"
+					if instance.ToolCallID != "" {
+						event.AssociationMethod = "native_process_tool_id"
+					}
+					s.Pending = append(s.Pending, event)
+					instance.Relations[key] = true
+					s.Instances[id] = instance
+				}
+			}
 			if instance.Terminal {
 				if now.Sub(instance.LastSnapshot) > retention {
 					delete(s.Instances, id)
@@ -225,7 +275,7 @@ func reconcileNative(store Store, observed []nativeInstance, alive func(nativeIn
 				continue
 			}
 			live, err := alive(instance)
-			event := Event{SchemaVersion: 1, SandboxID: id, ExecutorID: instance.ExecutorID, IdentitySource: "observer", RuntimeSource: "codex.native.linux.proc", Name: "codex-linux-" + id[:min(12, len(id))], Type: "linux-pid-namespace", Timestamp: now, ExecutionID: id, ObservedSessionID: instance.ThreadID}
+			event := instance.event(now)
 			if err != nil {
 				// A temporary permission/read failure is not destruction.
 				if !instance.Lost {
@@ -249,16 +299,6 @@ func reconcileNative(store Store, observed []nativeInstance, alive func(nativeIn
 					event.EventID = digest(id, event.EventName, now.Format(time.RFC3339Nano))
 					s.Pending = append(s.Pending, event)
 					instance.LastSnapshot, instance.Lost = now, false
-				}
-				if tool := matchingTool(s.Tools, instance); tool != nil {
-					key := digest(tool.SessionID, tool.TurnID, tool.CallID)
-					if !instance.Relations[key] {
-						event.EventID, event.EventName, event.State = digest(id, key), "obs.sandbox.trace.bound", ""
-						event.SessionID, event.TurnID, event.ToolCallID = tool.SessionID, tool.TurnID, tool.CallID
-						event.AssociationMethod = "native_thread_command_digest"
-						s.Pending = append(s.Pending, event)
-						instance.Relations[key] = true
-					}
 				}
 			}
 			s.Instances[id] = instance

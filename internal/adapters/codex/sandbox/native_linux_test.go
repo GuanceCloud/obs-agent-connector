@@ -88,3 +88,71 @@ func TestLinuxNativeRequiresKernelIsolationAndRealCodexInit(t *testing.T) {
 		t.Fatal("observed an unenforced sandbox")
 	}
 }
+
+func TestNativeCommandChildContextRequiresExactIsolationAndCommand(t *testing.T) {
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, "self", "ns"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("mnt:host", filepath.Join(root, "self", "ns", "mnt")); err != nil {
+		t.Fatal(err)
+	}
+	fakeNativeProcess(t, root, 100, 1, "10", "codex", "host")
+	fakeNativeProcess(t, root, 101, 100, "20", "codex-linux-sandbox", "sandbox")
+	fakeNativeProcess(t, root, 102, 101, "21", "/bin/sh", "sandbox")
+	write := func(pid int, name, value string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(root, strconv.Itoa(pid), name), []byte(value), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write(101, "environ", "HOME=/test-home\x00CODEX_HOME=/test-codex\x00")
+	if err := os.MkdirAll(filepath.Join(root, "101", "task", "101"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	write(101, "task/101/children", "102")
+	write(102, "cmdline", "/bin/sh\x00-c\x00sleep 2\x00")
+	write(102, "environ", "CODEX_THREAD_ID=session\x00CODEX_TOOL_CALL_ID=call\x00SECRET=never-save\x00")
+	get := func() nativeInstance {
+		t.Helper()
+		found, err := scanNative(root, "boot", "/test-codex")
+		if err != nil || len(found) != 1 {
+			t.Fatalf("scan count=%d err=%v", len(found), err)
+		}
+		return found[0]
+	}
+	if i := get(); i.ThreadID != "session" || i.ToolCallID != "call" || i.ContextConflict {
+		t.Fatal("did not recover command child context")
+	}
+	write(101, "cmdline", "codex-linux-sandbox\x00--\x00/opt/codex\x00--codex-run-as-arg0-exec-helper\x00sh\x00/bin/sh\x00-c\x00sleep 2\x00")
+	if i := get(); i.ThreadID != "session" || i.ToolCallID != "call" {
+		t.Fatal("exec-server arg0 trampoline hid the command context")
+	}
+	write(102, "cmdline", "/bin/sh\x00-c\x00different\x00")
+	if i := get(); i.ThreadID != "" || i.ToolCallID != "" {
+		t.Fatal("unrelated command supplied a Tool identity")
+	}
+	write(102, "cmdline", "/bin/sh\x00-c\x00sleep 2\x00")
+	if err := os.Remove(filepath.Join(root, "102", "ns", "pid")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("pid:other", filepath.Join(root, "102", "ns", "pid")); err != nil {
+		t.Fatal(err)
+	}
+	if i := get(); i.ThreadID != "" {
+		t.Fatal("another namespace supplied context")
+	}
+	if err := os.Remove(filepath.Join(root, "102", "ns", "pid")); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("pid:sandbox", filepath.Join(root, "102", "ns", "pid")); err != nil {
+		t.Fatal(err)
+	}
+	fakeNativeProcess(t, root, 103, 101, "22", "/bin/sh", "sandbox")
+	write(103, "cmdline", "/bin/sh\x00-c\x00sleep 2\x00")
+	write(103, "environ", "CODEX_THREAD_ID=other-session\x00CODEX_TOOL_CALL_ID=other-call\x00")
+	write(101, "task/101/children", "102 103")
+	if i := get(); !i.ContextConflict || i.ThreadID != "" {
+		t.Fatal("conflicting command contexts were guessed")
+	}
+}

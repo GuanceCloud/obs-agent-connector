@@ -115,7 +115,7 @@ func (e Event) Validate() error {
 	if len(e.ExecutionID) > 256 {
 		return fmt.Errorf("execution identifier exceeds limit")
 	}
-	if e.AssociationMethod != "" && e.AssociationMethod != "runtime_keys" && e.AssociationMethod != "native_thread_command_digest" {
+	if e.AssociationMethod != "" && e.AssociationMethod != "runtime_keys" && e.AssociationMethod != "native_thread_command_digest" && e.AssociationMethod != "native_process_tool_id" {
 		return fmt.Errorf("invalid sandbox association method")
 	}
 	if len(e.ObservedSessionID) > 256 || strings.ContainsAny(e.ObservedSessionID, "\r\n\x00") {
@@ -201,6 +201,8 @@ func (e Event) record(now time.Time, resource map[string]any, capture bool) mode
 		attrs["obs.sandbox.association.method"] = method
 		if method == "native_thread_command_digest" {
 			attrs["obs.sandbox.association.confidence"] = "inferred"
+		} else if method == "native_process_tool_id" {
+			attrs["obs.sandbox.association.confidence"] = "observed"
 		}
 	}
 	if e.ObservedSessionID != "" {
