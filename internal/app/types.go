@@ -1,5 +1,7 @@
 package app
 
+import installpkg "github.com/GuanceCloud/obs-agent-connector/internal/install"
+
 type installInput struct {
 	Endpoint       string
 	TracePath      string
@@ -12,6 +14,7 @@ type installInput struct {
 	CaptureContent string
 	MaxChars       int
 	Enabled        *bool
+	CodexSandbox   installpkg.CodexSandboxOptions
 }
 
 type githubRelease struct {

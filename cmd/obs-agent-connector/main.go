@@ -7,6 +7,7 @@ import (
 	claudehook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/hook"
 	codebuddyhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codebuddy/hook"
 	codexhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/hook"
+	codexsandbox "github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/sandbox"
 	cursorhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/cursor/hook"
 	dcodehook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/dcode/hook"
 	grokhook "github.com/GuanceCloud/obs-agent-connector/internal/adapters/grok/hook"
@@ -19,6 +20,9 @@ import (
 )
 
 func main() {
+	if len(os.Args) >= 3 && os.Args[1] == "internal" && os.Args[2] == "codex-sandbox" {
+		os.Exit(codexsandbox.RunCLI(os.Args[3:]))
+	}
 	if len(os.Args) >= 3 && os.Args[1] == "hook" {
 		switch os.Args[2] {
 		case "pi":

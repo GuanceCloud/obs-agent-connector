@@ -26,6 +26,7 @@ type CodexOptions struct {
 	Endpoint              string
 	TracePath             string
 	MetricsPath           string
+	Sandbox               CodexSandboxOptions
 	InstallType           string
 	XToken                string
 	Headers               []string
@@ -57,6 +58,9 @@ Options:
   --endpoint <url>           GTrace or OTLP HTTP endpoint
   --trace-path <path>        override the trace upload path
   --metrics-path <path>      override the metrics upload path
+  --logs-path <path>         Codex sandbox Logs path relative to endpoint
+  --sandbox-enabled <bool>   enable native Linux sandbox observation and runtime bridge
+  --sandbox-max-pending <n>  Codex sandbox pending Logs limit, from 1 to 4096
   --x-token <token>          add the GTrace X-Token header
   --header <KEY=VALUE>       add an HTTP header; may be repeated
   --tag <KEY=VALUE>          add a resource attribute; may be repeated
@@ -137,6 +141,14 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 			return CodexResult{}, fmt.Errorf("parse legacy Codex GTrace config: %w", err)
 		}
 	}
+	configure := !options.NoConfig && shouldConfigureGTrace(configExists, options)
+	var nextConfig map[string]any
+	if configure {
+		nextConfig, err = MergeCodexRuntimeConfig(configValue, options, configExists)
+		if err != nil {
+			return CodexResult{}, err
+		}
+	}
 
 	absoluteSource, err := filepath.Abs(source)
 	if err != nil {
@@ -151,7 +163,12 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 			return CodexResult{}, err
 		}
 	}
-	if err := writeCodexHooks(hooksFile, hooks, absoluteDestination); err != nil {
+	effectiveConfig := configValue
+	if configure {
+		effectiveConfig = nextConfig
+	}
+	nativeEnabled := objectValue(effectiveConfig["sandbox"])["enabled"] == true
+	if err := writeCodexHooksWithNative(hooksFile, hooks, absoluteDestination, nativeEnabled); err != nil {
 		return CodexResult{}, err
 	}
 
@@ -160,11 +177,7 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 		HooksFile:  hooksFile,
 		ConfigFile: configFile,
 	}
-	if !options.NoConfig && shouldConfigureGTrace(configExists, options) {
-		nextConfig, mergeErr := mergeCodexGTraceConfig(configValue, options, configExists)
-		if mergeErr != nil {
-			return result, mergeErr
-		}
+	if configure {
 		if err := writeJSONAtomic(configFile, nextConfig); err != nil {
 			return result, err
 		}
@@ -192,6 +205,7 @@ func ParseInstallArgs(args []string) (CodexOptions, error) {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.SetOutput(io.Discard)
 	var options CodexOptions
+	readSandboxOptions := RegisterCodexSandboxFlags(fs)
 	var headers stringList
 	var attributes stringList
 	var enable bool
@@ -213,6 +227,11 @@ func ParseInstallArgs(args []string) (CodexOptions, error) {
 	fs.Var(&attributes, "tag", "resource attribute KEY=VALUE")
 	if err := fs.Parse(args); err != nil {
 		return CodexOptions{}, err
+	}
+	var sandboxErr error
+	options.Sandbox, sandboxErr = readSandboxOptions()
+	if sandboxErr != nil {
+		return CodexOptions{}, sandboxErr
 	}
 	if fs.NArg() != 0 {
 		return CodexOptions{}, fmt.Errorf("unexpected arguments: %s", strings.Join(fs.Args(), " "))
@@ -247,6 +266,10 @@ func ParseInstallArgs(args []string) (CodexOptions, error) {
 }
 
 func writeCodexHooks(path string, settings map[string]any, command string) error {
+	return writeCodexHooksWithNative(path, settings, command, false)
+}
+
+func writeCodexHooksWithNative(path string, settings map[string]any, command string, native bool) error {
 	if settings == nil {
 		settings = map[string]any{}
 	}
@@ -255,24 +278,51 @@ func writeCodexHooks(path string, settings map[string]any, command string) error
 		hooks = map[string]any{}
 		settings["hooks"] = hooks
 	}
-	groups, _ := hooks["Stop"].([]any)
-	next := make([]any, 0, len(groups)+1)
-	for _, group := range groups {
-		if !managedCodexHook(group) {
-			next = append(next, group)
+	for _, event := range []string{"Stop", "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Interrupt"} {
+		groups, _ := hooks[event].([]any)
+		next := make([]any, 0, len(groups)+1)
+		for _, group := range groups {
+			object, ok := group.(map[string]any)
+			if !ok {
+				next = append(next, group)
+				continue
+			}
+			handlers, ok := object["hooks"].([]any)
+			if !ok {
+				next = append(next, group)
+				continue
+			}
+			remaining := make([]any, 0, len(handlers))
+			for _, handler := range handlers {
+				if !managedCodexHook(map[string]any{"hooks": []any{handler}}) {
+					remaining = append(remaining, handler)
+				}
+			}
+			if len(remaining) > 0 || len(handlers) == 0 {
+				object["hooks"] = remaining
+				next = append(next, object)
+			}
 		}
+		message := "Observing native Codex sandbox execution"
+		if event != "Stop" && !native {
+			if len(next) == 0 {
+				delete(hooks, event)
+			} else {
+				hooks[event] = next
+			}
+			continue
+		}
+		if event == "Stop" {
+			message = "Uploading Codex telemetry to GTrace"
+		}
+		next = append(next, map[string]any{
+			"hooks": []any{map[string]any{
+				"type": "command", "command": codexHookCommand(command),
+				"timeout": 60, "statusMessage": message,
+			}},
+		})
+		hooks[event] = next
 	}
-	next = append(next, map[string]any{
-		"hooks": []any{
-			map[string]any{
-				"type":          "command",
-				"command":       codexHookCommand(command),
-				"timeout":       60,
-				"statusMessage": "Uploading Codex telemetry to GTrace",
-			},
-		},
-	})
-	hooks["Stop"] = next
 	return writeJSONAtomic(path, settings)
 }
 
@@ -314,7 +364,7 @@ func managedCodexHook(value any) bool {
 func shouldConfigureGTrace(configExists bool, options CodexOptions) bool {
 	return configExists || options.Endpoint != "" || options.Enabled != nil ||
 		len(options.Headers) > 0 || len(options.ResourceAttributes) > 0 || options.XToken != "" ||
-		options.CaptureContent != "" || options.MaxChars > 0
+		options.CaptureContent != "" || options.MaxChars > 0 || options.Sandbox.Specified()
 }
 
 func mergeCodexGTraceConfig(current map[string]any, options CodexOptions, existed bool) (map[string]any, error) {

@@ -110,6 +110,7 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 	case "codex":
 		hooksFile := agent.ExpandHome(p.BuiltinHookFile)
 		result, installErr := installCodexAdapter(telemetryinstall.CodexOptions{
+			Sandbox:               input.CodexSandbox,
 			SourceExecutable:      executable,
 			DestinationExecutable: executable,
 			CodexHome:             filepath.Dir(hooksFile),
@@ -134,6 +135,7 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 			} else {
 				printSingleDetail("Trust", "granted")
 			}
+			printSingleDetail("Sandbox Logs", "Experimental; supports native Linux observation and an independent runtime producer. Enable and configure logsPath with config codex list/edit.")
 		}
 	case "cursor":
 		_, err = telemetryinstall.InstallCursor(telemetryinstall.CursorOptions{
