@@ -90,7 +90,9 @@ func RunWithOptions(options RunOptions) error {
 	if sandbox.Configured(cfg) && input.Event != "" {
 		if sandbox.NativeSupported() {
 			if err := sandbox.RecordNativeHook(sandbox.NewStore(cfg), input.NativeHook); err != nil {
-				_ = appendLog(cfg, "native sandbox Hook deferred", map[string]any{"phase": "association"})
+				if detail := sandbox.CollectionDiagnostic(err, "association", cfg.Debug); detail != nil {
+					_ = appendLog(cfg, "native sandbox Hook deferred", detail)
+				}
 			}
 		}
 		start := options.StartObserver
@@ -98,7 +100,9 @@ func RunWithOptions(options RunOptions) error {
 			start = func(cfg config.Config) error { return sandbox.EnsureNative(cfg, "") }
 		}
 		if err := start(cfg); err != nil {
-			_ = appendLog(cfg, "native sandbox Hook deferred", map[string]any{"phase": "observer_start"})
+			if detail := sandbox.CollectionDiagnostic(err, "observer_start", cfg.Debug); detail != nil {
+				_ = appendLog(cfg, "native sandbox Hook deferred", detail)
+			}
 		}
 	}
 	if input.Event != "" && input.Event != "Stop" {

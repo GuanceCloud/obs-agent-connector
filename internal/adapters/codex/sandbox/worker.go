@@ -9,6 +9,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -214,6 +215,7 @@ func recoverBindings(cfg config.Config, store Store) error {
 
 func errorCategory(err error) string {
 	var status *transport.UploadError
+	var network net.Error
 	switch {
 	case errors.As(err, &status):
 		if status.RejectedLogRecords > 0 {
@@ -228,9 +230,32 @@ func errorCategory(err error) string {
 		return "queue_full"
 	case errors.Is(err, ErrDeferred):
 		return "retry_scheduled"
+	case errors.Is(err, journal.ErrBusy):
+		return "journal_busy"
+	case errors.Is(err, os.ErrPermission):
+		return "filesystem_permission_denied"
+	case errors.Is(err, os.ErrNotExist):
+		return "filesystem_not_found"
+	case errors.As(err, &network):
+		if network.Timeout() {
+			return "transport_timeout"
+		}
+		return "transport_network_error"
+	case errors.Is(err, io.EOF), errors.Is(err, io.ErrUnexpectedEOF):
+		return "connection_closed"
 	default:
 		return "collection_or_transport_error"
 	}
+}
+
+// CollectionDiagnostic exposes only bounded categories and operation names.
+// A busy journal already retries independently; routine contention is verbose
+// debugging information, not a collection or Trace-upload failure.
+func CollectionDiagnostic(err error, phase string, debug bool) map[string]any {
+	if err == nil || errors.Is(err, journal.ErrBusy) && !debug {
+		return nil
+	}
+	return map[string]any{"category": errorCategory(err), "phase": phase}
 }
 
 func consume(ctx context.Context, reader io.Reader, store Store, logPath string) error {

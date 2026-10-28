@@ -4,9 +4,11 @@ import (
 	"compress/gzip"
 	"context"
 	"encoding/hex"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -20,6 +22,57 @@ import (
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/state"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
 )
+
+func TestSandboxCollectionFailureCannotBlockTraceUpload(t *testing.T) {
+	base := t.TempDir()
+	traces, metrics := 0, 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/v1/traces":
+			traces++
+		case "/v1/metrics":
+			metrics++
+		default:
+			t.Errorf("unexpected upload: %s", r.URL.Path)
+		}
+		w.Header().Set("Content-Type", "application/x-protobuf")
+	}))
+	defer server.Close()
+	cfg := config.Config{Enabled: true, FailOnError: true, SandboxEnabled: true, StateDir: filepath.Join(base, "state"), Endpoint: server.URL, TracePath: "v1/traces", MetricsPath: "v1/metrics", LogsPath: "v1/logs", CaptureContent: "none", HookLogFile: filepath.Join(base, "hooks.jsonl")}
+	store := sandbox.NewStore(cfg)
+	for _, dir := range []string{store.Root, filepath.Join(store.Root, "native")} {
+		if err := os.MkdirAll(dir, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "journal.json"), []byte("invalid fixture journal"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	rollout := filepath.Join(base, "rollout.jsonl")
+	if err := os.WriteFile(rollout, []byte(joinJSONLines(
+		row("2026-10-28T01:00:00Z", "session_meta", map[string]any{"id": "session"}),
+		row("2026-10-28T01:00:01Z", "event_msg", map[string]any{"type": "task_started", "turn_id": "turn"}),
+		row("2026-10-28T01:00:02Z", "event_msg", map[string]any{"type": "user_message", "message": "fixture"}),
+		row("2026-10-28T01:00:03Z", "event_msg", map[string]any{"type": "agent_message", "message": "completed fixture"}),
+		row("2026-10-28T01:00:04Z", "event_msg", map[string]any{"type": "task_complete", "turn_id": "turn"}),
+	)), 0600); err != nil {
+		t.Fatal(err)
+	}
+	options := RunOptions{Config: &cfg, Input: &Input{TranscriptPath: rollout, NativeHook: sandbox.NativeHook{Event: "Stop", SessionID: "session", TurnID: "turn"}}, StartObserver: func(config.Config) error { return fmt.Errorf("fixture observer unavailable") }}
+	if exit := RunCLIWithOptions(options); exit != 0 {
+		t.Fatalf("sandbox failure failed the Stop Hook: %d", exit)
+	}
+	if exit := RunCLIWithOptions(options); exit != 0 {
+		t.Fatalf("repeat Hook failed: %d", exit)
+	}
+	if traces != 1 || metrics != 1 {
+		t.Fatalf("failed or duplicate telemetry: traces=%d metrics=%d", traces, metrics)
+	}
+	completed, err := (state.Manager{Root: filepath.Join(cfg.StateDir, "uploads")}).Completed("session", "turn")
+	if err != nil || !completed {
+		t.Fatalf("normal upload did not complete: %v", err)
+	}
+}
 
 func TestSandboxBindingUsesUploadedTraceAcrossMetricsRetry(t *testing.T) {
 	base := t.TempDir()

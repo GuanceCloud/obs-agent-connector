@@ -433,7 +433,9 @@ func RunNative(ctx context.Context, cfg config.Config) error {
 			deliveryConfig, deliveryStore = current, NewStore(current)
 			if time.Since(lastRecovery) >= 15*time.Second {
 				if err := recoverBindings(deliveryConfig, deliveryStore); err != nil {
-					_ = hooklog.Append(deliveryConfig.HookLogFile, "native sandbox binding recovery deferred", map[string]any{"category": errorCategory(err)})
+					if detail := CollectionDiagnostic(err, "binding_recovery", deliveryConfig.Debug); detail != nil {
+						_ = hooklog.Append(deliveryConfig.HookLogFile, "native sandbox binding recovery deferred", detail)
+					}
 				}
 				lastRecovery = time.Now()
 			}
@@ -462,7 +464,27 @@ func RunNative(ctx context.Context, cfg config.Config) error {
 		return err
 	}
 	codexHome := agentfiles.CodexHome(home)
+	lastHookCheck := time.Time{}
+	lastHookHealth := ""
 	for {
+		if time.Since(lastHookCheck) >= time.Minute {
+			missing, err := nativeMissingHooks(codexHome)
+			health := strings.Join(missing, ",")
+			if err != nil {
+				health = "unreadable"
+			}
+			if health != lastHookHealth {
+				if err != nil {
+					_ = hooklog.Append(cfg.HookLogFile, "native sandbox Hook registration unavailable", map[string]any{"category": errorCategory(err), "phase": "hook_health"})
+				} else if len(missing) > 0 {
+					_ = hooklog.Append(cfg.HookLogFile, "native sandbox Hook registration missing", map[string]any{"category": "hook_registration_missing", "missing_events": missing, "recovery": "obs-agent-connector update codex"})
+				} else {
+					_ = hooklog.Append(cfg.HookLogFile, "native sandbox Hook registration restored", nil)
+				}
+				lastHookHealth = health
+			}
+			lastHookCheck = time.Now()
+		}
 		if time.Since(lastCheck) >= time.Second {
 			currentImage, err := os.Stat(executable)
 			if err != nil || !os.SameFile(image, currentImage) {
@@ -498,6 +520,7 @@ func RunNative(ctx context.Context, cfg config.Config) error {
 			continue
 		}
 		lastScan = time.Now()
+		phase := "proc_scan"
 		observed, scanErr := scanNative("/proc", strings.TrimSpace(string(boot)), codexHome)
 		if len(observed) > 0 {
 			idleSince = time.Now()
@@ -512,6 +535,7 @@ func RunNative(ctx context.Context, cfg config.Config) error {
 		sort.Strings(ids)
 		signature := digest(ids...)
 		if scanErr == nil && time.Now().After(retryAfter) && (signature != lastSignature || hookChanged || time.Since(lastReconcile) >= time.Minute) {
+			phase = "journal_reconcile"
 			scanErr = reconcileNative(store, observed, func(i nativeInstance) (bool, error) { return nativeAlive("/proc", i) })
 			if scanErr == nil {
 				lastSignature, lastReconcile = signature, time.Now()
@@ -523,8 +547,10 @@ func RunNative(ctx context.Context, cfg config.Config) error {
 			nativeModified = info.ModTime()
 		}
 		if scanErr != nil && time.Since(lastWarning) >= time.Minute {
-			_ = hooklog.Append(cfg.HookLogFile, "native sandbox observation deferred", map[string]any{"category": errorCategory(scanErr)})
-			lastWarning = time.Now()
+			if detail := CollectionDiagnostic(scanErr, phase, cfg.Debug); detail != nil {
+				_ = hooklog.Append(cfg.HookLogFile, "native sandbox observation deferred", detail)
+				lastWarning = time.Now()
+			}
 		}
 		select {
 		case <-ctx.Done():
