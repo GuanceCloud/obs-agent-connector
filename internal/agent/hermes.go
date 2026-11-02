@@ -7,10 +7,11 @@ import (
 
 func hermesPlugin() Definition {
 	return Definition{
-		Name:                "hermes",
-		PluginName:          "hermes-otel-plugin",
-		AgentCommand:        "hermes",
-		GitHubUnixInstaller: "install.sh",
+		Name:                 "hermes",
+		PluginName:           "hermes-otel-plugin",
+		AgentCommand:         "hermes",
+		GitHubUnixInstaller:  "install.sh",
+		GitHubReleaseBaseEnv: "OSS_ENDPOINT",
 		Markers: []string{
 			"~/.hermes/plugins/hermes-otel-plugin",
 		},
