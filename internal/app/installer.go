@@ -560,6 +560,9 @@ func renderBashCommand(args []string) string {
 
 func pluginEnv(download pluginDownloadConfig, p agent.Definition) []string {
 	env := []string{}
+	if download.Source == pluginSourceGitHub && strings.TrimSpace(p.GitHubReleaseBaseEnv) != "" {
+		env = append(env, p.GitHubReleaseBaseEnv+"="+githubPluginAssetBase(download, p))
+	}
 	if download.Source == pluginSourceOSS {
 		env = append(env, "OSS_ENDPOINT="+ossPluginBaseURL(download.BaseURL))
 	}
@@ -580,15 +583,12 @@ func pluginEnv(download pluginDownloadConfig, p agent.Definition) []string {
 
 func renderEnvAssignments(download pluginDownloadConfig, p agent.Definition) string {
 	assignments := []string{}
-	if download.Source == pluginSourceOSS {
-		assignments = append(assignments, "OSS_ENDPOINT="+shellQuote(ossPluginBaseURL(download.BaseURL)))
-	}
-	for _, item := range p.Env {
+	for _, item := range pluginEnv(download, p) {
 		key, value, ok := splitEnvAssignment(item)
 		if !ok {
 			continue
 		}
-		assignments = append(assignments, key+"="+shellQuote(agent.ExpandHome(value)))
+		assignments = append(assignments, key+"="+shellQuote(value))
 	}
 	return strings.Join(assignments, " ")
 }
@@ -617,7 +617,11 @@ func installerURLForOS(download pluginDownloadConfig, p agent.Definition, goos s
 	}
 	switch download.Source {
 	case pluginSourceGitHub:
-		return githubPluginAssetBase(download, p) + "/install-release.sh", nil
+		installer := strings.TrimSpace(p.GitHubUnixInstaller)
+		if installer == "" {
+			installer = "install-release.sh"
+		}
+		return githubPluginAssetBase(download, p) + "/" + strings.TrimLeft(installer, "/"), nil
 	case pluginSourceOSS:
 		return ossPluginBaseURL(download.BaseURL) + "/" + p.PluginName + "/install.sh", nil
 	default:

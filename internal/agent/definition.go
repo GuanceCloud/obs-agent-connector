@@ -14,6 +14,8 @@ type Definition struct {
 	PluginName               string
 	AgentCommand             string
 	SupportedPlatforms       []string
+	GitHubUnixInstaller      string
+	GitHubReleaseBaseEnv     string
 	WindowsInstaller         string
 	ReleaseArchiveEnv        string
 	PackageScript            string
