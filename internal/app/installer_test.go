@@ -554,3 +554,28 @@ func agentDefinitionForTest(name string) agent.Definition {
 	}
 	return definition
 }
+
+func TestUnixInstallerURLs(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		agentName string
+		source    string
+		base      string
+		want      string
+	}{
+		{"hermes github", "hermes", pluginSourceGitHub, "https://github.com/GuanceCloud", "https://github.com/GuanceCloud/hermes-otel-plugin/releases/latest/download/install.sh"},
+		{"hermes oss", "hermes", pluginSourceOSS, "https://static.guance.com", "https://static.guance.com/agent_plugins/hermes-otel-plugin/install.sh"},
+		{"hermes exact release", "hermes", pluginSourceGitHub, "https://github.com/GuanceCloud/hermes-otel-plugin/releases/download/v0.1.9", "https://github.com/GuanceCloud/hermes-otel-plugin/releases/download/v0.1.9/install.sh"},
+		{"default github", "openclaw", pluginSourceGitHub, "https://github.com/GuanceCloud", "https://github.com/GuanceCloud/openclaw-otel-plugin/releases/latest/download/install-release.sh"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, err := installerURLForOS(pluginDownloadConfig{Source: tc.source, BaseURL: tc.base}, agentDefinitionForTest(tc.agentName), "linux")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got != tc.want {
+				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
+}
