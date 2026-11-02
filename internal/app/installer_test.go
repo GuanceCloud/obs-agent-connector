@@ -579,3 +579,42 @@ func TestUnixInstallerURLs(t *testing.T) {
 		})
 	}
 }
+
+func TestHermesInstallerReleaseEnvironment(t *testing.T) {
+	for _, tc := range []struct{ name, source, base, want string }{
+		{"github", pluginSourceGitHub, "https://github.com/GuanceCloud", "OSS_ENDPOINT=https://github.com/GuanceCloud/hermes-otel-plugin/releases/latest/download"},
+		{"oss", pluginSourceOSS, "https://static.guance.com", "OSS_ENDPOINT=https://static.guance.com/agent_plugins"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := agentDefinitionForTest("hermes")
+			download := pluginDownloadConfig{Source: tc.source, BaseURL: tc.base}
+			env := pluginEnv(download, p)
+			count := 0
+			for _, item := range env {
+				if strings.HasPrefix(item, "OSS_ENDPOINT=") {
+					count++
+					if item != tc.want {
+						t.Fatalf("expected %q, got %q", tc.want, item)
+					}
+				}
+			}
+			if count != 1 {
+				t.Fatalf("expected one release endpoint, got %v", env)
+			}
+			for _, command := range []string{renderInstallCommand(download, p, installInput{}), renderPluginUpdateCommand(download, p)} {
+				if !strings.Contains(command, renderEnvAssignments(download, p)) || !strings.Contains(command, "OSS_ENDPOINT=") {
+					t.Fatalf("missing release environment: %s", command)
+				}
+			}
+			if !strings.Contains(renderPluginUpdateCommand(download, p), "--no-config") {
+				t.Fatal("update must preserve configuration")
+			}
+		})
+	}
+	p := agentDefinitionForTest("openclaw")
+	for _, env := range pluginEnv(pluginDownloadConfig{Source: pluginSourceGitHub, BaseURL: "https://github.com/GuanceCloud"}, p) {
+		if strings.HasPrefix(env, "OSS_ENDPOINT=") {
+			t.Fatalf("unexpected environment for default installer: %s", env)
+		}
+	}
+}
