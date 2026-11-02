@@ -617,7 +617,11 @@ func installerURLForOS(download pluginDownloadConfig, p agent.Definition, goos s
 	}
 	switch download.Source {
 	case pluginSourceGitHub:
-		return githubPluginAssetBase(download, p) + "/install-release.sh", nil
+		installer := strings.TrimSpace(p.GitHubUnixInstaller)
+		if installer == "" {
+			installer = "install-release.sh"
+		}
+		return githubPluginAssetBase(download, p) + "/" + strings.TrimLeft(installer, "/"), nil
 	case pluginSourceOSS:
 		return ossPluginBaseURL(download.BaseURL) + "/" + p.PluginName + "/install.sh", nil
 	default:
