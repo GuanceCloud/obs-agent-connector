@@ -18,13 +18,31 @@ Built-in `invoke_agent` spans do not carry token usage. Attributable token usage
 | `omp` | Oh My Pi 18.1.15+ | Current connector | `~/.obs-agent-connector/omp/gtrace.json` | `~/.omp/agent/extensions/obs-agent-connector.js` |
 | `pi` | Pi Coding Agent 0.85.1+ | Current connector | `~/.obs-agent-connector/pi/gtrace.json` | Managed extension registered in `~/.pi/agent/settings.json` |
 | `dsh` | DeepSeek Harness | Unix: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install.sh` Windows: `https://static.guance.com/agent_plugins/dsh-otel-plugin/install-release.ps1` | `$DSH_HOME/gtrace.json` (default `~/.dsh/gtrace.json`) | `$DSH_HOME/profiles/<profile>/node_modules/dsh-otel-plugin` |
-| `hermes` | Hermes | `https://static.guance.com/agent_plugins/hermes-otel-plugin/install.sh` | `~/.hermes/config.yaml` | `~/.hermes/plugins/hermes-otel-plugin` |
+| `hermes` | Hermes | `https://static.guance.com/agent_plugins/hermes-otel-plugin/install.sh` | `$HERMES_HOME/config.yaml` (default `~/.hermes/config.yaml`) | `$HERMES_HOME/plugins/hermes-otel-plugin` |
 | `opencode` | OpenCode with automatic config-directory detection | Unix: `https://static.guance.com/agent_plugins/opencode-otel-plugin/opencode-otel-plugin.tar.gz`  Windows: `https://static.guance.com/agent_plugins/opencode-otel-plugin/install-release.ps1` | `~/.config/opencode/gtrace.json` | `~/.config/opencode/plugins/opencode-otel-plugin` |
 | `mimo` | MiMo Code using the host-aware OpenCode plugin with `--variant mimo` | Same package and release installer as `opencode` (requires a host-aware release) | `~/.config/mimocode/gtrace.json` | `~/.config/mimocode/plugins/opencode-otel-plugin` |
 | `openclaw` | OpenClaw | Unix: `https://static.guance.com/agent_plugins/openclaw-otel-plugin/install.sh`  Windows: `https://static.guance.com/agent_plugins/openclaw-otel-plugin/install-release.ps1` | `~/.openclaw/openclaw.json` | `~/.openclaw/extensions/openclaw-otel-plugin` |
 | `qoder` | Qoder with automatic CN/global detection | Unix: `https://static.guance.com/agent_plugins/qoder-otel-plugin/qoder-otel-plugin.tar.gz`  Windows: `https://static.guance.com/agent_plugins/qoder-otel-plugin/install-release.ps1` | `~/.qoder/gtrace.json` or `~/.qoder-cn/gtrace.json` | `~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin` or `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
 | `workbuddy` | WorkBuddy with automatic profile-directory detection | Built into `obs-agent-connector` | `~/.obs-agent-connector/workbuddy/gtrace.json` (legacy profile config remains readable) | `<profile>/settings.json` managed Hooks |
 | `qwenwork-cn` | QwenWork CN domestic desktop on macOS, Linux and Windows; Windows AMD64 user smoke test passed, Linux/Windows ARM64 runtime unverified; [local Hook contract](product-research/qwenwork-cn.md) | Built into `obs-agent-connector` | `~/.obs-agent-connector/qwenwork-cn/gtrace.json` | `~/.qwenworkcn/settings.json` managed Hooks |
+
+## Hermes Home Directory
+
+Hermes uses a non-empty `HERMES_HOME` for plugin discovery, installed-version detection,
+configuration lookup, installation, updates, and removal. An unset or empty value
+falls back to `~/.hermes`. A leading `~/` is expanded before passing the same home
+to the plugin installer.
+
+```bash
+export HERMES_HOME="$HOME/custom-hermes"
+obs-agent-connector install hermes
+obs-agent-connector update hermes
+obs-agent-connector remove hermes
+```
+
+Updates preserve existing configuration with `--no-config`. Removal deletes only
+the plugin under the selected home and keeps `config.yaml` unless `--purge-config`
+is supplied. Use the same `HERMES_HOME` for each command.
 
 ## WorkBuddy Migration
 
@@ -146,6 +164,6 @@ contract and add a regression test for the generated command.
 | `workbuddy` | `enabled` |
 | `qwenwork-cn` | `enabled` |
 
-`hermes` is not included because its runtime config is `~/.hermes/config.yaml`.
+`hermes` is not included because its runtime config is `$HERMES_HOME/config.yaml` (default `~/.hermes/config.yaml`).
 
 CodeBuddy accepts both legacy IDE `index.json` plus `messages/` transcripts and CodeBuddy Code CLI JSONL sessions through the same managed Hooks. No conversion script or version-specific configuration is required. See [CodeBuddy transcript semantics](product-research/codebuddy.md) for terminal states, token deduplication, and timing limits.

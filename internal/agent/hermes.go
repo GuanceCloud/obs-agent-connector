@@ -1,5 +1,10 @@
 package agent
 
+import (
+	"os"
+	"path/filepath"
+)
+
 func hermesPlugin() Definition {
 	return Definition{
 		Name:         "hermes",
@@ -12,5 +17,20 @@ func hermesPlugin() Definition {
 		RemovePaths: []string{
 			"~/.hermes/plugins/hermes-otel-plugin",
 		},
+		Resolve: resolveHermesPlugin,
 	}
+}
+
+func resolveHermesPlugin(p Definition) Definition {
+	home := os.Getenv("HERMES_HOME")
+	if home == "" {
+		home = "~/.hermes"
+	}
+	home = ExpandHome(home)
+	pluginDir := filepath.Join(home, "plugins", p.PluginName)
+	p.Markers = []string{pluginDir}
+	p.ConfigFiles = []string{filepath.Join(home, "config.yaml")}
+	p.RemovePaths = []string{pluginDir}
+	p.Env = []string{"HERMES_HOME=" + home}
+	return p
 }
