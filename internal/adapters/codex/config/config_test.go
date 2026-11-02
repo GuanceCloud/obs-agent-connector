@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-func TestSandboxIsOptInAndRequiresAnExplicitLogsRoute(t *testing.T) {
+func TestSandboxDefaultsOnAndRequiresAnExplicitLogsRoute(t *testing.T) {
 	home := t.TempDir()
 	t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
 	if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o700); err != nil {
@@ -20,8 +20,8 @@ func TestSandboxIsOptInAndRequiresAnExplicitLogsRoute(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if cfg.SandboxEnabled || cfg.LogsPath != "" {
-		t.Fatal("sandbox logs enabled implicitly")
+	if !cfg.SandboxEnabled || cfg.LogsPath != "" {
+		t.Fatal("sandbox default or explicit Logs route requirement changed")
 	}
 	if err := os.WriteFile(path, []byte(`{"enabled":true,"endpoint":"https://collector.example","logsPath":"otel/v1/logs","otel_logs_url":"https://ignored.example/logs","sandbox":{"enabled":true,"max_pending":64}}`), 0o600); err != nil {
 		t.Fatal(err)
@@ -39,6 +39,36 @@ func TestSandboxIsOptInAndRequiresAnExplicitLogsRoute(t *testing.T) {
 	cfg, err = Resolve(ResolveOptions{Home: home, Cwd: t.TempDir()})
 	if err != nil || cfg.LogsPath != "" {
 		t.Fatal("retired Logs URL supplied an implicit route")
+	}
+}
+
+func TestSandboxDefaultAndExplicitOptOut(t *testing.T) {
+	for _, tc := range []struct {
+		name, body string
+		want       bool
+	}{
+		{"missing", `{"enabled":true,"logsPath":"v1/write/otel-logs"}`, true},
+		{"missing-enabled", `{"enabled":true,"logsPath":"v1/write/otel-logs","sandbox":{"max_pending":64}}`, true},
+		{"disabled", `{"enabled":true,"logsPath":"v1/write/otel-logs","sandbox":{"enabled":false}}`, false},
+		{"enabled", `{"enabled":true,"logsPath":"v1/write/otel-logs","sandbox":{"enabled":true}}`, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("CODEX_HOME", filepath.Join(home, ".codex"))
+			if err := os.MkdirAll(filepath.Join(home, ".codex"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(home, ".codex", "gtrace.json"), []byte(tc.body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := Resolve(ResolveOptions{Home: home, Cwd: t.TempDir()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if cfg.SandboxEnabled != tc.want || cfg.LogsPath != "v1/write/otel-logs" {
+				t.Fatalf("sandbox enabled=%v, Logs path=%q", cfg.SandboxEnabled, cfg.LogsPath)
+			}
+		})
 	}
 }
 

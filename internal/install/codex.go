@@ -59,7 +59,7 @@ Options:
   --trace-path <path>        override the trace upload path
   --metrics-path <path>      override the metrics upload path
   --logs-path <path>         Codex sandbox Logs path relative to endpoint
-  --sandbox-enabled <bool>   enable native Linux sandbox observation and runtime bridge
+  --sandbox-enabled <bool>   enable native Linux sandbox observation and runtime bridge (default: true)
   --sandbox-max-pending <n>  Codex sandbox pending Logs limit, from 1 to 4096
   --x-token <token>          add the GTrace X-Token header
   --header <KEY=VALUE>       add an HTTP header; may be repeated
@@ -167,7 +167,8 @@ func InstallCodex(options CodexOptions) (CodexResult, error) {
 	if configure {
 		effectiveConfig = nextConfig
 	}
-	nativeEnabled := objectValue(effectiveConfig["sandbox"])["enabled"] == true
+	sandboxEnabled, sandboxConfigured := objectValue(effectiveConfig["sandbox"])["enabled"]
+	nativeEnabled := !sandboxConfigured || sandboxEnabled == true
 	if err := writeCodexHooksWithNative(hooksFile, hooks, absoluteDestination, nativeEnabled); err != nil {
 		return CodexResult{}, err
 	}

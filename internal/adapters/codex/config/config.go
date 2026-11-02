@@ -117,7 +117,7 @@ func Resolve(options ResolveOptions) (Config, error) {
 		TracePath:          normalizeSignalPath(asString(merged["tracePath"]), "api/public/otel/v1/traces"),
 		MetricsPath:        normalizeSignalPath(asString(merged["metricsPath"]), "api/public/otel/v1/metrics"),
 		LogsPath:           strings.Trim(strings.TrimSpace(asString(merged["logsPath"])), "/"),
-		SandboxEnabled:     parseBoolean(sandbox["enabled"], false),
+		SandboxEnabled:     parseBoolean(sandbox["enabled"], true),
 		SandboxMaxPending:  maxPending,
 		OtelTracesURL:      asString(merged["otel_traces_url"]),
 		OtelMetricsURL:     asString(merged["otel_metrics_url"]),

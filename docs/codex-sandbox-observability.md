@@ -30,7 +30,7 @@ Exports use OTLP/HTTP Protobuf with gzip. Logs use the same `endpoint`, headers,
   "enabled": true,
   "endpoint": "https://llm-openway.guance.com",
   "logsPath": "v1/write/otel-logs",
-  "sandbox": { "enabled": false, "max_pending": 1024 }
+  "sandbox": { "enabled": true, "max_pending": 1024 }
 }
 ```
 
@@ -45,7 +45,9 @@ obs-agent-connector config codex list
 obs-agent-connector config codex edit --logs-path=v1/write/otel-logs
 ```
 
-The edit preserves the sandbox enable state. Enable native Linux observation and the optional bridge:
+Sandbox observation defaults to enabled when `sandbox.enabled` is absent. New installations persist `sandbox.enabled=true` and the recognized profile's Logs route. Existing explicit `false` values remain disabled, including values written by older releases; opt back in explicitly when desired. Missing Logs routes are not inferred at runtime, so legacy configurations without `logsPath` still need the route edit above.
+
+The edit preserves an explicit sandbox enable state. To enable native Linux observation and the optional bridge after an earlier opt-out:
 
 ```bash
 obs-agent-connector config codex edit \
@@ -54,11 +56,11 @@ obs-agent-connector config codex edit \
   --sandbox-max-pending=1024
 ```
 
-The same three sandbox flags are accepted by `install codex`. Explicit empty path edits are honored for that edit; later config edits can seed the recognized profile default again. Enabling requires a valid endpoint and effective relative Logs path. Invalid settings are rejected before configuration writes or installation changes. No other Agent receives Codex sandbox defaults.
+The same three sandbox flags are accepted by `install codex`. Clear the Logs path together with `--sandbox-enabled=false`; an enabled sandbox edit requires a valid endpoint and effective relative Logs path. Later config edits can seed the recognized profile default again. Invalid settings are rejected before configuration writes or installation changes. No other Agent receives Codex sandbox defaults.
 
 Configuration commands save settings. Run `obs-agent-connector update codex` once to install the new lifecycle registrations while preserving the runtime configuration. The next SessionStart, UserPromptSubmit, PreToolUse, PostToolUse, Stop, or Interrupt Hook starts or recovers the observer. `source=agent_sandbox` is fixed and needs no source setting in `gtrace.json`.
 
-Both enable flags must be true. When disabled, the bridge does not read input or create sandbox state. `max_pending` accepts 1 through 4,096, defaulting to 1,024 for missing/out-of-range values. `captureContent: "none"` suppresses free-text reasons; other modes redact and limit reasons to 1,024 characters. Names, types, and configured resource values are sanitized and bounded. Normal installer updates preserve these configuration keys and never automatically enable observation. Enabled lifecycle Hooks start the observer as needed.
+Both the main telemetry switch and the effective sandbox switch must be true. Disable sandbox observation with `obs-agent-connector config codex edit --sandbox-enabled=false`. When disabled, the bridge does not read input or create sandbox state. `max_pending` accepts 1 through 4,096, defaulting to 1,024 for missing/out-of-range values. `captureContent: "none"` suppresses free-text reasons; other modes redact and limit reasons to 1,024 characters. Names, types, and configured resource values are sanitized and bounded. Normal installer updates preserve runtime configuration byte-for-byte and honor explicit opt-outs. When `sandbox.enabled` is absent, update registers all six lifecycle Hooks using the enabled default without rewriting the runtime file. Enabled lifecycle Hooks start the observer as needed.
 
 
 ## Native Linux collection

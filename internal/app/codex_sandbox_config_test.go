@@ -26,7 +26,7 @@ func TestCodexLogsConfigListEditAndValidation(t *testing.T) {
 			t.Fatal(err)
 		}
 	})
-	for _, text := range []string{"logs-path", "sandbox-enabled", "false (default)", "agent_sandbox (fixed)", "Native Linux namespace observation"} {
+	for _, text := range []string{"logs-path", "sandbox-enabled", "true (default)", "agent_sandbox (fixed)", "Native Linux namespace observation"} {
 		if !strings.Contains(output, text) {
 			t.Fatalf("missing %s in config list", text)
 		}

@@ -22,7 +22,7 @@ func (o CodexSandboxOptions) Specified() bool {
 // Runtime config generation remains owned by this installer.
 func RegisterCodexSandboxFlags(fs *flag.FlagSet) func() (CodexSandboxOptions, error) {
 	path := fs.String("logs-path", "", "Codex sandbox Logs path relative to endpoint")
-	enabled := fs.String("sandbox-enabled", "", "enable native Linux namespace observation and the runtime bridge")
+	enabled := fs.String("sandbox-enabled", "", "enable native Linux namespace observation and the runtime bridge (default: true)")
 	maxPending := fs.String("sandbox-max-pending", "", "Codex sandbox pending Logs limit, from 1 to 4096")
 	return func() (CodexSandboxOptions, error) {
 		var out CodexSandboxOptions
@@ -80,7 +80,7 @@ func MergeCodexRuntimeConfig(current map[string]any, options CodexOptions, exist
 	}
 	sandbox := objectValue(next["sandbox"])
 	if _, ok := sandbox["enabled"]; !ok {
-		sandbox["enabled"] = false
+		sandbox["enabled"] = true
 	}
 	if _, ok := sandbox["max_pending"]; !ok {
 		sandbox["max_pending"] = 1024

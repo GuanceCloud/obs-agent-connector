@@ -29,13 +29,14 @@ func TestCodexSandboxProfileRoutesAndOverrides(t *testing.T) {
 			if next["logsPath"] != tc.want || next["otel_logs_url"] != nil {
 				t.Fatal("incorrect profile route or retained retired URL setting")
 			}
-			if next["sandbox"].(map[string]any)["enabled"] != false {
-				t.Fatal("route defaults enabled collection")
+			if next["sandbox"].(map[string]any)["enabled"] != true {
+				t.Fatal("sandbox collection is not enabled by default")
 			}
 		})
 	}
 	empty := ""
-	next, err := MergeCodexRuntimeConfig(nil, CodexOptions{Endpoint: "https://collector.example", Sandbox: CodexSandboxOptions{LogsPath: &empty}}, false)
+	disabled := false
+	next, err := MergeCodexRuntimeConfig(nil, CodexOptions{Endpoint: "https://collector.example", Sandbox: CodexSandboxOptions{LogsPath: &empty, Enabled: &disabled}}, false)
 	if err != nil || next["logsPath"] != "" {
 		t.Fatal("explicit empty path did not override the profile default")
 	}
@@ -50,8 +51,8 @@ func TestCodexSandboxDefaultsAndExplicitRouteSwitchPreserveConfig(t *testing.T) 
 	if defaults["otel_logs_url"] != nil || defaults["logsPath"] != "" {
 		t.Fatal("guessed a Logs endpoint")
 	}
-	if defaults["sandbox"].(map[string]any)["enabled"] != false {
-		t.Fatal("enabled bridge without a producer")
+	if defaults["sandbox"].(map[string]any)["enabled"] != true {
+		t.Fatal("sandbox collection is not enabled by default")
 	}
 	logsPath, enabled, limit := "first/logs", true, 64
 	configured, err := MergeCodexRuntimeConfig(defaults, CodexOptions{Sandbox: CodexSandboxOptions{LogsPath: &logsPath, Enabled: &enabled, MaxPending: &limit}}, true)
@@ -61,7 +62,7 @@ func TestCodexSandboxDefaultsAndExplicitRouteSwitchPreserveConfig(t *testing.T) 
 	if configured["logsPath"] != logsPath || configured["sandbox"].(map[string]any)["max_pending"] != limit {
 		t.Fatal("explicit Logs config missing")
 	}
-	if defaults["sandbox"].(map[string]any)["enabled"] != false {
+	if defaults["sandbox"].(map[string]any)["enabled"] != true {
 		t.Fatal("merge mutated input config")
 	}
 	configured["sandbox"].(map[string]any)["producer_hint"] = "preserve"
@@ -138,7 +139,7 @@ func TestInstallCodexSeedsVisibleSandboxDefaultsAndNoConfigPreservesBytes(t *tes
 	}
 	var config map[string]any
 	readTestJSON(t, path, &config)
-	if config["sandbox"] == nil || config["otel_logs_url"] != nil || config["logsPath"] != "v1/write/otel-logs" {
+	if config["sandbox"] == nil || config["sandbox"].(map[string]any)["enabled"] != true || config["otel_logs_url"] != nil || config["logsPath"] != "v1/write/otel-logs" {
 		t.Fatal("installer did not write visible Logs fields")
 	}
 	before, err := os.ReadFile(path)
@@ -157,5 +158,60 @@ func TestInstallCodexSeedsVisibleSandboxDefaultsAndNoConfigPreservesBytes(t *tes
 	}
 	if string(after) != string(before) {
 		t.Fatal("--no-config rewrote runtime configuration")
+	}
+}
+
+func TestInstallCodexSandboxDefaultsRegisterHooksAndPreserveOptOut(t *testing.T) {
+	disabled := false
+	for _, tc := range []struct {
+		name, body string
+		noConfig   bool
+		enabled    *bool
+		wantNative bool
+	}{
+		{name: "fresh", wantNative: true},
+		{name: "legacy-no-config", body: `{"enabled":true,"logsPath":"v1/write/otel-logs"}`, noConfig: true, wantNative: true},
+		{name: "missing-enable-no-config", body: `{"enabled":true,"sandbox":{"max_pending":64}}`, noConfig: true, wantNative: true},
+		{name: "preserve-disabled", body: `{"enabled":true,"sandbox":{"enabled":false}}`},
+		{name: "preserve-disabled-no-config", body: `{"enabled":true,"sandbox":{"enabled":false}}`, noConfig: true},
+		{name: "explicit-disabled", enabled: &disabled},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			root := t.TempDir()
+			source, path, hooksPath := filepath.Join(root, "source"), filepath.Join(root, "gtrace.json"), filepath.Join(root, "hooks.json")
+			if err := os.WriteFile(source, []byte("fixture-binary"), 0o700); err != nil {
+				t.Fatal(err)
+			}
+			if tc.body != "" {
+				if err := os.WriteFile(path, []byte(tc.body), 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
+			o := CodexOptions{Home: root, SourceExecutable: source, DestinationExecutable: filepath.Join(root, "bin", "obs-agent-connector"), HooksFile: hooksPath, ConfigFile: path, Endpoint: "https://collector.example", SkipTrust: true, NoConfig: tc.noConfig, Sandbox: CodexSandboxOptions{Enabled: tc.enabled}}
+			if _, err := InstallCodex(o); err != nil {
+				t.Fatal(err)
+			}
+			var hooks map[string]any
+			readTestJSON(t, hooksPath, &hooks)
+			events := hooks["hooks"].(map[string]any)
+			for _, event := range []string{"Stop", "SessionStart", "UserPromptSubmit", "PreToolUse", "PostToolUse", "Interrupt"} {
+				groups, _ := events[event].([]any)
+				if want := event == "Stop" || tc.wantNative; (len(groups) > 0) != want {
+					t.Fatalf("%s registered=%v, want %v", event, len(groups) > 0, want)
+				}
+			}
+			if tc.noConfig {
+				after, err := os.ReadFile(path)
+				if err != nil || string(after) != tc.body {
+					t.Fatal("--no-config changed existing runtime bytes")
+				}
+			} else {
+				var cfg map[string]any
+				readTestJSON(t, path, &cfg)
+				if cfg["sandbox"].(map[string]any)["enabled"] != tc.wantNative {
+					t.Fatal("installer did not preserve the effective sandbox switch")
+				}
+			}
+		})
 	}
 }

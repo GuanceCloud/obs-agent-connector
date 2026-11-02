@@ -207,7 +207,7 @@ func codexSandboxConfigRows(current map[string]any) [][]string {
 	sandbox := objectValue(current["sandbox"])
 	enabled := runtimeConfigBoolValue(sandbox, "enabled")
 	if enabled == "-" {
-		enabled = "false (default)"
+		enabled = "true (default)"
 	}
 	maxPending := runtimeConfigIntValue(sandbox, "max_pending")
 	if maxPending == "-" {

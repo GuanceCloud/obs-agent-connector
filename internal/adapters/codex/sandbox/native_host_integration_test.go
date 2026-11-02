@@ -152,7 +152,7 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 		}
 		return nil
 	}
-	if err := run(connector, "install", "codex", "--yes", "--endpoint", server.URL, "--x-token", "fixture", "--sandbox-enabled=true", "--logs-path=v1/logs", "--trace-path=v1/traces", "--metrics-path=v1/metrics", "--capture-content=none"); err != nil {
+	if err := run(connector, "install", "codex", "--yes", "--endpoint", server.URL, "--x-token", "fixture", "--logs-path=v1/logs", "--trace-path=v1/traces", "--metrics-path=v1/metrics", "--capture-content=none"); err != nil {
 		t.Fatal(err)
 	}
 	// Reproduce the observed installation drift: only Stop remains registered.
