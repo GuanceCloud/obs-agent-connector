@@ -7,6 +7,69 @@ import (
 	"testing"
 )
 
+func TestHermesDiscoveryEvidence(t *testing.T) {
+	for _, mode := range []string{"path", "config", "plugin", "custom-config", "empty-home", "missing-home", "custom-does-not-fall-back"} {
+		t.Run(mode, func(t *testing.T) {
+			home, bin := t.TempDir(), t.TempDir()
+			t.Setenv("HOME", home)
+			t.Setenv("USERPROFILE", home)
+			t.Setenv("PATH", bin)
+			t.Setenv("HERMES_HOME", "")
+			root := filepath.Join(home, ".hermes")
+			if mode == "custom-config" || mode == "custom-does-not-fall-back" {
+				root = filepath.Join(home, "custom hermes")
+				t.Setenv("HERMES_HOME", root)
+			}
+			switch mode {
+			case "path":
+				command := "hermes"
+				if runtime.GOOS == "windows" {
+					command += ".exe"
+				}
+				if err := os.WriteFile(filepath.Join(bin, command), []byte("stub"), 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "config", "custom-config", "custom-does-not-fall-back":
+				configRoot := root
+				if mode == "custom-does-not-fall-back" {
+					configRoot = filepath.Join(home, ".hermes")
+				}
+				if err := os.MkdirAll(configRoot, 0755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(filepath.Join(configRoot, "config.yaml"), []byte("model: test\n"), 0600); err != nil {
+					t.Fatal(err)
+				}
+			case "plugin":
+				if err := os.MkdirAll(filepath.Join(root, "plugins", "hermes-otel-plugin"), 0755); err != nil {
+					t.Fatal(err)
+				}
+			case "empty-home":
+				if err := os.MkdirAll(root, 0755); err != nil {
+					t.Fatal(err)
+				}
+			}
+			want := mode == "path" || mode == "config" || mode == "custom-config" || mode == "plugin"
+			found := false
+			for _, candidate := range DiscoverCandidatesForOS("linux") {
+				if candidate.Plugin.Name != "hermes" {
+					continue
+				}
+				found = true
+				if candidate.Plugin.ConfigFiles[0] != filepath.Join(root, "config.yaml") {
+					t.Fatalf("discovery changed Hermes home: %+v", candidate)
+				}
+				if mode != "path" && candidate.DetectedCmd != "data-dir" {
+					t.Fatalf("unexpected discovery source: %q", candidate.DetectedCmd)
+				}
+			}
+			if found != want {
+				t.Fatalf("Hermes discovered = %t, want %t", found, want)
+			}
+		})
+	}
+}
+
 func TestHermesHomeLifecycle(t *testing.T) {
 	for _, mode := range []string{"unset", "empty", "custom", "tilde"} {
 		t.Run(mode, func(t *testing.T) {
