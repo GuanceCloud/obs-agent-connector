@@ -33,6 +33,12 @@ configuration lookup, installation, updates, and removal. An unset or empty valu
 falls back to `~/.hermes`. A leading `~/` is expanded before passing the same home
 to the plugin installer.
 
+`discover` detects the Hermes command on PATH. If the command is unavailable to
+the connector process, an existing `config.yaml` or installed plugin under the
+selected Hermes home also identifies the target (`COMMAND` is `data-dir`). An
+empty directory or an environment variable alone is not enough. A custom home
+never falls back to another user's default profile.
+
 ```bash
 export HERMES_HOME="$HOME/custom-hermes"
 obs-agent-connector install hermes
