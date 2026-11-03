@@ -124,6 +124,20 @@ func TestNativeCommandChildContextRequiresExactIsolationAndCommand(t *testing.T)
 	if i := get(); i.ThreadID != "session" || i.ToolCallID != "call" || i.ContextConflict {
 		t.Fatal("did not recover command child context")
 	}
+	// Older desktop exec-server versions expose only the session identity on
+	// the actual command child. Keep it for the existing unique-command path.
+	write(102, "environ", "CODEX_THREAD_ID=session\x00SECRET=never-save\x00")
+	if i := get(); i.ThreadID != "session" || i.ToolCallID != "" || i.ContextConflict {
+		t.Fatal("discarded an isolated command child's session-only context")
+	}
+	script := "set +o privileged\nif ! . /dev/fd/7 >/dev/null; then printf 'failed to restore shell snapshot\\n' >&2; fi\nsleep 2"
+	write(101, "cmdline", "codex-linux-sandbox\x00--\x00/bin/bash\x00-pc\x00"+script+"\x00")
+	write(102, "cmdline", "/bin/bash\x00-pc\x00"+script+"\x00")
+	if i := get(); i.ThreadID != "session" || i.ToolCallID != "" || i.CommandHash != digest("shell", "sleep 2") {
+		t.Fatal("snapshot replay hid the isolated child's legacy session context")
+	}
+	write(102, "cmdline", "/bin/sh\x00-c\x00sleep 2\x00")
+	write(102, "environ", "CODEX_THREAD_ID=session\x00CODEX_TOOL_CALL_ID=call\x00SECRET=never-save\x00")
 	write(101, "cmdline", "codex-linux-sandbox\x00--\x00/opt/codex\x00--codex-run-as-arg0-exec-helper\x00sh\x00/bin/sh\x00-c\x00sleep 2\x00")
 	if i := get(); i.ThreadID != "session" || i.ToolCallID != "call" {
 		t.Fatal("exec-server arg0 trampoline hid the command context")
@@ -154,5 +168,34 @@ func TestNativeCommandChildContextRequiresExactIsolationAndCommand(t *testing.T)
 	write(101, "task/101/children", "102 103")
 	if i := get(); !i.ContextConflict || i.ThreadID != "" {
 		t.Fatal("conflicting command contexts were guessed")
+	}
+}
+
+func TestNativeSnapshotReplayCommandDigest(t *testing.T) {
+	command := "printf fixture-only\nprintf 'second line'\n"
+	suffix := " >/dev/null; then printf 'failed to restore shell snapshot\\n' >&2; fi\n" + command
+	for _, tc := range []struct {
+		name string
+		argv []string
+		want bool
+	}{
+		{"bash-file", []string{"/bin/bash", "-pc", "set +o privileged\nif ! . /dev/fd/7" + suffix}, true},
+		{"zsh-file", []string{"/bin/zsh", "-fc", "setopt RCS\nif ! . /dev/fd/8" + suffix}, true},
+		{"sh-file", []string{"/bin/sh", "-c", "if ! . /dev/fd/3" + suffix}, true},
+		{"bash-environment", []string{"/bin/bash", "-pc", "set +o privileged\nif ! eval \"unset __CODEX_SHELL_SNAPSHOT_STATE_0 __CODEX_SHELL_SNAPSHOT_STATE_1\n${__CODEX_SHELL_SNAPSHOT_STATE_0}${__CODEX_SHELL_SNAPSHOT_STATE_1}\"" + suffix}, true},
+		{"trampoline", []string{"/opt/codex", "--codex-run-as-arg0-exec-helper", "bash", "/bin/bash", "-pc", "set +o privileged\nif ! . /dev/fd/4" + suffix}, true},
+		{"unrecognized-shell-flag", []string{"/bin/bash", "-lc", "set +o privileged\nif ! . /dev/fd/7" + suffix}, false},
+		{"missing-privileged-reset", []string{"/bin/bash", "-pc", "if ! . /dev/fd/7" + suffix}, false},
+		{"arbitrary-source", []string{"/bin/bash", "-pc", "set +o privileged\nif ! . /tmp/untrusted" + suffix}, false},
+		{"extra-shell-operation", []string{"/bin/bash", "-pc", "set +o privileged\nif ! . /dev/fd/7; unrelated" + suffix}, false},
+		{"different-replay-marker", []string{"/bin/bash", "-pc", "set +o privileged\nif ! . /dev/fd/7 >/dev/null; then false; fi\n" + command}, false},
+		{"invalid-state-number", []string{"/bin/bash", "-pc", "set +o privileged\nif ! eval \"unset __CODEX_SHELL_SNAPSHOT_STATE_1\n${__CODEX_SHELL_SNAPSHOT_STATE_1}\"" + suffix}, false},
+		{"extra-expansion", []string{"/bin/bash", "-pc", "set +o privileged\nif ! eval \"unset __CODEX_SHELL_SNAPSHOT_STATE_0\n${__CODEX_SHELL_SNAPSHOT_STATE_0}$(unrelated)\"" + suffix}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if matches := nativeCommandDigest(tc.argv) == digest("shell", command); matches != tc.want {
+				t.Fatalf("normalized command matches=%v, want %v", matches, tc.want)
+			}
+		})
 	}
 }

@@ -21,17 +21,58 @@ import (
 	"testing"
 	"time"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/config"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/proto"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
 )
 
 // The model is a local deterministic fixture. Codex itself executes commands,
 // emits Hooks, assigns session/turn IDs and writes transcripts. Unlike the
 // helper-only test, no Hook input, native context or transcript is fabricated.
 func TestNativeCodexRealHostAssociation(t *testing.T) {
+	testNativeCodexRealHostAssociation(t, false)
+}
+
+func TestNativeCodexSnapshotRealHostAssociation(t *testing.T) {
+	testNativeCodexRealHostAssociation(t, true)
+}
+
+func testNativeCodexRealHostAssociation(t *testing.T, snapshot bool) {
 	connector, codex := os.Getenv("OBS_CONNECTOR_TEST_BINARY"), os.Getenv("OBS_CODEX_TEST_BINARY")
 	if connector == "" || codex == "" {
 		t.Skip("set OBS_CONNECTOR_TEST_BINARY and OBS_CODEX_TEST_BINARY")
+	}
+	method := os.Getenv("OBS_CODEX_TEST_ASSOCIATION_METHOD")
+	if method == "" {
+		method = "native_process_tool_id"
+	}
+	confidence := "observed"
+	if method == "native_thread_command_digest" {
+		confidence = "inferred"
+	} else if method != "native_process_tool_id" {
+		t.Fatal("unsupported expected association method")
+	}
+	// Explicit opt-in only: mirror the marked fixture signals to the currently
+	// configured receiver. Never copy credentials into the private Codex HOME.
+	var forward *transport.Client
+	var forwardIdentity []string
+	if os.Getenv("OBS_CODEX_TEST_FORWARD") == "1" {
+		cfg, err := config.Resolve(config.ResolveOptions{})
+		if err != nil || !Configured(cfg) {
+			t.Fatal("forwarding requires an enabled local sandbox upload configuration")
+		}
+		forward = &transport.Client{Config: transport.Config{
+			Endpoint: cfg.Endpoint, TracePath: cfg.TracePath, MetricsPath: cfg.MetricsPath, LogsPath: cfg.LogsPath,
+			Headers: cfg.Headers, PublicKey: cfg.PublicKey, SecretKey: cfg.SecretKey, Timeout: 10 * time.Second,
+		}}
+		// Headless GTrace destinations can scope ingestion to the registered
+		// Agent identity. Reuse only that non-secret identity for marked data.
+		for key, flag := range map[string]string{"agent_id": "--agent-id", "agent_name": "--agent-name"} {
+			if value, ok := cfg.ResourceAttributes[key].(string); ok && value != "" {
+				forwardIdentity = append(forwardIdentity, flag, value)
+			}
+		}
 	}
 	var mu sync.Mutex
 	var logs []otlp.LogRecord
@@ -87,8 +128,10 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 		}
 		mu.Lock()
 		defer mu.Unlock()
+		signal := ""
 		switch r.URL.Path {
 		case "/v1/logs":
+			signal = "logs"
 			req, err := proto.DecodeExportLogsServiceRequest(body)
 			if err != nil {
 				t.Error(err)
@@ -103,6 +146,7 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 				}
 			}
 		case "/v1/traces":
+			signal = "traces"
 			req, err := proto.DecodeExportTraceServiceRequest(body)
 			if err != nil {
 				t.Error(err)
@@ -114,9 +158,17 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 				}
 			}
 		case "/v1/metrics":
+			signal = "metrics"
 		default:
 			w.WriteHeader(404)
 			return
+		}
+		if forward != nil {
+			if _, err := forward.Upload(signal, body); err != nil {
+				t.Errorf("fixture forwarding failed for %s (%s)", signal, errorCategory(err))
+				w.WriteHeader(http.StatusBadGateway)
+				return
+			}
 		}
 		w.Header().Set("Content-Type", "application/x-protobuf")
 	}))
@@ -126,7 +178,7 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 	if err := os.MkdirAll(codexHome, 0700); err != nil {
 		t.Fatal(err)
 	}
-	toml := fmt.Sprintf("model=\"obs-local-fixture\"\nmodel_provider=\"fixture\"\napproval_policy=\"never\"\nsandbox_mode=\"read-only\"\n[features]\ncode_mode=false\n[model_providers.fixture]\nname=\"Local fixture\"\nbase_url=%q\nwire_api=\"responses\"\nrequires_openai_auth=false\n", server.URL+"/v1")
+	toml := fmt.Sprintf("model=\"obs-local-fixture\"\nmodel_provider=\"fixture\"\napproval_policy=\"never\"\nsandbox_mode=\"read-only\"\n[features]\ncode_mode=false\nshell_snapshot_v2=%t\n[model_providers.fixture]\nname=\"Local fixture\"\nbase_url=%q\nwire_api=\"responses\"\nrequires_openai_auth=false\n", snapshot, server.URL+"/v1")
 	if err := os.WriteFile(filepath.Join(codexHome, "config.toml"), []byte(toml), 0600); err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +204,8 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 		}
 		return nil
 	}
-	if err := run(connector, "install", "codex", "--yes", "--endpoint", server.URL, "--x-token", "fixture", "--logs-path=v1/logs", "--trace-path=v1/traces", "--metrics-path=v1/metrics", "--capture-content=none"); err != nil {
+	installArgs := []string{"install", "codex", "--yes", "--endpoint", server.URL, "--x-token", "fixture", "--logs-path=v1/logs", "--trace-path=v1/traces", "--metrics-path=v1/metrics", "--capture-content=none", "--tag", "obs.validation.kind=native-codex-fixture"}
+	if err := run(connector, append(installArgs, forwardIdentity...)...); err != nil {
 		t.Fatal(err)
 	}
 	// Reproduce the observed installation drift: only Stop remains registered.
@@ -198,8 +251,22 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 			body, _ := os.ReadFile(file)
 			var status observerStatus
 			if json.Unmarshal(body, &status) == nil && status.PID > 0 {
+				process, err := processInfo("/proc", status.PID, false)
+				if err != nil || process.Start != status.StartTicks {
+					continue
+				}
 				p, _ := os.FindProcess(status.PID)
 				_ = p.Signal(syscall.SIGTERM)
+				// Wait for the private observer to finish atomic writes before
+				// testing.TempDir removes its state tree.
+				deadline := time.Now().Add(2 * time.Second)
+				for time.Now().Before(deadline) {
+					current, err := processInfo("/proc", status.PID, false)
+					if err != nil || current.Start != status.StartTicks || current.State == "Z" {
+						break
+					}
+					time.Sleep(10 * time.Millisecond)
+				}
 			}
 		}
 	}()
@@ -240,8 +307,8 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 			continue
 		}
 		bindings++
-		if attr(r, "obs.sandbox.association.method") != "native_process_tool_id" || attr(r, "obs.sandbox.association.confidence") != "observed" {
-			t.Fatal("real host did not use observed native Tool ID")
+		if attr(r, "obs.sandbox.association.method") != method || attr(r, "obs.sandbox.association.confidence") != confidence {
+			t.Fatalf("real host did not use expected %s/%s evidence", method, confidence)
 		}
 		if attr(r, "gen_ai.tool.call.id") != "call-native-fixture" {
 			t.Fatal("unexpected runtime call identity")
@@ -261,6 +328,7 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 		if !found {
 			t.Fatal("sandbox binding did not match an uploaded Tool span in the same session")
 		}
+		t.Logf("confirmed fixture binding: sandbox=%s trace=%s span=%s method=%s", attr(r, "obs.sandbox.id"), hex.EncodeToString(r.TraceID), hex.EncodeToString(r.SpanID), method)
 		traceIDs[hex.EncodeToString(r.TraceID)] = true
 		sessions[attr(r, "gen_ai.conversation.id")] = true
 		sandboxIDs[attr(r, "obs.sandbox.id")] = true
@@ -268,5 +336,5 @@ func TestNativeCodexRealHostAssociation(t *testing.T) {
 	if bindings != 2 || len(traceIDs) != 2 || len(sessions) != 2 || len(sandboxIDs) != 2 {
 		t.Fatalf("bindings=%d traces=%d sessions=%d sandboxes=%d logs=%d spans=%d", bindings, len(traceIDs), len(sessions), len(sandboxIDs), len(logs), len(spans))
 	}
-	t.Logf("two real Codex sessions: distinct sandboxes and OBS Traces, native Tool IDs, automatic Hooks/transcripts, %d lifecycle/association logs", len(logs))
+	t.Logf("two real Codex sessions: distinct sandboxes and OBS Traces, %s/%s, snapshot_v2=%v, automatic Hooks/transcripts, %d lifecycle/association logs", method, confidence, snapshot, len(logs))
 }

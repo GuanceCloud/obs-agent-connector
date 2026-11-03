@@ -133,9 +133,64 @@ func nativeCommandDigest(argv []string) string {
 	if len(argv) >= 4 && filepath.Base(argv[0]) == "codex" && argv[1] == "--codex-run-as-arg0-exec-helper" {
 		command := append([]string(nil), argv[3:]...)
 		command[0] = argv[2]
-		return argvHash(command)
+		argv = command
+	}
+	if len(argv) == 3 {
+		if command, ok := snapshotCommand(filepath.Base(argv[0]), argv[1], argv[2]); ok {
+			return digest("shell", command)
+		}
 	}
 	return argvHash(argv)
+}
+
+// Decode only the exec-server's complete snapshot replay envelope. The shell
+// command is inspected in memory and hashed, never executed or persisted.
+// Unknown startup scripts must not be reduced to a coincidentally similar tool.
+func snapshotCommand(shell, flag, script string) (string, bool) {
+	startup := ""
+	switch {
+	case shell == "bash" && flag == "-pc":
+		startup = "set +o privileged\n"
+	case shell == "zsh" && flag == "-fc":
+		startup = "setopt RCS\n"
+	case shell == "sh" && flag == "-c":
+	default:
+		return "", false
+	}
+	replay, ok := strings.CutPrefix(script, startup+"if ! ")
+	if !ok {
+		return "", false
+	}
+	restore, command, ok := strings.Cut(replay, " >/dev/null; then printf 'failed to restore shell snapshot\\n' >&2; fi\n")
+	if !ok || command == "" {
+		return "", false
+	}
+	if fd, ok := strings.CutPrefix(restore, ". /dev/fd/"); ok {
+		value, err := strconv.Atoi(fd)
+		if err == nil && value >= 3 && strconv.Itoa(value) == fd {
+			return command, true
+		}
+	}
+	// The environment transport uses consecutively numbered state variables,
+	// with one matching expansion per variable, and no other shell operations.
+	if body, ok := strings.CutPrefix(restore, "eval \"unset "); ok {
+		names, expansion, ok := strings.Cut(body, "\n")
+		variables := strings.Fields(names)
+		if !ok || len(variables) == 0 || len(variables) > 128 {
+			return "", false
+		}
+		var expected strings.Builder
+		for i, name := range variables {
+			if name != fmt.Sprintf("__CODEX_SHELL_SNAPSHOT_STATE_%d", i) {
+				return "", false
+			}
+			expected.WriteString("${" + name + "}")
+		}
+		if names == strings.Join(variables, " ") && expansion == expected.String()+"\"" {
+			return command, true
+		}
+	}
+	return "", false
 }
 
 func processContext(root string, pid int) nativeContext {
@@ -189,7 +244,7 @@ func commandContext(root string, init nativeProcess, commandHash string, initial
 			continue
 		}
 		p, err := processInfo(root, pid, true)
-		if err != nil || p.UID != init.UID || p.Parent != init.PID || namespaceKey(p) != namespaceKey(init) || argvHash(p.Args) != commandHash {
+		if err != nil || p.UID != init.UID || p.Parent != init.PID || namespaceKey(p) != namespaceKey(init) || nativeCommandDigest(p.Args) != commandHash {
 			continue
 		}
 		start, err := strconv.ParseUint(p.Start, 10, 64)
@@ -198,17 +253,20 @@ func commandContext(root string, init nativeProcess, commandHash string, initial
 			continue
 		}
 		ctx := processContext(root, pid)
-		if ctx.Thread == "" || ctx.Call == "" {
+		if ctx.Thread == "" {
 			continue
 		}
 		current, err := processInfo(root, pid, false)
 		if err != nil || current.Start != p.Start || current.Parent != init.PID {
 			continue
 		}
-		if result.Thread != "" && ctx.Thread != result.Thread || result.Call != "" && ctx.Call != result.Call {
+		if result.Thread != "" && ctx.Thread != result.Thread || result.Call != "" && ctx.Call != "" && ctx.Call != result.Call {
 			return nativeContext{Home: initial.Home, CodexHome: initial.CodexHome}, true
 		}
-		result.Thread, result.Call = ctx.Thread, ctx.Call
+		result.Thread = ctx.Thread
+		if ctx.Call != "" {
+			result.Call = ctx.Call
+		}
 	}
 	return result, false
 }
