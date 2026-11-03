@@ -120,7 +120,7 @@ GitHub Actions runs CI on pushes and pull requests. The manual `Package` workflo
 - `internal/app/`: commands and shared application workflows.
 - `internal/agent/`: Agent definitions and discovery.
 - `internal/adapters/`: product-specific telemetry collectors.
-- `internal/core/`: shared Trace, Metrics, OTLP, privacy, and state logic.
+- `internal/core/`: shared Trace, Metrics, Logs, OTLP, privacy, and state logic.
 - `internal/install/`: built-in Hook and runtime-config installers.
 - `scripts/`: installation, build, and release scripts.
 - `docs/`: usage, commands, integration details, and release notes.
@@ -132,6 +132,7 @@ GitHub Actions runs CI on pushes and pull requests. The manual `Package` workflo
 - [Plugin matrix](docs/plugins.md)
 - [Distribution guide](docs/distribution.md)
 - [DCode checkpoint collection](docs/dcode-checkpoint-collection.md)
+- [Experimental Codex sandbox runtime bridge](docs/codex-sandbox-observability.md)
 - [Release notes](docs/releases/v0.1.30.md)
 
 ## License

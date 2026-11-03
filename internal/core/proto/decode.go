@@ -134,6 +134,12 @@ func (r *protoReader) string() (string, error) {
 
 func (r *protoReader) skip(wire int) error {
 	switch wire {
+	case 5:
+		if len(r.data)-r.pos < 4 {
+			return ioErrUnexpectedEOF("fixed32")
+		}
+		r.pos += 4
+		return nil
 	case wireVarint:
 		_, err := r.varint()
 		return err

@@ -3,13 +3,17 @@ package transport
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/proto"
 )
 
 type Config struct {
@@ -18,6 +22,7 @@ type Config struct {
 	MetricsPath string
 	TraceURL    string
 	MetricsURL  string
+	LogsPath    string
 	Headers     map[string]string
 	PublicKey   string
 	SecretKey   string
@@ -25,8 +30,27 @@ type Config struct {
 }
 
 type Result struct {
-	StatusCode int
-	Body       string
+	StatusCode         int
+	Body               string
+	RejectedLogRecords int64
+}
+
+// UploadError exposes retry policy without persisting server response bodies.
+type UploadError struct {
+	StatusCode         int
+	RejectedLogRecords int64
+	RetryAfter         time.Duration
+}
+
+func (e *UploadError) Error() string {
+	if e.RejectedLogRecords > 0 {
+		return fmt.Sprintf("OTLP logs partial success: %d records rejected", e.RejectedLogRecords)
+	}
+	return fmt.Sprintf("OTLP upload failed: HTTP %d", e.StatusCode)
+}
+
+func (e *UploadError) Retryable() bool {
+	return e.StatusCode == 429 || e.StatusCode == 502 || e.StatusCode == 503 || e.StatusCode == 504
 }
 
 type Client struct {
@@ -35,6 +59,10 @@ type Client struct {
 }
 
 func (c Client) Upload(signal string, body []byte) (Result, error) {
+	return c.UploadContext(context.Background(), signal, body)
+}
+
+func (c Client) UploadContext(ctx context.Context, signal string, body []byte) (Result, error) {
 	url := c.signalURL(signal)
 	if strings.TrimSpace(url) == "" {
 		return Result{}, fmt.Errorf("%s endpoint is empty", signal)
@@ -44,7 +72,7 @@ func (c Client) Upload(signal string, body []byte) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	request, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(payload))
+	request, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
 	if err != nil {
 		return Result{}, err
 	}
@@ -74,12 +102,75 @@ func (c Client) Upload(signal string, body []byte) (Result, error) {
 		return Result{}, err
 	}
 	defer response.Body.Close()
-	responseBody, _ := io.ReadAll(io.LimitReader(response.Body, 4096))
+	limit := int64(4096)
+	if signal == "logs" {
+		limit = 65536
+	}
+	responseBody, readErr := io.ReadAll(io.LimitReader(response.Body, limit+1))
 	result := Result{StatusCode: response.StatusCode, Body: strings.TrimSpace(string(responseBody))}
 	if response.StatusCode < 200 || response.StatusCode >= 300 {
-		return result, fmt.Errorf("OTLP %s upload failed: HTTP %d", signal, response.StatusCode)
+		if signal != "logs" {
+			return result, fmt.Errorf("OTLP %s upload failed: HTTP %d", signal, response.StatusCode)
+		}
+		return result, &UploadError{StatusCode: response.StatusCode, RetryAfter: retryAfter(response.Header.Get("Retry-After"))}
+	}
+	if signal == "logs" {
+		if readErr != nil {
+			return result, fmt.Errorf("read OTLP logs response: %w", readErr)
+		}
+		if int64(len(responseBody)) > limit {
+			return result, fmt.Errorf("OTLP logs response exceeds limit")
+		}
+		var rejected int64
+		if strings.Contains(strings.ToLower(response.Header.Get("Content-Type")), "json") {
+			var value struct {
+				PartialSuccess struct {
+					Rejected json.RawMessage `json:"rejectedLogRecords"`
+				} `json:"partialSuccess"`
+			}
+			if len(responseBody) > 0 {
+				if err := json.Unmarshal(responseBody, &value); err != nil {
+					return result, fmt.Errorf("decode OTLP logs response: %w", err)
+				}
+			}
+			if len(value.PartialSuccess.Rejected) > 0 {
+				text := strings.Trim(string(value.PartialSuccess.Rejected), "\"")
+				if err := json.Unmarshal([]byte(text), &rejected); err != nil || rejected < 0 {
+					return result, fmt.Errorf("invalid OTLP logs rejected count")
+				}
+			}
+		} else {
+			var err error
+			rejected, err = proto.DecodeLogsRejected(responseBody)
+			if err != nil {
+				return result, fmt.Errorf("decode OTLP logs response: %w", err)
+			}
+		}
+		result.RejectedLogRecords = rejected
+		if rejected > 0 {
+			return result, &UploadError{StatusCode: response.StatusCode, RejectedLogRecords: rejected}
+		}
 	}
 	return result, nil
+}
+
+func retryAfter(value string) time.Duration {
+	if seconds, err := strconv.ParseInt(strings.TrimSpace(value), 10, 64); err == nil && seconds > 0 {
+		if seconds > 86400 {
+			seconds = 86400
+		}
+		return time.Duration(seconds) * time.Second
+	}
+	if date, err := http.ParseTime(value); err == nil {
+		delay := time.Until(date)
+		if delay > 24*time.Hour {
+			return 24 * time.Hour
+		}
+		if delay > 0 {
+			return delay
+		}
+	}
+	return 0
 }
 
 func requestContentEncoding(headers map[string]string) string {
@@ -133,6 +224,12 @@ func (c Client) signalURL(signal string) string {
 			return c.Config.MetricsURL
 		}
 		return JoinEndpoint(c.Config.Endpoint, c.Config.MetricsPath)
+	case "logs":
+		// A logs route must be explicit: GTrace trace endpoints need not accept logs.
+		if strings.TrimSpace(c.Config.LogsPath) == "" {
+			return ""
+		}
+		return JoinEndpoint(c.Config.Endpoint, c.Config.LogsPath)
 	default:
 		return ""
 	}

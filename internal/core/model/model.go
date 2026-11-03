@@ -160,3 +160,19 @@ type Metric struct {
 	StartTimeUnixNano string
 	TimeUnixNano      string
 }
+
+// LogRecord represents a structured OpenTelemetry log or event.
+type LogRecord struct {
+	EventName            string
+	TimeUnixNano         uint64
+	ObservedTimeUnixNano uint64
+	SeverityNumber       uint32
+	SeverityText         string
+	Body                 any
+	Attributes           map[string]any
+	Resource             map[string]any
+	Scope                Scope
+	TraceID              string
+	SpanID               string
+	Flags                uint32
+}

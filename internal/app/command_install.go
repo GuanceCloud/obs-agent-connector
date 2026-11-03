@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
+	installpkg "github.com/GuanceCloud/obs-agent-connector/internal/install"
 	"os"
 	"strings"
 )
@@ -19,6 +20,7 @@ func (v *repeatedValue) Set(value string) error {
 func install(args []string) error {
 	fs := flag.NewFlagSet("install", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
+	readSandboxOptions := installpkg.RegisterCodexSandboxFlags(fs)
 	endpoint := fs.String("endpoint", "", "GTrace endpoint")
 	xToken := fs.String("x-token", "", "GTrace X-Token")
 	agentID := fs.String("agent-id", "", "GTrace agent_id tag")
@@ -45,6 +47,10 @@ func install(args []string) error {
 	}
 
 	if err := fs.Parse(flagArgs); err != nil {
+		return err
+	}
+	sandboxOptions, err := readSandboxOptions()
+	if err != nil {
 		return err
 	}
 	if fs.NArg() > 0 {
@@ -74,6 +80,9 @@ func install(args []string) error {
 	if err != nil {
 		return err
 	}
+	if sandboxOptions.Specified() && selected[0].Name != "codex" {
+		return fmt.Errorf("sandbox Logs options are supported only for codex")
+	}
 	if !agent.SupportsPlatform(selected[0], currentGOOS) {
 		return unsupportedPlatformError(selected[0], currentGOOS)
 	}
@@ -88,6 +97,7 @@ func install(args []string) error {
 	}
 
 	inputDefaults := installInput{
+		CodexSandbox:   sandboxOptions,
 		Endpoint:       strings.TrimSpace(*endpoint),
 		TracePath:      strings.Trim(strings.TrimSpace(*tracePath), "/"),
 		MetricsPath:    strings.Trim(strings.TrimSpace(*metricsPath), "/"),

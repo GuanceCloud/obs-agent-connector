@@ -221,36 +221,38 @@ func removeCodexHooks(hooksFile string) error {
 		return nil
 	}
 
-	groups, ok := hooksValue["Stop"].([]any)
-	if !ok {
-		return nil
-	}
-
-	stopGroups := make([]any, 0, len(groups))
-	for _, group := range groups {
-		groupMap, ok := group.(map[string]any)
+	for event, value := range hooksValue {
+		groups, ok := value.([]any)
 		if !ok {
-			stopGroups = append(stopGroups, group)
 			continue
 		}
-		handlers, _ := groupMap["hooks"].([]any)
-		remove := false
-		for _, handler := range handlers {
-			handlerMap, ok := handler.(map[string]any)
+		kept := make([]any, 0, len(groups))
+		for _, group := range groups {
+			groupMap, ok := group.(map[string]any)
 			if !ok {
+				kept = append(kept, group)
 				continue
 			}
-			command, _ := handlerMap["command"].(string)
-			if isCodexGTraceHookCommand(command) {
-				remove = true
-				break
+			handlers, ok := groupMap["hooks"].([]any)
+			if !ok {
+				kept = append(kept, group)
+				continue
+			}
+			remaining := make([]any, 0, len(handlers))
+			for _, handler := range handlers {
+				item, _ := handler.(map[string]any)
+				command, _ := item["command"].(string)
+				if !isCodexGTraceHookCommand(command) {
+					remaining = append(remaining, handler)
+				}
+			}
+			if len(remaining) > 0 || len(handlers) == 0 {
+				groupMap["hooks"] = remaining
+				kept = append(kept, groupMap)
 			}
 		}
-		if !remove {
-			stopGroups = append(stopGroups, groupMap)
-		}
+		hooksValue[event] = kept
 	}
-	hooksValue["Stop"] = stopGroups
 
 	data, err := json.MarshalIndent(config, "", "  ")
 	if err != nil {
@@ -262,7 +264,8 @@ func removeCodexHooks(hooksFile string) error {
 
 func isCodexGTraceHookCommand(command string) bool {
 	command = strings.ReplaceAll(command, `\`, `/`)
-	return strings.Contains(command, "codex-hook-wrapper.js") ||
+	return (strings.Contains(command, "obs-agent-connector") && strings.Contains(command, " hook codex")) ||
+		strings.Contains(command, "codex-hook-wrapper.js") ||
 		strings.Contains(command, "codex-otel-plugin") ||
 		strings.Contains(command, "codex-observability-plugin") ||
 		strings.Contains(command, "/codex-hook") ||

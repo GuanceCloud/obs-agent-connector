@@ -130,6 +130,22 @@ func (c *Claim) SignalWasUploaded(signal string) bool {
 	return err == nil
 }
 
+func (c *Claim) SignalDetail(signal, key string) string {
+	if c == nil || !validSignal(signal) {
+		return ""
+	}
+	body, err := os.ReadFile(filepath.Join(c.dir, signal+".json"))
+	if err != nil {
+		return ""
+	}
+	var details map[string]any
+	if json.Unmarshal(body, &details) != nil {
+		return ""
+	}
+	value, _ := details[key].(string)
+	return value
+}
+
 func (c *Claim) MarkSignalUploaded(signal string, details map[string]any) error {
 	if c == nil {
 		return errors.New("claim is nil")

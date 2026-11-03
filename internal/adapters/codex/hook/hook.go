@@ -10,10 +10,12 @@ import (
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/collector"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/config"
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/sandbox"
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/codex/sidecar"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/metrics"
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/model"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/proto"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/state"
@@ -23,6 +25,7 @@ import (
 
 type Input struct {
 	TranscriptPath string `json:"transcript_path"`
+	sandbox.NativeHook
 }
 
 type Summary struct {
@@ -35,10 +38,11 @@ type Summary struct {
 }
 
 type RunOptions struct {
-	Config    *config.Config
-	Input     *Input
-	ReadInput func() (Input, error)
-	Client    *http.Client
+	Config        *config.Config
+	Input         *Input
+	ReadInput     func() (Input, error)
+	Client        *http.Client
+	StartObserver func(config.Config) error
 }
 
 func RunCLI() int {
@@ -82,6 +86,27 @@ func RunWithOptions(options RunOptions) error {
 	input, err := resolveRunInput(options)
 	if err != nil {
 		return err
+	}
+	if sandbox.Configured(cfg) && input.Event != "" {
+		if sandbox.NativeSupported() {
+			if err := sandbox.RecordNativeHook(sandbox.NewStore(cfg), input.NativeHook); err != nil {
+				if detail := sandbox.CollectionDiagnostic(err, "association", cfg.Debug); detail != nil {
+					_ = appendLog(cfg, "native sandbox Hook deferred", detail)
+				}
+			}
+		}
+		start := options.StartObserver
+		if start == nil {
+			start = func(cfg config.Config) error { return sandbox.EnsureNative(cfg, "") }
+		}
+		if err := start(cfg); err != nil {
+			if detail := sandbox.CollectionDiagnostic(err, "observer_start", cfg.Debug); detail != nil {
+				_ = appendLog(cfg, "native sandbox Hook deferred", detail)
+			}
+		}
+	}
+	if input.Event != "" && input.Event != "Stop" {
+		return nil
 	}
 	if err := appendLog(cfg, hooklog.HookInvoked, map[string]any{
 		"pid":             os.Getpid(),
@@ -177,6 +202,21 @@ func uploadTurn(
 			_ = claim.Release()
 		}
 	}()
+	var sandboxSpans []model.Span
+	var sandboxScope string
+	if sandbox.Configured(cfg) {
+		// Pin before the first upload so partial retries retain the actual IDs
+		// later used for sandbox association, without persisting message content.
+		pinned, err := claim.StabilizeSpans(batch.Spans)
+		if err != nil {
+			_ = appendLog(cfg, "sandbox identity pin unavailable", nil)
+		}
+		if err == nil && pinned != nil {
+			batch.Spans = pinned
+			sandboxSpans = pinned
+			sandboxScope = sandbox.Scope(cfg)
+		}
+	}
 
 	builtMetrics := metrics.Build(batch.Spans)
 	tracePayload := proto.EncodeExportTraceServiceRequest(otlp.SpansToProtoRequest(batch.Spans))
@@ -186,8 +226,9 @@ func uploadTurn(
 			return err
 		}
 		if err := claim.MarkSignalUploaded("traces", map[string]any{
-			"status": result.StatusCode,
-			"bytes":  len(tracePayload),
+			"status":        result.StatusCode,
+			"bytes":         len(tracePayload),
+			"sandbox_scope": sandboxScope,
 		}); err != nil {
 			return err
 		}
@@ -196,6 +237,13 @@ func uploadTurn(
 			"spans":  len(batch.Spans),
 		}); err != nil {
 			return err
+		}
+	}
+	if len(sandboxSpans) > 0 && claim.SignalDetail("traces", "sandbox_scope") == sandbox.Scope(cfg) {
+		if err := sandbox.NewStore(cfg).BindSpans(sandboxSpans); err != nil {
+			// The continuous worker recovers confirmed IDs from the upload
+			// journal; sandbox collection cannot delay the Agent upload.
+			_ = appendLog(cfg, "sandbox trace binding deferred", map[string]any{"error": err.Error()})
 		}
 	}
 

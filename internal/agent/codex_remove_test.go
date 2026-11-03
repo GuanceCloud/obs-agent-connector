@@ -281,3 +281,21 @@ func TestCodexDefinitionHasRemoveCleanup(t *testing.T) {
 		t.Fatal("expected codex remove resolver")
 	}
 }
+
+func TestRemoveCodexNativeHooksPreservesOtherHandlers(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "hooks.json")
+	body := []byte(`{"hooks":{"PreToolUse":[{"matcher":"Bash","hooks":[{"type":"command","command":"obs-agent-connector hook codex"},{"type":"command","command":"custom-audit"}]}],"SessionStart":[{"hooks":[{"type":"command","command":"obs-agent-connector hook codex"}]}]}}`)
+	if err := os.WriteFile(path, body, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := removeCodexHooks(path); err != nil {
+		t.Fatal(err)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(after), "obs-agent-connector") || !strings.Contains(string(after), "custom-audit") || !strings.Contains(string(after), "Bash") {
+		t.Fatal("native Hook removal changed unrelated handlers")
+	}
+}
