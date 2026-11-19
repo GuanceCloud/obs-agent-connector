@@ -8,24 +8,25 @@ import (
 )
 
 var definitions = map[string]Definition{
-	"qwenwork-cn": qwenWorkPlugin(),
-	"claude":      claudePlugin(),
-	"codebuddy":   codeBuddyPlugin(),
-	"codex":       codexPlugin(),
-	"cursor":      cursorPlugin(),
-	"dcode":       dcodePlugin(),
-	"dsh":         dshPlugin(),
-	"grok":        grokPlugin(),
-	"hermes":      hermesPlugin(),
-	"kiro":        kiroPlugin(),
-	"omp":         ompPlugin(),
-	"mimo":        mimoPlugin(),
-	"pi":          piPlugin(),
-	"opencode":    opencodePlugin(),
-	"openclaw":    openClawPlugin(),
-	"qoder":       qoderPlugin(),
-	"qoder-cn":    qoderCNPlugin(),
-	"workbuddy":   workBuddyPlugin(),
+	"qwenwork-cn":    qwenWorkPlugin(),
+	"claude":         claudePlugin(),
+	"claude-desktop": claudeDesktopPlugin(),
+	"codebuddy":      codeBuddyPlugin(),
+	"codex":          codexPlugin(),
+	"cursor":         cursorPlugin(),
+	"dcode":          dcodePlugin(),
+	"dsh":            dshPlugin(),
+	"grok":           grokPlugin(),
+	"hermes":         hermesPlugin(),
+	"kiro":           kiroPlugin(),
+	"omp":            ompPlugin(),
+	"mimo":           mimoPlugin(),
+	"pi":             piPlugin(),
+	"opencode":       opencodePlugin(),
+	"openclaw":       openClawPlugin(),
+	"qoder":          qoderPlugin(),
+	"qoder-cn":       qoderCNPlugin(),
+	"workbuddy":      workBuddyPlugin(),
 }
 
 func Get(name string) Definition {
@@ -60,11 +61,19 @@ func SelectInstalled(target string) ([]Definition, error) {
 	out := make([]Definition, 0, len(selected))
 	for _, p := range selected {
 		p = Resolve(p)
-		if _, ok := InstalledMarker(p); ok {
+		_, installed := InstalledMarker(p)
+		if !installed && p.RequiresPluginImport {
+			// An imported plugin can keep using the managed runtime after its ZIP is moved.
+			installed = FirstExistingPath(p.Markers) != "" || FirstExistingPath(p.ConfigFiles) != ""
+		}
+		if installed {
 			out = append(out, p)
 			continue
 		}
 		if normalizedTarget != "" {
+			if p.RequiresPluginImport {
+				return nil, fmt.Errorf("%s setup files are missing", p.Name)
+			}
 			return nil, fmt.Errorf("%s plugin is not installed", p.Name)
 		}
 	}

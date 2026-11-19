@@ -2,6 +2,7 @@ package state
 
 import (
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -55,5 +56,34 @@ func TestClaimIsExclusiveAndStaleClaimRecovers(t *testing.T) {
 	recovered, err := manager.Claim("session", "turn", "")
 	if err != nil || recovered == nil {
 		t.Fatalf("stale claim was not recovered: %v", err)
+	}
+}
+
+func TestClaimRechecksCompletionAfterAcquiringLock(t *testing.T) {
+	manager := Manager{Root: t.TempDir()}
+	first, err := manager.Claim("session", "turn", "")
+	if err != nil || first == nil {
+		t.Fatalf("claim failed: %v", err)
+	}
+	for _, signal := range []string{"traces", "metrics"} {
+		if err := first.MarkSignalUploaded(signal, nil); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	manager.Now = func() time.Time {
+		// Complete after the second contender's first completion check,
+		// before it acquires the lock.
+		if err := first.Complete("traces", "metrics"); err != nil {
+			t.Fatal(err)
+		}
+		return time.Now()
+	}
+	claim, err := manager.Claim("session", "turn", "")
+	if claim != nil || !errors.Is(err, ErrAlreadyCompleted) {
+		t.Fatalf("completed turn was claimed again: %v, %v", claim, err)
+	}
+	if _, err := os.Stat(first.lockFile); !os.IsNotExist(err) {
+		t.Fatalf("second contender's lock was not released: %v", err)
 	}
 }

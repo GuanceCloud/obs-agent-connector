@@ -143,7 +143,7 @@ Supported edit parameters:
 Notes:
 
 - `edit` merges the supplied values into the existing config and rewrites the file atomically
-- supported Agents: `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `mimo`, `omp`, `pi`, `opencode`, `qoder`, `qwenwork-cn`, and `workbuddy`
+- supported Agents: `claude`, `claude-desktop`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `grok`, `kiro`, `mimo`, `omp`, `pi`, `opencode`, `qoder`, `qwenwork-cn`, and `workbuddy`
 - `hermes` and `openclaw` are excluded because they do not use the managed `gtrace.json` layout
 
 ## Install
@@ -158,6 +158,12 @@ obs-agent-connector install grok
 obs-agent-connector install kiro
 obs-agent-connector install omp
 obs-agent-connector install pi
+```
+
+Prepare and import the [Claude Desktop plugin](plugins.md#claude-desktop) for local Code and Cowork on macOS.
+
+```bash
+obs-agent-connector install claude-desktop
 ```
 
 Install the default built-in adapters:
@@ -250,7 +256,7 @@ obs-agent-connector disable codex --dry-run
 
 `enable` and `disable` update the Agent runtime JSON config in place:
 
-- `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `dsh`, `mimo`, `opencode`, `pi`, and `qoder` set top-level `enabled`
+- `claude`, `claude-desktop`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `dsh`, `mimo`, `opencode`, `pi`, and `qoder` set top-level `enabled`
 - `openclaw` sets `plugins.entries.openclaw-otel-plugin.enabled`
 
 `hermes` is not currently supported because its runtime config is YAML rather than a supported JSON `enabled` switch.
@@ -322,7 +328,7 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
-- removes the managed Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy adapters, including compatible legacy plugin residue where applicable
+- removes the managed Claude, Claude Desktop, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy adapters, including compatible legacy plugin residue where applicable
 - removes each built-in adapter's connector-managed config, Hook log, and upload state by default
 - removes `~/.obs-agent-connector/config.json` by default
 - keeps connector-managed global and per-Agent configuration when `--keep-config` is used; Hooks, logs, and upload state are still removed

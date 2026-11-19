@@ -7,6 +7,7 @@
 Supported Agents:
 
 - `claude`
+- `claude-desktop`
 - `codebuddy`
 - `codex`
 - `cursor`
@@ -401,6 +402,7 @@ Notes:
 - if `--agent-name` is omitted, the CLI generates `<hostname>_<agent>_<YYYYMMDD>`
 - `install` accepts a single Agent target only
 - Claude installation replaces legacy `claude-otel-plugin` Hook entries and preserves unrelated `Stop` and `SessionEnd` Hooks
+- Claude Desktop uses a [separate plugin ZIP](plugins.md#claude-desktop) for local Code and Cowork on macOS
 - CodeBuddy installation replaces legacy `codebuddy-hook` entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - Codex installation replaces legacy `codex-otel-plugin` Hook entries, updates managed Stop Hooks, and preserves unrelated Hook entries
 - Codex installation, discovery, runtime state, trust, and removal use `CODEX_HOME`; when it is unset, they use `~/.codex`
@@ -456,6 +458,7 @@ Notes:
 - these commands update the Agent runtime config in place
 - currently supported:
   - `claude`
+  - `claude-desktop`
   - `codebuddy`
   - `codex`
   - `cursor`

@@ -100,7 +100,9 @@ func updatePlugins(args []string) error {
 		fmt.Println("Command preview:")
 		for _, p := range selected {
 			p = agent.Resolve(p)
-			if p.IsBuiltin() {
+			if p.RequiresPluginImport {
+				fmt.Printf("refresh %s runtime and plugin ZIP\n", p.Name)
+			} else if p.IsBuiltin() {
 				fmt.Printf("reconcile %s hook with the current obs-agent-connector runtime\n", p.Name)
 			} else {
 				fmt.Println(renderPluginUpdateCommand(pluginDownload, p))

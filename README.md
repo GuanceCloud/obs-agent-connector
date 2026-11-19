@@ -47,6 +47,7 @@ For a specific version or GitHub download source, see the [distribution guide](d
 | Agent | Plugin | macOS | Linux | Windows | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `claude` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook adapter |
+| `claude-desktop` | Built into `obs-agent-connector` | `✅` | `❌` | `❌` | Local Code and Cowork through an imported plugin ZIP |
 | `codebuddy` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook plus native `index.json` replay; Linux x64 is product-validated |
 | `codex` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop Hook adapter plus built-in Codex trust/config handling |
 | `cursor` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Detects `~/.cursor`, prefers `cursor-agent`, and manages user-level Cursor Hooks |

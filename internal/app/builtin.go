@@ -80,6 +80,19 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 		if err == nil {
 			printSingleDetail("Note", "Restart WorkBuddy before the next conversation to load the built-in Hooks and unload the previous plugin. If settings are overwritten on exit, rerun installation after quitting WorkBuddy.")
 		}
+	case "claude-desktop":
+		var bundlePath string
+		bundlePath, err = telemetryinstall.InstallClaudeDesktop(telemetryinstall.CodexOptions{
+			SourceExecutable: executable, Endpoint: input.Endpoint, TracePath: input.TracePath,
+			MetricsPath: input.MetricsPath, InstallType: fixedType, XToken: input.XToken,
+			Headers: input.Headers, ResourceAttributes: builtinResourceAttributes(input),
+			CaptureContent: input.CaptureContent, MaxChars: input.MaxChars, Enabled: input.Enabled,
+			NoConfig: noConfig,
+		})
+		if err == nil {
+			printSingleDetail("Plugin ZIP", bundlePath)
+			printSingleDetail("Activation", "Upload the ZIP in Claude Desktop through Customize > Plugins, then start a new local session.")
+		}
 	case "claude":
 		_, err = telemetryinstall.InstallClaude(telemetryinstall.ClaudeOptions{
 			SourceExecutable:      executable,
@@ -235,7 +248,12 @@ func removeBuiltinAdapter(p agent.Definition, options telemetryinstall.RemoveOpt
 	if err != nil {
 		return err
 	}
-	printSingleDetail("Hook", removedOrKept(result.HookRemoved))
+	if p.RequiresPluginImport {
+		printSingleDetail("Plugin ZIP", removedOrKept(result.HookRemoved))
+		printSingleDetail("Registration", "Remove the OBS plugin from Customize > Plugins in Claude Desktop if present.")
+	} else {
+		printSingleDetail("Hook", removedOrKept(result.HookRemoved))
+	}
 	printSingleDetail("Config", removedOrKept(result.ConfigRemoved))
 	if options.PurgeManaged {
 		printSingleDetail("Managed Files", removedOrKept(result.ManagedFilesRemoved))
@@ -308,7 +326,7 @@ func builtinResourceAttributes(input installInput) []string {
 }
 
 func installedPluginVersion(p agent.Definition) string {
-	if p.IsBuiltin() {
+	if p.IsBuiltin() && !p.RequiresPluginImport {
 		return version
 	}
 	return agent.InstalledVersion(p)

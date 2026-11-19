@@ -52,6 +52,7 @@ func discover(args []string) error {
 	rows := make([][]string, 0, len(candidates))
 	steps := make([]discoverStep, 0, len(candidates))
 	hasUnsupported := false
+	hasPreparedBundle := false
 	for _, candidate := range candidates {
 		version := displayVersion(candidate.InstalledVersion)
 		if !candidate.Supported {
@@ -61,14 +62,18 @@ func discover(args []string) error {
 		}
 		pluginState := "missing"
 		action := "install"
-		if candidate.InstalledPath != "" && *updateMode {
+		if candidate.InstalledPath != "" {
 			pluginState = "installed"
-			action = "update"
-			steps = append(steps, discoverStep{Candidate: candidate, Action: action})
-		} else if candidate.InstalledPath != "" {
-			pluginState = "installed"
+			if candidate.Plugin.RequiresPluginImport {
+				pluginState = "prepared"
+				hasPreparedBundle = true
+			}
 			action = "skip"
-		} else {
+			if *updateMode {
+				action = "update"
+			}
+		}
+		if action != "skip" {
 			steps = append(steps, discoverStep{Candidate: candidate, Action: action})
 		}
 		rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, pluginState, version, action})
@@ -77,6 +82,10 @@ func discover(args []string) error {
 	fmt.Println("Discover plan:")
 	printTable([]string{"AGENT", "COMMAND", "PLUGIN", "VERSION", "ACTION"}, rows)
 	if len(steps) == 0 {
+		if hasPreparedBundle {
+			fmt.Println("No installation changes needed. Check Claude Desktop for activation of prepared plugin ZIPs.")
+			return nil
+		}
 		if *updateMode {
 			if hasUnsupported {
 				fmt.Println("No supported plugins found to update.")
@@ -155,10 +164,14 @@ func discover(args []string) error {
 			continue
 		}
 		if candidate.InstalledPath != "" && !*updateMode {
+			detail := "plugin already installed version=" + displayVersion(candidate.InstalledVersion)
+			if candidate.Plugin.RequiresPluginImport {
+				detail = "plugin ZIP already prepared: " + candidate.InstalledPath
+			}
 			results = append(results, discoverResult{
 				Agent:  candidate.Plugin.Name,
 				Result: "skipped",
-				Detail: "plugin already installed version=" + displayVersion(candidate.InstalledVersion),
+				Detail: detail,
 			})
 			continue
 		}
@@ -212,9 +225,13 @@ func discover(args []string) error {
 		}
 
 		installedVersion := installedPluginVersion(candidate.Plugin)
+		result := "installed"
+		if candidate.Plugin.RequiresPluginImport {
+			result = "prepared"
+		}
 		results = append(results, discoverResult{
 			Agent:  candidate.Plugin.Name,
-			Result: "installed",
+			Result: result,
 			Detail: fmt.Sprintf("version=%s agent_id=%s agent_name=%s", displayVersion(installedVersion), perAgent.AgentID, perAgent.AgentName),
 		})
 	}

@@ -51,6 +51,8 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 		result, err = removeWorkBuddy(home, options)
 	case "claude":
 		result, err = removeClaude(home, options)
+	case "claude-desktop":
+		result, err = removeClaudeDesktop(home, options)
 	case "codebuddy":
 		result, err = removeCodeBuddy(home, options)
 	case "codex":

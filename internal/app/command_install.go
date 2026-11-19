@@ -156,6 +156,10 @@ func install(args []string) error {
 		fmt.Println()
 		fmt.Println("Command preview:")
 		for _, p := range selected {
+			if p.RequiresPluginImport {
+				fmt.Printf("prepare %s plugin ZIP for import in Claude Desktop\n", p.Name)
+				continue
+			}
 			if p.IsBuiltin() {
 				fmt.Printf("register %s hook with the current obs-agent-connector runtime\n", p.Name)
 				continue

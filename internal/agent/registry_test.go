@@ -9,23 +9,24 @@ import (
 
 func TestRegisteredPluginNames(t *testing.T) {
 	expected := map[string]string{
-		"claude":    "claude-otel-plugin",
-		"codebuddy": "obs-agent-connector",
-		"codex":     "codex-otel-plugin",
-		"cursor":    "cursor-otel-plugin",
-		"dcode":     "obs-agent-connector",
-		"dsh":       "dsh-otel-plugin",
-		"grok":      "obs-agent-connector",
-		"hermes":    "hermes-otel-plugin",
-		"kiro":      "obs-agent-connector",
-		"omp":       "obs-agent-connector",
-		"mimo":      "opencode-otel-plugin",
-		"pi":        "obs-agent-connector",
-		"opencode":  "opencode-otel-plugin",
-		"openclaw":  "openclaw-otel-plugin",
-		"qoder":     "qoder-otel-plugin",
-		"qoder-cn":  "qoder-otel-plugin",
-		"workbuddy": "obs-agent-connector",
+		"claude":         "claude-otel-plugin",
+		"claude-desktop": "obs-claude-desktop",
+		"codebuddy":      "obs-agent-connector",
+		"codex":          "codex-otel-plugin",
+		"cursor":         "cursor-otel-plugin",
+		"dcode":          "obs-agent-connector",
+		"dsh":            "dsh-otel-plugin",
+		"grok":           "obs-agent-connector",
+		"hermes":         "hermes-otel-plugin",
+		"kiro":           "obs-agent-connector",
+		"omp":            "obs-agent-connector",
+		"mimo":           "opencode-otel-plugin",
+		"pi":             "obs-agent-connector",
+		"opencode":       "opencode-otel-plugin",
+		"openclaw":       "openclaw-otel-plugin",
+		"qoder":          "qoder-otel-plugin",
+		"qoder-cn":       "qoder-otel-plugin",
+		"workbuddy":      "obs-agent-connector",
 	}
 
 	for name, pluginName := range expected {
@@ -318,5 +319,29 @@ func assertNoMigrationArtifact(t *testing.T, definition Definition) {
 		if strings.Contains(value, "Definition") {
 			t.Fatalf("Agent %s contains invalid migrated value %q", definition.Name, value)
 		}
+	}
+}
+
+func TestClaudeDesktopBundleMarkerOnlyOnMacOS(t *testing.T) {
+	definition := Get("claude-desktop")
+	if !definition.IsBuiltin() || !definition.RequiresPluginImport || !SupportsPlatform(definition, "darwin") ||
+		SupportsPlatform(definition, "linux") || SupportsPlatform(definition, "windows") {
+		t.Fatalf("unexpected Desktop definition: %#v", definition)
+	}
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	t.Setenv("USERPROFILE", home)
+	bundle := ExpandHome(definition.BuiltinHookFile)
+	if path, found := InstalledMarker(definition); path != "" || found {
+		t.Fatalf("missing bundle reported as prepared: path=%q found=%v", path, found)
+	}
+	if err := os.MkdirAll(filepath.Dir(bundle), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(bundle, []byte("fixture"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if path, found := InstalledMarker(definition); path != bundle || !found {
+		t.Fatalf("prepared bundle not detected: path=%q found=%v", path, found)
 	}
 }

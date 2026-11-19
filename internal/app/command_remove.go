@@ -45,7 +45,9 @@ func remove(args []string) error {
 	rows := make([][2]string, 0, len(selected)*3)
 	for _, p := range selected {
 		rows = append(rows, [2]string{"Agent", p.Name})
-		if p.IsBuiltin() {
+		if p.RequiresPluginImport {
+			rows = append(rows, [2]string{"Plugin ZIP", p.BuiltinHookFile})
+		} else if p.IsBuiltin() {
 			rows = append(rows, [2]string{"Hook", p.BuiltinHookFile + " (managed entry only)"})
 		}
 		for _, cmd := range p.RemoveCmds {
