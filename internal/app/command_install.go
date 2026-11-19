@@ -69,6 +69,10 @@ func install(args []string) error {
 	if strings.TrimSpace(target) == "" {
 		return fmt.Errorf("install requires a single agent, for example: install codex")
 	}
+	machine, err := managedDesktopTarget(target)
+	if err != nil {
+		return err
+	}
 
 	selected, err := agent.Select(target)
 	if err != nil {
@@ -150,11 +154,22 @@ func install(args []string) error {
 		[2]string{"Agent ID", input.AgentID},
 		[2]string{"Agent Name", input.AgentName},
 	)
+	if machine {
+		paths, err := managedDesktopPaths()
+		if err != nil {
+			return err
+		}
+		rows = append(rows, managedDesktopPlan(paths)...)
+	}
 	printDetails(rows)
 
 	if *dryRun {
 		fmt.Println()
 		fmt.Println("Command preview:")
+		if machine {
+			fmt.Println("register Stop and SessionEnd in the machine policy with administrator authorization")
+			return nil
+		}
 		for _, p := range selected {
 			if p.IsBuiltin() {
 				fmt.Printf("register %s hook with the current obs-agent-connector runtime\n", p.Name)
@@ -178,6 +193,9 @@ func install(args []string) error {
 		}
 	}
 
+	if machine {
+		return runManagedDesktopInstall(input, false)
+	}
 	for _, p := range selected {
 		if err := installOne(pluginDownload, p, input); err != nil {
 			return err

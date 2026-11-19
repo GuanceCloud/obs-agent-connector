@@ -1,6 +1,7 @@
 package install
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 )
 
@@ -24,10 +26,11 @@ type RemoveResult struct {
 }
 
 type RemoveOptions struct {
-	PurgeConfig   bool
-	PurgeState    bool
-	PurgeManaged  bool
-	ConnectorOnly bool
+	PurgeConfig      bool
+	PurgeState       bool
+	PurgeManaged     bool
+	ConnectorOnly    bool
+	KeepClaudeLedger bool
 }
 
 func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, error) {
@@ -51,6 +54,8 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 		result, err = removeWorkBuddy(home, options)
 	case "claude":
 		result, err = removeClaude(home, options)
+	case desktop.Name:
+		result, err = removeClaudeDesktopUserFiles(home, options)
 	case "codebuddy":
 		result, err = removeCodeBuddy(home, options)
 	case "codex":
@@ -69,13 +74,33 @@ func RemoveAdapter(adapter, home string, options RemoveOptions) (RemoveResult, e
 	if err != nil {
 		return result, err
 	}
-	if options.PurgeManaged {
+	if options.PurgeManaged && !(adapter == "claude" && options.KeepClaudeLedger) {
 		managedDir := agentfiles.Directory(home, adapter)
 		if err := os.RemoveAll(managedDir); err != nil {
 			return result, fmt.Errorf("remove managed %s files: %w", adapter, err)
 		}
 		result.ConfigRemoved = true
 		result.ManagedFilesRemoved = true
+	}
+	return result, nil
+}
+
+func removeClaudeDesktopUserFiles(home string, options RemoveOptions) (RemoveResult, error) {
+	result := RemoveResult{
+		Adapter:    desktop.Name,
+		ConfigFile: agentfiles.ConfigPath(home, desktop.Name),
+	}
+	if options.PurgeConfig {
+		if err := removeFileIfExists(result.ConfigFile); err != nil {
+			return result, err
+		}
+		result.ConfigRemoved = true
+	}
+	if options.PurgeState {
+		if err := removeFileIfExists(agentfiles.HookLogPath(home, desktop.Name)); err != nil {
+			return result, err
+		}
+		result.StatePurged = true
 	}
 	return result, nil
 }
@@ -384,24 +409,62 @@ func removeClaude(home string, options RemoveOptions) (RemoveResult, error) {
 			}
 		}
 	}
-	if options.PurgeConfig {
+	if options.KeepClaudeLedger {
+		if options.PurgeConfig {
+			if err := removeClaudeConfigKeepingState(filepath.Join(home, ".claude", "gtrace.json")); err != nil {
+				return result, err
+			}
+		}
+		if options.PurgeConfig || options.PurgeManaged {
+			if err := removeClaudeConfigKeepingState(result.ConfigFile); err != nil {
+				return result, err
+			}
+			result.ConfigRemoved = true
+		}
+	} else if options.PurgeConfig {
 		if err := removeConfigFiles(result.ConfigFile, filepath.Join(home, ".claude", "gtrace.json")); err != nil {
 			return result, err
 		}
 		result.ConfigRemoved = true
 	}
-	if options.PurgeState {
+	if options.PurgeState && !options.KeepClaudeLedger {
 		for _, name := range []string{"obs-agent-connector", "agent-telemetry", "gtrace-agent"} {
 			if err := os.RemoveAll(filepath.Join(home, ".claude", "state", name)); err != nil {
 				return result, err
 			}
 		}
+		result.StatePurged = true
+	}
+	if options.PurgeState || (options.PurgeManaged && options.KeepClaudeLedger) {
 		if err := removeFileIfExists(agentfiles.HookLogPath(home, "claude")); err != nil {
 			return result, err
 		}
-		result.StatePurged = true
 	}
 	return result, nil
+}
+
+func removeClaudeConfigKeepingState(path string) error {
+	info, err := os.Stat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return removeFileIfExists(path)
+	}
+	body, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var config map[string]any
+	if json.Unmarshal(body, &config) != nil || config["state_dir"] == nil || config["state_dir"] == "" {
+		return removeFileIfExists(path)
+	}
+	// Keep the declaration in its original precedence slot. A project can
+	// override the user profile, while the OBS profile overrides the project.
+	return WriteClaudeDesktopUserConfig(path, map[string]any{"state_dir": config["state_dir"]})
 }
 
 func removeCodex(home string, options RemoveOptions) (RemoveResult, error) {

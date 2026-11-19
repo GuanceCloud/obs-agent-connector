@@ -42,6 +42,13 @@ func updatePlugins(args []string) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unrecognized update arguments: %s", strings.Join(fs.Args(), " "))
 	}
+	machine, err := managedDesktopTarget(target)
+	if err != nil {
+		return err
+	}
+	if machine {
+		return changeManagedDesktop("update", *yes, *dryRun)
+	}
 	if target != "" {
 		selectedTarget, err := agent.Select(target)
 		if err != nil {
@@ -60,7 +67,6 @@ func updatePlugins(args []string) error {
 		fmt.Println("No installed plugin found to update.")
 		return nil
 	}
-
 	var pluginDownload pluginDownloadConfig
 	if !selected[0].IsBuiltin() {
 		cfg, _, err := loadConnectorConfig()

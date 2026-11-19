@@ -82,6 +82,16 @@ func (m Manager) Claim(sessionID, turnID, fingerprint string) (*Claim, error) {
 	for attempt := 0; attempt < 2; attempt++ {
 		file, openErr := os.OpenFile(lockFile, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
 		if openErr == nil {
+			// A previous owner can complete the turn between our first check
+			// and acquisition of the lock.
+			if completed, err := m.Completed(sessionID, turnID); completed || err != nil {
+				_ = file.Close()
+				_ = os.Remove(lockFile)
+				if err != nil {
+					return nil, err
+				}
+				return nil, ErrAlreadyCompleted
+			}
 			if _, err := file.Write(body); err != nil {
 				_ = file.Close()
 				_ = os.Remove(lockFile)

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
@@ -231,11 +232,21 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 }
 
 func removeBuiltinAdapter(p agent.Definition, options telemetryinstall.RemoveOptions) error {
+	if p.Name == "claude" && claudeDesktopKeepsUploadLedger() {
+		options.KeepClaudeLedger = true
+		printSingleDetail("Shared Claude upload state", "Kept for Claude Desktop, including any configured state_dir.")
+	}
+	if p.Name == desktop.Name && claudeDesktopKeepsUploadLedger() {
+		printSingleDetail("Registration", "For machine Hook removal, run remove claude-desktop.")
+		return nil
+	}
 	result, err := telemetryinstall.RemoveAdapter(p.Name, "", options)
 	if err != nil {
 		return err
 	}
-	printSingleDetail("Hook", removedOrKept(result.HookRemoved))
+	if p.Name != desktop.Name {
+		printSingleDetail("Hook", removedOrKept(result.HookRemoved))
+	}
 	printSingleDetail("Config", removedOrKept(result.ConfigRemoved))
 	if options.PurgeManaged {
 		printSingleDetail("Managed Files", removedOrKept(result.ManagedFilesRemoved))

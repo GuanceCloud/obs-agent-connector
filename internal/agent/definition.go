@@ -22,6 +22,7 @@ type Definition struct {
 	PackageArgs              []string
 	PackageRootArg           bool
 	DiscoveryCommandOptional bool
+	DiscoverCommand          func(goos string) (string, bool)
 	Env                      []string
 	InstallArgs              []string
 	WindowsArgs              []string

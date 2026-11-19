@@ -182,7 +182,12 @@ func TestHookRetriesOnlyFailedSignal(t *testing.T) {
 	transcript := writeHookTranscript(t)
 	cfg := testHookConfig(t, server.URL)
 	payload := hookPayload(transcript)
-	for range 3 {
+	desktop := RunOptions{Config: &cfg, Payload: payload, SkipWait: true, Desktop: true, Entrypoint: "claude-desktop-3p"}
+	if err := RunWithOptions(desktop); err != nil {
+		t.Fatal(err)
+	}
+	payload["hook_event_name"] = "SessionEnd"
+	for range 2 {
 		if err := RunWithOptions(RunOptions{Config: &cfg, Payload: payload, SkipWait: true}); err != nil {
 			t.Fatal(err)
 		}
@@ -226,7 +231,7 @@ func TestConcurrentHooksClaimTurnOnce(t *testing.T) {
 		t.Fatal("first hook did not reach receiver")
 	}
 	go func() {
-		errs <- RunWithOptions(RunOptions{Config: &cfg, Payload: payload, SkipWait: true})
+		errs <- RunWithOptions(RunOptions{Config: &cfg, Payload: payload, SkipWait: true, Desktop: true, Entrypoint: "claude-desktop-3p"})
 	}()
 	time.Sleep(20 * time.Millisecond)
 	close(release)

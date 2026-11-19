@@ -111,6 +111,10 @@ func versionFromJSONFile(path string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return versionFromJSON(data)
+}
+
+func versionFromJSON(data []byte) (string, error) {
 	var payload struct {
 		Version string `json:"version"`
 	}
