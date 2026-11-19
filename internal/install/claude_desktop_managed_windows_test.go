@@ -45,19 +45,104 @@ func TestManagedWindowsPermissions(t *testing.T) {
 	}
 }
 
-func TestManagedWindowsStagingPermissions(t *testing.T) {
+func TestManagedWindowsStagingFallback(t *testing.T) {
 	account, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {
 		t.Fatal(err)
 	}
 	sid := account.User.Sid.String()
-	sddl := "O:" + sid + "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;" + sid + ")"
-	dir := t.TempDir()
-	if err := setManagedWindowsSecurity(dir, sddl); err != nil {
+	base := "O:" + sid + "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;" + sid + ")"
+	local, profile := t.TempDir(), t.TempDir()
+	if err := setManagedWindowsSecurity(local, base+"(A;;FW;;;WD)"); err != nil {
 		t.Fatal(err)
 	}
-	if err := checkManagedWindowsPath(dir, account.User.Sid); err != nil {
+	// This inheritable entry does not apply to the profile itself. The private
+	// staging directory must block the entry from flowing down to it.
+	if err := setManagedWindowsSecurity(profile, base+"(A;OICIIO;FW;;;WD)"); err != nil {
 		t.Fatal(err)
+	}
+	knownFolder := func(id *windows.KNOWNFOLDERID, _ uint32) (string, error) {
+		if id == windows.FOLDERID_LocalAppData {
+			return local, nil
+		}
+		return profile, nil
+	}
+	if err := checkManagedWindowsPath(local, account.User.Sid); err == nil || !strings.Contains(err.Error(), "write access") {
+		t.Fatalf("Local AppData fixture must have an untrusted writer: %v", err)
+	}
+	interrupted := errors.New("simulated helper interruption")
+	for _, result := range []error{nil, interrupted} {
+		var staged string
+		err := withManagedWindowsStaging(account.User.Sid, knownFolder, func(dir string) error {
+			staged = dir
+			if filepath.Dir(dir) != profile {
+				t.Fatalf("staging parent = %q, want %q", filepath.Dir(dir), profile)
+			}
+			sd, err := windows.GetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT, windows.OWNER_SECURITY_INFORMATION|windows.DACL_SECURITY_INFORMATION)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := checkManagedWindowsSecurity(sd, account.User.Sid); err != nil {
+				t.Fatal(err)
+			}
+			control, _, err := sd.Control()
+			if err != nil || control&windows.SE_DACL_PROTECTED == 0 {
+				t.Fatalf("staging directory should block access inheritance: %v", err)
+			}
+			dacl, _, err := sd.DACL()
+			if err != nil || dacl == nil || dacl.AceCount != 3 {
+				t.Fatalf("expected only the current account, SYSTEM and Administrators: %v", err)
+			}
+			if err := os.WriteFile(filepath.Join(dir, "fixture.exe"), []byte("fixture"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			return result
+		})
+		if !errors.Is(err, result) || staged == "" {
+			t.Fatalf("staging callback returned %v, want %v", err, result)
+		}
+		if _, err := os.Lstat(staged); !os.IsNotExist(err) {
+			t.Fatalf("staging directory remained after helper completion: %v", err)
+		}
+	}
+	if err := checkManagedWindowsPath(local, account.User.Sid); err == nil || !strings.Contains(err.Error(), "write access") {
+		t.Fatalf("staging changed the original Local AppData ACL: %v", err)
+	}
+}
+
+func TestManagedWindowsStagingRejectsBothUnsafeFolders(t *testing.T) {
+	account, err := windows.GetCurrentProcessToken().GetTokenUser()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid := account.User.Sid.String()
+	sddl := "O:" + sid + "D:P(A;;FA;;;SY)(A;;FA;;;BA)(A;;FA;;;" + sid + ")(A;;FW;;;WD)"
+	local, profile := t.TempDir(), t.TempDir()
+	for _, dir := range []string{local, profile} {
+		if err := setManagedWindowsSecurity(dir, sddl); err != nil {
+			t.Fatal(err)
+		}
+	}
+	knownFolder := func(id *windows.KNOWNFOLDERID, _ uint32) (string, error) {
+		if id == windows.FOLDERID_LocalAppData {
+			return local, nil
+		}
+		return profile, nil
+	}
+	err = withManagedWindowsStaging(account.User.Sid, knownFolder, func(dir string) error {
+		t.Fatalf("staged into an unsafe folder at %s", dir)
+		return nil
+	})
+	if err == nil || !strings.Contains(err.Error(), "Local AppData folder "+local) ||
+		!strings.Contains(err.Error(), "user profile folder "+profile) ||
+		strings.Count(err.Error(), "write access is granted outside the trusted Windows accounts") != 2 {
+		t.Fatalf("expected a diagnostic for both unsafe folders: %v", err)
+	}
+	for _, dir := range []string{local, profile} {
+		entries, err := os.ReadDir(dir)
+		if err != nil || len(entries) != 0 {
+			t.Fatalf("unsafe staging folder %s was changed: %v %v", dir, entries, err)
+		}
 	}
 }
 

@@ -1,6 +1,8 @@
 package install
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -251,45 +253,97 @@ func elevateManagedDesktop(action, source string) error {
 	if err != nil {
 		return err
 	}
-	root, err := windows.KnownFolderPath(windows.FOLDERID_LocalAppData, 0)
-	if err != nil {
-		return fmt.Errorf("resolve the Windows account's local application data: %w", err)
-	}
-	volume := filepath.VolumeName(root)
-	if !filepath.IsAbs(root) || len(volume) != 2 || volume[1] != ':' {
-		return errors.New("the Windows account's local application data must be on a local drive")
-	}
 	account, err := windows.GetCurrentProcessToken().GetTokenUser()
 	if err != nil {
 		return fmt.Errorf("resolve the Windows account for administrator staging: %w", err)
 	}
-	if err := checkManagedWindowsPath(root, account.User.Sid); err != nil {
-		return err
-	}
-	dir, err := os.MkdirTemp(root, "obs-claude-desktop-admin-")
-	if err != nil {
-		return fmt.Errorf("prepare the Windows administrator helper: %w", err)
-	}
-	defer os.RemoveAll(dir)
+	return withManagedWindowsStaging(account.User.Sid, windows.KnownFolderPath, func(dir string) error {
+		staged := filepath.Join(dir, "obs-agent-connector.exe")
+		if err := copyExecutable(source, staged); err != nil {
+			return fmt.Errorf("stage the Windows administrator helper: %w", err)
+		}
+		pinned, err := pinManagedWindowsExecutable(staged)
+		if err != nil {
+			return fmt.Errorf("protect the Windows administrator helper during authorization: %w", err)
+		}
+		defer windows.CloseHandle(pinned)
+		if err := verifyOBSExecutable(staged); err != nil {
+			return err
+		}
+		return runManagedWindowsAdministrator(staged, parameters, action)
+	})
+}
 
-	sid := account.User.Sid.String()
+func withManagedWindowsStaging(account *windows.SID, knownFolderPath func(*windows.KNOWNFOLDERID, uint32) (string, error), run func(string) error) error {
+	sid := account.String()
 	sddl := "O:" + sid + "D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;" + sid + ")"
-	if err := setManagedWindowsSecurity(dir, sddl); err != nil {
-		return err
-	}
-	staged := filepath.Join(dir, "obs-agent-connector.exe")
-	if err := copyExecutable(source, staged); err != nil {
-		return fmt.Errorf("stage the Windows administrator helper: %w", err)
-	}
-	pinned, err := pinManagedWindowsExecutable(staged)
+	sd, err := windows.SecurityDescriptorFromString(sddl)
 	if err != nil {
-		return fmt.Errorf("protect the Windows administrator helper during authorization: %w", err)
+		return fmt.Errorf("build private Windows administrator staging permissions: %w", err)
 	}
-	defer windows.CloseHandle(pinned)
-	if err := verifyOBSExecutable(staged); err != nil {
-		return err
+	sa := windows.SecurityAttributes{
+		Length:             uint32(unsafe.Sizeof(windows.SecurityAttributes{})),
+		SecurityDescriptor: sd,
 	}
-	return runManagedWindowsAdministrator(staged, parameters, action)
+	var failures []error
+	for _, candidate := range []struct {
+		name string
+		id   *windows.KNOWNFOLDERID
+	}{
+		{"Local AppData", windows.FOLDERID_LocalAppData},
+		{"user profile", windows.FOLDERID_Profile},
+	} {
+		root, err := knownFolderPath(candidate.id, 0)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("resolve Windows %s folder: %w", candidate.name, err))
+			continue
+		}
+		dir, err := createManagedWindowsStaging(root, account, &sa)
+		if err != nil {
+			failures = append(failures, fmt.Errorf("Windows %s folder %s: %w", candidate.name, root, err))
+			continue
+		}
+		defer os.RemoveAll(dir)
+		return run(dir)
+	}
+	return fmt.Errorf("no safe staging directory for the Windows administrator helper: %w", errors.Join(failures...))
+}
+
+func createManagedWindowsStaging(root string, account *windows.SID, sa *windows.SecurityAttributes) (string, error) {
+	volume := filepath.VolumeName(root)
+	if !filepath.IsAbs(root) || len(volume) != 2 || volume[1] != ':' {
+		return "", errors.New("administrator staging requires a local drive")
+	}
+	drive, err := windows.UTF16PtrFromString(volume + `\`)
+	if err != nil {
+		return "", err
+	}
+	switch windows.GetDriveType(drive) {
+	case windows.DRIVE_FIXED, windows.DRIVE_REMOVABLE, windows.DRIVE_RAMDISK:
+	default:
+		return "", errors.New("administrator staging requires a local drive")
+	}
+	if err := checkManagedWindowsPath(root, account); err != nil {
+		return "", err
+	}
+	var suffix [16]byte
+	if _, err := rand.Read(suffix[:]); err != nil {
+		return "", fmt.Errorf("generate a private Windows staging name: %w", err)
+	}
+	dir := filepath.Join(root, "obs-claude-desktop-admin-"+hex.EncodeToString(suffix[:]))
+	name, err := windows.UTF16PtrFromString(dir)
+	if err != nil {
+		return "", err
+	}
+	// Apply the protected DACL before the staging directory can inherit any access entries.
+	if err := windows.CreateDirectory(name, sa); err != nil {
+		return "", fmt.Errorf("create a private Windows staging directory: %w", err)
+	}
+	if err := checkManagedWindowsPath(dir, account); err != nil {
+		_ = os.Remove(dir)
+		return "", err
+	}
+	return dir, nil
 }
 
 func pinManagedWindowsExecutable(path string) (windows.Handle, error) {
