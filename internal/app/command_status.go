@@ -29,6 +29,13 @@ func status(args []string) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unrecognized status arguments: %s", strings.Join(fs.Args(), " "))
 	}
+	machine, err := managedDesktopTarget(target)
+	if err != nil {
+		return err
+	}
+	if machine {
+		return claudeDesktopManagedStatus()
+	}
 
 	selected, err := agent.Select(target)
 	if err != nil {
@@ -40,25 +47,17 @@ func status(args []string) error {
 	configPath := agent.FirstExistingPath(p.ConfigFiles)
 	enabledStatus := pluginEnabledStatus(p, configPath)
 
-	presence := "Installed"
-	if p.RequiresPluginImport {
-		presence = "Plugin ZIP prepared"
-	}
-
 	rows := [][2]string{
 		{"Agent", p.Name},
 		{"Command", p.AgentCommand},
 		{"Supported", yesNo(agent.SupportsPlatform(p, currentGOOS))},
-		{presence, yesNo(installed)},
+		{"Installed", yesNo(installed)},
 		{"Version", displayVersion(installedPluginVersion(p))},
 		{"Config", displayPathOrDash(configPath)},
 		{"Path", displayPathOrDash(installedPath)},
 		{"Enabled", enabledStatus},
 	}
 
-	if p.RequiresPluginImport {
-		rows = append(rows, [2]string{"Registration", "Check Customize > Plugins in Claude Desktop."})
-	}
 	if p.StatusDetails != nil {
 		rows = append(rows, p.StatusDetails(p)...)
 	}

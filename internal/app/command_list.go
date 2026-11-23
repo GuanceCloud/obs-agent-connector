@@ -3,9 +3,11 @@ package app
 import (
 	"flag"
 	"fmt"
-	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	"os"
 	"strings"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
+	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 )
 
 func listPlugins(args []string) error {
@@ -19,18 +21,38 @@ func listPlugins(args []string) error {
 	}
 
 	rows := [][]string{}
-	found := false
 	selected, err := agent.Select("")
 	if err != nil {
 		return err
 	}
 	for _, definition := range selected {
 		p := agent.Resolve(definition)
+		if p.Name == desktop.Name {
+			if !agent.SupportsPlatform(p, currentGOOS) {
+				continue
+			}
+			state, err := managedDesktopState()
+			if err != nil || !state.Policy || !state.Runtime {
+				continue
+			}
+			paths, err := managedDesktopPaths()
+			if err != nil {
+				continue
+			}
+			path, _ := desktopAccountConfigPath()
+			configPath := agent.FirstExistingPath([]string{path})
+			rows = append(rows, []string{
+				p.Name,
+				displayVersion(managedDesktopRuntimeVersion(paths.RuntimePath)),
+				displayPathOrDash(configPath),
+				paths.PolicyPath,
+			})
+			continue
+		}
 		installedAt, ok := agent.InstalledMarker(p)
 		if !ok {
 			continue
 		}
-		found = true
 		configPath := agent.FirstExistingPath(p.ConfigFiles)
 		if configPath == "" {
 			configPath = "-"
@@ -42,7 +64,7 @@ func listPlugins(args []string) error {
 			agent.DisplayPath(installedAt),
 		})
 	}
-	if !found {
+	if len(rows) == 0 {
 		fmt.Println("No installed plugins found.")
 		return nil
 	}

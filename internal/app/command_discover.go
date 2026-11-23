@@ -3,14 +3,23 @@ package app
 import (
 	"flag"
 	"fmt"
-	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	"os"
 	"strings"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
+	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 )
 
+var discoverCandidatesForOS = agent.DiscoverCandidatesForOS
+
+const incompleteDesktopDiscovery = "machine files are incomplete. Run update claude-desktop to reconcile them"
+
 type discoverStep struct {
-	Candidate agent.Candidate
-	Action    string
+	Candidate    agent.Candidate
+	State        string
+	Action       string
+	Blocked      error
+	DesktopPaths desktop.MachinePaths
 }
 
 func discover(args []string) error {
@@ -43,7 +52,7 @@ func discover(args []string) error {
 		return fmt.Errorf("discover failed: %w", err)
 	}
 
-	candidates := agent.DiscoverCandidatesForOS(currentGOOS)
+	candidates := discoverCandidatesForOS(currentGOOS)
 	if len(candidates) == 0 {
 		fmt.Println("No supported Agents detected.")
 		return nil
@@ -52,38 +61,40 @@ func discover(args []string) error {
 	rows := make([][]string, 0, len(candidates))
 	steps := make([]discoverStep, 0, len(candidates))
 	hasUnsupported := false
-	hasPreparedBundle := false
+	hasPartialDesktop := false
+	hasChanges := false
+	needsExternalDownload := false
+	var desktopPlan [][2]string
+	var desktopBlocker error
 	for _, candidate := range candidates {
-		version := displayVersion(candidate.InstalledVersion)
-		if !candidate.Supported {
-			hasUnsupported = true
-			rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, "n/a", version, "unsupported"})
-			continue
+		step := planDiscoveryStep(candidate, *updateMode)
+		steps = append(steps, step)
+		rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, step.State, displayVersion(step.Candidate.InstalledVersion), step.Action})
+		hasUnsupported = hasUnsupported || step.Action == "unsupported"
+		hasPartialDesktop = hasPartialDesktop || step.State == "partial"
+		if step.Blocked != nil {
+			desktopBlocker = step.Blocked
 		}
-		pluginState := "missing"
-		action := "install"
-		if candidate.InstalledPath != "" {
-			pluginState = "installed"
-			if candidate.Plugin.RequiresPluginImport {
-				pluginState = "prepared"
-				hasPreparedBundle = true
+		if step.Action == "install" || step.Action == "update" {
+			hasChanges = true
+			if candidate.Plugin.Name == desktop.Name {
+				desktopPlan = managedDesktopPlan(step.DesktopPaths)
 			}
-			action = "skip"
-			if *updateMode {
-				action = "update"
-			}
+			needsExternalDownload = needsExternalDownload || !candidate.Plugin.IsBuiltin()
 		}
-		if action != "skip" {
-			steps = append(steps, discoverStep{Candidate: candidate, Action: action})
-		}
-		rows = append(rows, []string{candidate.Plugin.Name, candidate.DetectedCmd, pluginState, version, action})
 	}
 
 	fmt.Println("Discover plan:")
 	printTable([]string{"AGENT", "COMMAND", "PLUGIN", "VERSION", "ACTION"}, rows)
-	if len(steps) == 0 {
-		if hasPreparedBundle {
-			fmt.Println("No installation changes needed. Check Claude Desktop for activation of prepared plugin ZIPs.")
+	if desktopBlocker != nil {
+		printSingleDetail("Claude Desktop", desktopBlocker.Error())
+	}
+	if !hasChanges {
+		if desktopBlocker != nil {
+			return desktopBlocker
+		}
+		if hasPartialDesktop {
+			printSingleDetail("Claude Desktop", incompleteDesktopDiscovery)
 			return nil
 		}
 		if *updateMode {
@@ -102,13 +113,6 @@ func discover(args []string) error {
 		return nil
 	}
 
-	needsExternalDownload := false
-	for _, step := range steps {
-		if !step.Candidate.Plugin.IsBuiltin() {
-			needsExternalDownload = true
-			break
-		}
-	}
 	var pluginDownload pluginDownloadConfig
 	if needsExternalDownload {
 		pluginDownload, err = pluginDownloadSettings(*staticBaseFlag, cfg, input.Endpoint)
@@ -116,7 +120,6 @@ func discover(args []string) error {
 			return fmt.Errorf("discover failed: %w", err)
 		}
 	}
-	rows = nil
 	detailRows := [][2]string{
 		{"Endpoint", input.Endpoint},
 		{"X-Token", "<configured>"},
@@ -127,10 +130,11 @@ func discover(args []string) error {
 	if len(input.GlobalTags) > 0 {
 		detailRows = append(detailRows, [2]string{"Global Tags", strings.Join(input.GlobalTags, ", ")})
 	}
+	detailRows = append(detailRows, desktopPlan...)
 	printDetails(detailRows)
 
 	if *dryRun {
-		return nil
+		return desktopBlocker
 	}
 
 	if !*yes {
@@ -150,8 +154,10 @@ func discover(args []string) error {
 
 	results := make([]discoverResult, 0, len(candidates))
 	hadFailure := false
-	for _, candidate := range candidates {
-		if !candidate.Supported {
+	for _, step := range steps {
+		candidate := step.Candidate
+		switch step.Action {
+		case "unsupported":
 			detail := candidate.UnsupportedReason
 			if strings.TrimSpace(detail) == "" {
 				detail = "not supported on this platform"
@@ -162,11 +168,17 @@ func discover(args []string) error {
 				Detail: detail,
 			})
 			continue
-		}
-		if candidate.InstalledPath != "" && !*updateMode {
+		case "blocked":
+			hadFailure = true
+			results = append(results, discoverResult{Agent: desktop.Name, Result: "failed", Detail: step.Blocked.Error()})
+			continue
+		case "skip":
 			detail := "plugin already installed version=" + displayVersion(candidate.InstalledVersion)
-			if candidate.Plugin.RequiresPluginImport {
-				detail = "plugin ZIP already prepared: " + candidate.InstalledPath
+			switch step.State {
+			case "managed":
+				detail = "machine registration already present: " + step.DesktopPaths.PolicyPath
+			case "partial":
+				detail = incompleteDesktopDiscovery
 			}
 			results = append(results, discoverResult{
 				Agent:  candidate.Plugin.Name,
@@ -176,7 +188,16 @@ func discover(args []string) error {
 			continue
 		}
 
-		if candidate.InstalledPath != "" {
+		if step.Action == "update" {
+			if candidate.Plugin.Name == desktop.Name {
+				if err := runManagedDesktopInstall(installInput{}, true); err != nil {
+					hadFailure = true
+					results = append(results, discoverResult{Agent: desktop.Name, Result: "failed", Detail: err.Error()})
+					continue
+				}
+				results = append(results, discoverResult{Agent: desktop.Name, Result: "updated", Detail: step.DesktopPaths.PolicyPath})
+				continue
+			}
 			beforeVersion := installedPluginVersion(candidate.Plugin)
 			if err := updatePluginOne(pluginDownload, candidate.Plugin); err != nil {
 				hadFailure = true
@@ -214,7 +235,12 @@ func discover(args []string) error {
 			continue
 		}
 
-		if err := installOne(pluginDownload, candidate.Plugin, perAgent); err != nil {
+		if candidate.Plugin.Name == desktop.Name {
+			err = runManagedDesktopInstall(perAgent, false)
+		} else {
+			err = installOne(pluginDownload, candidate.Plugin, perAgent)
+		}
+		if err != nil {
 			hadFailure = true
 			results = append(results, discoverResult{
 				Agent:  candidate.Plugin.Name,
@@ -223,15 +249,15 @@ func discover(args []string) error {
 			})
 			continue
 		}
+		if candidate.Plugin.Name == desktop.Name {
+			results = append(results, discoverResult{Agent: desktop.Name, Result: "installed", Detail: step.DesktopPaths.PolicyPath})
+			continue
+		}
 
 		installedVersion := installedPluginVersion(candidate.Plugin)
-		result := "installed"
-		if candidate.Plugin.RequiresPluginImport {
-			result = "prepared"
-		}
 		results = append(results, discoverResult{
 			Agent:  candidate.Plugin.Name,
-			Result: result,
+			Result: "installed",
 			Detail: fmt.Sprintf("version=%s agent_id=%s agent_name=%s", displayVersion(installedVersion), perAgent.AgentID, perAgent.AgentName),
 		})
 	}
@@ -249,6 +275,46 @@ func discover(args []string) error {
 	}
 
 	return nil
+}
+
+func planDiscoveryStep(candidate agent.Candidate, update bool) discoverStep {
+	step := discoverStep{Candidate: candidate, State: "missing", Action: "install"}
+	if !candidate.Supported {
+		step.State, step.Action = "n/a", "unsupported"
+		return step
+	}
+	if candidate.Plugin.Name == desktop.Name {
+		paths, err := managedDesktopPaths()
+		if err != nil {
+			step.State, step.Action, step.Blocked = "conflict", "blocked", err
+			return step
+		}
+		step.DesktopPaths = paths
+		state, err := managedDesktopState()
+		if err != nil {
+			step.State, step.Action, step.Blocked = "conflict", "blocked", err
+			return step
+		}
+		if state.Policy || state.Runtime {
+			step.State = "managed"
+			if !state.Policy || !state.Runtime {
+				step.State = "partial"
+			}
+			if update && state.Blocked != nil {
+				step.Action, step.Blocked = "blocked", state.Blocked
+				return step
+			}
+		}
+	} else if candidate.InstalledPath != "" {
+		step.State = "installed"
+	}
+	if step.State != "missing" {
+		step.Action = "skip"
+		if update {
+			step.Action = "update"
+		}
+	}
+	return step
 }
 
 func displayVersion(version string) string {

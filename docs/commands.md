@@ -75,6 +75,11 @@ obs-agent-connector discover \
 `discover` detects supported Agent commands in `PATH`, skips Agents whose plugins are already installed by default, and switches to update mode when `-u` is provided.
 For new plugin installs it generates one `agid_<uuidv4-without-dashes>` `agent_id` and uses `<hostname>_<agent>_<YYYYMMDD>` as the default `agent_name`.
 The output also shows the detected plugin version when it can be resolved from the local install layout.
+Claude Desktop discovery looks for the macOS application bundle, the Linux
+launcher, or the Windows MSIX package registered for the current account. The
+plan lists the machine files and administrator authorization before installing or
+updating them. `discover --update` refreshes an existing machine registration
+and can repair an incomplete one.
 Qoder is skipped until either `~/.qoder` or `~/.qoder-cn` has been created by the Agent.
 OpenCode is also detected when `~/.config/opencode` already exists, even if `opencode` is not currently in `PATH`.
 CodeBuddy is detected when the `codebuddy` command is in `PATH` or `~/.codebuddy` exists.
@@ -104,6 +109,11 @@ The output includes:
 - runtime `enabled` state for Agents that use a supported JSON config
 
 For plugins such as `hermes`, whose runtime config is YAML, the `enabled` field is reported as `unsupported`.
+
+`status claude-desktop` reports machine policy and runtime presence and the current
+account's telemetry setting. `list` and `status claude-desktop` read the installed
+machine runtime's version offline. The version shows `-` when it is unavailable.
+`list` also displays the path to a verified machine policy.
 
 QwenWork CN status includes read-only native token-flag diagnostics, usage
 observation/source timestamps, separate trace/metric upload outcomes and pending
@@ -160,11 +170,21 @@ obs-agent-connector install omp
 obs-agent-connector install pi
 ```
 
-Prepare and import the [Claude Desktop plugin](plugins.md#claude-desktop) for local Code and Cowork on macOS.
+Install and manage the machine Hook policy for local Claude Desktop Code and
+Cowork on macOS, Linux, and Windows. [Claude Desktop setup](plugins.md#claude-desktop)
 
 ```bash
+obs-agent-connector install claude-desktop --dry-run
 obs-agent-connector install claude-desktop
+obs-agent-connector status claude-desktop
+obs-agent-connector update claude-desktop
+obs-agent-connector remove claude-desktop
 ```
+
+OBS requests administrator authorization for the machine install, update, and
+remove operations. The preview and status commands run as the current account.
+`--yes` skips OBS confirmation. The operating system still checks authorization
+through sudo on macOS and Linux or UAC on Windows when elevation is required.
 
 Install the default built-in adapters:
 
@@ -196,7 +216,7 @@ If that source is unavailable, `install` derives the installer base from `--endp
 For example, `https://llm-openway.guance.com` maps to `https://static.guance.com/agent_plugins`, and `https://llm-openway.truewatch.com` maps to `https://static.truewatch.com/agent_plugins`.
 Use `--static-base` when you need to override the installer base.
 On Windows, Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy register the current connector executable directly. External plugins use the PowerShell installer from the configured OSS or GitHub source.
-Claude, Cursor, CodeBuddy, Codex, Deep Agents Code, Grok Build, Kiro, OMP, Pi, OpenCode, OpenClaw, Qoder, QwenWork CN, and WorkBuddy are supported on Windows.
+Claude Desktop uses administrator authorization for its machine-level Hook policy. Claude, Claude Desktop, Cursor, CodeBuddy, Codex, Deep Agents Code, Grok Build, Kiro, OMP, Pi, OpenCode, OpenClaw, Qoder, QwenWork CN, and WorkBuddy are supported on Windows.
 For Grok Build, installation creates the global trusted Hook file at `~/.grok/hooks/obs-agent-connector.json`. Restart Grok, or run `/hooks`, select the Hooks tab, and press `l` to reload it in an active session. Runtime config, Hook logs, and durable queue/upload state are stored under `~/.obs-agent-connector/grok/`.
 
 For QwenWork CN, a normal install registers local Hooks and enables native token
@@ -281,7 +301,11 @@ Preview removal:
 obs-agent-connector remove codex --dry-run
 ```
 
-For built-in Agents, `remove` preserves unrelated Hooks but always deletes `~/.obs-agent-connector/<agent>/`, including `gtrace.json` and `gtrace-hooks.json`. Add `--purge-config` to also delete legacy Agent-local configuration and upload state. External plugin configuration remains unchanged unless `--purge-config` is supplied.
+For built-in Agents, `remove` deletes the connector's Hook registration and files
+under `~/.obs-agent-connector/<agent>/`. `remove claude-desktop` removes the two
+machine files and keeps per-user configuration. Add `--purge-config` where
+supported to also delete legacy Agent-local configuration and upload state or
+configuration owned by an external plugin.
 
 ## Version
 
@@ -328,8 +352,9 @@ obs-agent-connector uninstall --keep-config
 Behavior:
 
 - removes the current `obs-agent-connector` binary
-- removes the managed Claude, Claude Desktop, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy adapters, including compatible legacy plugin residue where applicable
-- removes each built-in adapter's connector-managed config, Hook log, and upload state by default
+- removes current-user registrations for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy, including compatible legacy plugin residue where applicable
+- removes connector-managed per-user config, Hook logs, and upload state by default. A remaining Claude Desktop machine registration keeps its per-user config and shared Claude upload state.
+- run `remove claude-desktop` before uninstalling to decommission the machine registration and stop its Hooks
 - removes `~/.obs-agent-connector/config.json` by default
 - keeps connector-managed global and per-Agent configuration when `--keep-config` is used; Hooks, logs, and upload state are still removed
 - removes the installer-managed PATH export from `~/.zshrc`, `~/.bashrc`, or `~/.profile` when found

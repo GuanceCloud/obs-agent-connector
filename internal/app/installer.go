@@ -264,11 +264,7 @@ func installOne(download pluginDownloadConfig, p agent.Definition, input install
 		if err := installBuiltinAdapter(p, input, false); err != nil {
 			return err
 		}
-		result := "installed"
-		if p.RequiresPluginImport {
-			result = "plugin ZIP prepared"
-		}
-		printSingleDetail("Result", result)
+		printSingleDetail("Result", "installed")
 		return nil
 	}
 
@@ -326,11 +322,7 @@ func updatePluginOne(download pluginDownloadConfig, p agent.Definition) error {
 		if err := installBuiltinAdapter(p, installInput{}, true); err != nil {
 			return err
 		}
-		result := "reconciled"
-		if p.RequiresPluginImport {
-			result = "runtime and plugin ZIP refreshed"
-		}
-		printSingleDetail("Result", result)
+		printSingleDetail("Result", "reconciled")
 		return nil
 	}
 

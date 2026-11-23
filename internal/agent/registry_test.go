@@ -3,14 +3,17 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
 )
 
 func TestRegisteredPluginNames(t *testing.T) {
 	expected := map[string]string{
 		"claude":         "claude-otel-plugin",
-		"claude-desktop": "obs-claude-desktop",
+		"claude-desktop": "obs-agent-connector",
 		"codebuddy":      "obs-agent-connector",
 		"codex":          "codex-otel-plugin",
 		"cursor":         "cursor-otel-plugin",
@@ -42,7 +45,7 @@ func TestRegisteredPluginNames(t *testing.T) {
 }
 
 func TestSupportedNamesForWindows(t *testing.T) {
-	expected := []string{"claude", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn", "workbuddy"}
+	expected := []string{"claude", "claude-desktop", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn", "workbuddy"}
 	got := SupportedNames("windows")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Windows supported names %v, got %v", expected, got)
@@ -50,7 +53,7 @@ func TestSupportedNamesForWindows(t *testing.T) {
 }
 
 func TestSupportedNamesForLinux(t *testing.T) {
-	expected := []string{"claude", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "hermes", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn"}
+	expected := []string{"claude", "claude-desktop", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "hermes", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn"}
 	got := SupportedNames("linux")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Linux supported names %v, got %v", expected, got)
@@ -322,26 +325,20 @@ func assertNoMigrationArtifact(t *testing.T, definition Definition) {
 	}
 }
 
-func TestClaudeDesktopBundleMarkerOnlyOnMacOS(t *testing.T) {
-	definition := Get("claude-desktop")
-	if !definition.IsBuiltin() || !definition.RequiresPluginImport || !SupportsPlatform(definition, "darwin") ||
-		SupportsPlatform(definition, "linux") || SupportsPlatform(definition, "windows") {
+func TestClaudeDesktopUsesMachinePolicies(t *testing.T) {
+	definition := Get(desktop.Name)
+	if !definition.IsBuiltin() || SupportsPlatform(definition, "freebsd") || len(definition.Markers) != 0 {
 		t.Fatalf("unexpected Desktop definition: %#v", definition)
 	}
-	home := t.TempDir()
-	t.Setenv("HOME", home)
-	t.Setenv("USERPROFILE", home)
-	bundle := ExpandHome(definition.BuiltinHookFile)
-	if path, found := InstalledMarker(definition); path != "" || found {
-		t.Fatalf("missing bundle reported as prepared: path=%q found=%v", path, found)
+	for _, goos := range []string{"darwin", "linux", "windows"} {
+		if !SupportsPlatform(definition, goos) {
+			t.Errorf("Claude Desktop is missing on %s", goos)
+		}
 	}
-	if err := os.MkdirAll(filepath.Dir(bundle), 0o700); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(bundle, []byte("fixture"), 0o600); err != nil {
-		t.Fatal(err)
-	}
-	if path, found := InstalledMarker(definition); path != bundle || !found {
-		t.Fatalf("prepared bundle not detected: path=%q found=%v", path, found)
+	if desktop.SupportsManagedOS(runtime.GOOS) {
+		paths, err := desktop.ManagedPaths()
+		if err != nil || Resolve(definition).BuiltinHookFile != paths.PolicyPath {
+			t.Fatalf("Claude Desktop did not resolve its machine policy path: %v", err)
+		}
 	}
 }

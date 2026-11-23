@@ -24,6 +24,7 @@ type HookPayload struct {
 	EventName            string
 	Version              string
 	LastAssistantMessage string
+	AgentRuntime         string
 }
 
 type rawTurn struct {
@@ -253,8 +254,9 @@ func normalizeTurn(
 		}}
 	}
 
+	agentRuntime := firstNonEmpty(payload.AgentRuntime, "claude")
 	resource := copyMap(cfg.ResourceAttributes)
-	resource["agent_runtime"] = "claude"
+	resource["agent_runtime"] = agentRuntime
 	resource["telemetry.sdk.language"] = "go"
 	resource["telemetry.sdk.name"] = "gtrace"
 	if agentVersion != "" {
@@ -269,7 +271,7 @@ func normalizeTurn(
 	turn := model.Turn{
 		SessionID:     payload.SessionID,
 		TurnID:        turnID,
-		AgentRuntime:  "claude",
+		AgentRuntime:  agentRuntime,
 		AgentName:     "claude",
 		AgentVersion:  agentVersion,
 		StartUnixNano: userTime,

@@ -1,10 +1,10 @@
 package agent
 
 import (
-	"archive/zip"
-	"io"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
@@ -12,66 +12,49 @@ import (
 
 func claudeDesktopPlugin() Definition {
 	return Definition{
-		Name:                    desktop.Name,
-		Backend:                 BackendBuiltin,
-		PluginName:              desktop.PluginName,
-		AgentCommand:            "Claude Desktop",
-		BuiltinHookFile:         desktop.BundlePath("~"),
-		SupportedPlatforms:      []string{"darwin"},
-		ConfigFiles:             []string{agentfiles.ConfigPath("~", desktop.Name)},
-		Markers:                 []string{desktop.ExecutablePath("~")},
-		EnabledJSONPath:         []string{"enabled"},
-		RequiresPluginImport:    true,
-		ResolveDiscovery:        resolveClaudeDesktopDiscovery,
-		ResolveInstalled:        claudeDesktopBundlePrepared,
-		ResolveInstalledVersion: claudeDesktopBundleVersion,
+		Name:               desktop.Name,
+		Backend:            BackendBuiltin,
+		PluginName:         "obs-agent-connector",
+		AgentCommand:       "Claude Desktop",
+		SupportedPlatforms: []string{"darwin", "linux", "windows"},
+		ConfigFiles:        []string{agentfiles.ConfigPath("~", desktop.Name)},
+		EnabledJSONPath:    []string{"enabled"},
+		Resolve:            resolveClaudeDesktopPaths,
+		DiscoverCommand:    discoverClaudeDesktopCommand,
 	}
 }
 
-func resolveClaudeDesktopDiscovery(p Definition) (Definition, bool) {
-	home, _ := os.UserHomeDir()
-	bundle := filepath.Join("Claude.app", "Contents", "MacOS", "Claude")
-	p.AgentCommand = FirstExistingPath([]string{
-		filepath.Join(home, "Applications", bundle),
-		filepath.Join("/Applications", bundle),
-	})
-	return p, p.AgentCommand != ""
+func resolveClaudeDesktopPaths(p Definition) Definition {
+	if paths, err := desktop.ManagedPaths(); err == nil {
+		p.BuiltinHookFile = paths.PolicyPath
+	}
+	return p
 }
 
-func claudeDesktopBundlePrepared(p Definition) (string, bool) {
-	path := ExpandHome(p.BuiltinHookFile)
-	info, err := os.Stat(path)
-	if err != nil || !info.Mode().IsRegular() {
-		return "", false
+func discoverClaudeDesktopCommand(goos string) (string, bool) {
+	goos = strings.ToLower(strings.TrimSpace(goos))
+	if goos == "" {
+		goos = runtime.GOOS
 	}
-	return path, true
+	return findClaudeDesktopCommand(goos, isClaudeDesktopMSIXInstalled)
 }
 
-func claudeDesktopBundleVersion(p Definition) string {
-	path, prepared := claudeDesktopBundlePrepared(p)
-	if !prepared {
-		return ""
-	}
-	bundle, err := zip.OpenReader(path)
-	if err != nil {
-		return ""
-	}
-	defer bundle.Close()
-	for _, entry := range bundle.File {
-		if entry.Name != ".claude-plugin/plugin.json" {
-			continue
+func findClaudeDesktopCommand(goos string, msixInstalled func() bool) (string, bool) {
+	switch goos {
+	case "darwin":
+		home, _ := os.UserHomeDir()
+		bundle := filepath.Join("Claude.app", "Contents", "MacOS", "Claude")
+		command := FirstExistingPath([]string{
+			filepath.Join(home, "Applications", bundle),
+			filepath.Join("/Applications", bundle),
+		})
+		return lookupAgentCommand(command)
+	case "linux":
+		return lookupAgentCommand("claude-desktop")
+	case "windows":
+		if msixInstalled() {
+			return "Claude (MSIX)", true
 		}
-		file, err := entry.Open()
-		if err != nil {
-			return ""
-		}
-		defer file.Close()
-		body, err := io.ReadAll(io.LimitReader(file, 64*1024))
-		if err != nil {
-			return ""
-		}
-		version, _ := versionFromJSON(body)
-		return version
 	}
-	return ""
+	return "", false
 }

@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
 	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
@@ -79,19 +80,6 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 		})
 		if err == nil {
 			printSingleDetail("Note", "Restart WorkBuddy before the next conversation to load the built-in Hooks and unload the previous plugin. If settings are overwritten on exit, rerun installation after quitting WorkBuddy.")
-		}
-	case "claude-desktop":
-		var bundlePath string
-		bundlePath, err = telemetryinstall.InstallClaudeDesktop(telemetryinstall.CodexOptions{
-			SourceExecutable: executable, Endpoint: input.Endpoint, TracePath: input.TracePath,
-			MetricsPath: input.MetricsPath, InstallType: fixedType, XToken: input.XToken,
-			Headers: input.Headers, ResourceAttributes: builtinResourceAttributes(input),
-			CaptureContent: input.CaptureContent, MaxChars: input.MaxChars, Enabled: input.Enabled,
-			NoConfig: noConfig,
-		})
-		if err == nil {
-			printSingleDetail("Plugin ZIP", bundlePath)
-			printSingleDetail("Activation", "Upload the ZIP in Claude Desktop through Customize > Plugins, then start a new local session.")
 		}
 	case "claude":
 		_, err = telemetryinstall.InstallClaude(telemetryinstall.ClaudeOptions{
@@ -244,14 +232,19 @@ func installBuiltinAdapter(p agent.Definition, input installInput, noConfig bool
 }
 
 func removeBuiltinAdapter(p agent.Definition, options telemetryinstall.RemoveOptions) error {
+	if p.Name == "claude" && claudeDesktopKeepsUploadLedger() {
+		options.KeepClaudeLedger = true
+		printSingleDetail("Shared Claude upload state", "Kept for Claude Desktop, including any configured state_dir.")
+	}
+	if p.Name == desktop.Name && claudeDesktopKeepsUploadLedger() {
+		printSingleDetail("Registration", "For machine Hook removal, run remove claude-desktop.")
+		return nil
+	}
 	result, err := telemetryinstall.RemoveAdapter(p.Name, "", options)
 	if err != nil {
 		return err
 	}
-	if p.RequiresPluginImport {
-		printSingleDetail("Plugin ZIP", removedOrKept(result.HookRemoved))
-		printSingleDetail("Registration", "Remove the OBS plugin from Customize > Plugins in Claude Desktop if present.")
-	} else {
+	if p.Name != desktop.Name {
 		printSingleDetail("Hook", removedOrKept(result.HookRemoved))
 	}
 	printSingleDetail("Config", removedOrKept(result.ConfigRemoved))
@@ -326,7 +319,7 @@ func builtinResourceAttributes(input installInput) []string {
 }
 
 func installedPluginVersion(p agent.Definition) string {
-	if p.IsBuiltin() && !p.RequiresPluginImport {
+	if p.IsBuiltin() {
 		return version
 	}
 	return agent.InstalledVersion(p)

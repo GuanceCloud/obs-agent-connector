@@ -38,13 +38,20 @@ type ResolveOptions struct {
 }
 
 func Resolve(options ResolveOptions) Config {
-	env := options.Env
-	if env == nil {
-		env = environment()
-	}
 	home := options.Home
 	if home == "" {
 		home, _ = os.UserHomeDir()
+	}
+	var desktopSettings map[string]any
+	if options.Desktop {
+		desktopSettings = readJSON(agentfiles.ConfigPath(home, desktop.Name))
+		if enabled, _ := desktopSettings["enabled"].(bool); !enabled {
+			return Config{}
+		}
+	}
+	env := options.Env
+	if env == nil {
+		env = environment()
 	}
 	cwd := options.Cwd
 	if cwd == "" {
@@ -83,7 +90,7 @@ func Resolve(options ResolveOptions) Config {
 		for _, source := range sources {
 			merge(stateConfig, source)
 		}
-		sources = []map[string]any{readJSON(agentfiles.ConfigPath(home, adapter))}
+		sources = []map[string]any{desktopSettings}
 	}
 	for _, source := range sources {
 		merge(merged, source)

@@ -11,11 +11,13 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/buildinfo"
 	claudeconfig "github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/config"
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
 	claudeparse "github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/parse"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/metrics"
@@ -41,10 +43,14 @@ func RunCLI() int {
 }
 
 func RunDesktopCLI(args []string) int {
-	if len(args) != 1 || !filepath.IsAbs(args[0]) {
+	if len(args) != 1 || args[0] != desktop.ManagedArgument || !desktop.SupportsManagedOS(runtime.GOOS) {
 		return 0
 	}
-	return runCLI(claudeconfig.ResolveOptions{Desktop: true, Home: args[0]})
+	home, err := desktop.ManagedHome()
+	if err != nil {
+		return 0
+	}
+	return runCLI(claudeconfig.ResolveOptions{Desktop: true, Home: home})
 }
 
 func runCLI(options claudeconfig.ResolveOptions) int {
@@ -114,6 +120,7 @@ func RunWithOptions(options RunOptions) error {
 	}
 	surface := desktopSurface(options.Entrypoint, messages)
 	if surface != "" {
+		parsedPayload.AgentRuntime = desktop.Name
 		cfg.ResourceAttributes = maps.Clone(cfg.ResourceAttributes)
 		if cfg.ResourceAttributes == nil {
 			cfg.ResourceAttributes = map[string]any{}

@@ -30,6 +30,16 @@ func remove(args []string) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unrecognized remove arguments: %s", strings.Join(fs.Args(), " "))
 	}
+	machine, err := managedDesktopTarget(target)
+	if err != nil {
+		return err
+	}
+	if machine {
+		if *purgeConfig {
+			return fmt.Errorf("--purge-config is unavailable for claude-desktop machine removal")
+		}
+		return changeManagedDesktop("remove", *yes, *dryRun)
+	}
 
 	selected, err := agent.SelectInstalled(target)
 	if err != nil {
@@ -44,10 +54,12 @@ func remove(args []string) error {
 	fmt.Println("Remove plan:")
 	rows := make([][2]string, 0, len(selected)*3)
 	for _, p := range selected {
+		keepClaudeLedger := p.Name == "claude" && claudeDesktopKeepsUploadLedger()
 		rows = append(rows, [2]string{"Agent", p.Name})
-		if p.RequiresPluginImport {
-			rows = append(rows, [2]string{"Plugin ZIP", p.BuiltinHookFile})
-		} else if p.IsBuiltin() {
+		if keepClaudeLedger {
+			rows = append(rows, [2]string{"Shared Claude upload state", "keep the ledger and state_dir for Claude Desktop"})
+		}
+		if p.IsBuiltin() {
 			rows = append(rows, [2]string{"Hook", p.BuiltinHookFile + " (managed entry only)"})
 		}
 		for _, cmd := range p.RemoveCmds {
@@ -59,20 +71,23 @@ func remove(args []string) error {
 		for _, path := range p.RemovePaths {
 			rows = append(rows, [2]string{"Path", path})
 		}
-		if p.IsBuiltin() {
+		if keepClaudeLedger {
+			rows = append(rows, [2]string{"Managed Files", "remove legacy telemetry settings and Hook logs"})
+		} else if p.IsBuiltin() {
 			rows = append(rows, [2]string{"Managed Files", "remove ~/.obs-agent-connector/" + p.Name})
 		}
+		configMode := "legacy and external config kept"
 		if *purgeConfig {
 			for _, path := range p.ConfigFiles {
 				rows = append(rows, [2]string{"Config", path})
 			}
+			configMode = "all config removed"
+			if keepClaudeLedger {
+				configMode = "only shared state_dir declarations kept"
+			}
 		}
+		rows = append(rows, [2]string{"Config Mode", configMode})
 	}
-	configMode := "legacy and external config kept"
-	if *purgeConfig {
-		configMode = "all config removed"
-	}
-	rows = append(rows, [2]string{"Config Mode", configMode})
 	printDetails(rows)
 
 	if *dryRun {

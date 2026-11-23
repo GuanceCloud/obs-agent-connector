@@ -53,6 +53,10 @@ func uninstallConnector(args []string) error {
 		managedFilesMode = "keep managed config; remove Hooks, logs, and state"
 	}
 	rows = append(rows, [2]string{"Built-in Agents", "remove claude, claude-desktop, codebuddy, codex, cursor, dcode, grok, kiro, omp, pi, qwenwork-cn, and workbuddy; " + managedFilesMode})
+	if claudeDesktopKeepsUploadLedger() {
+		rows = append(rows, [2]string{"Claude Desktop managed Hooks", "Machine Hooks can keep collecting. Run remove claude-desktop before uninstall to remove them."})
+		rows = append(rows, [2]string{"Shared Claude upload state", "keep the ledger, state_dir, and shared Desktop user config"})
+	}
 	if *keepConfig {
 		rows = append(rows, [2]string{"Config", "keep " + configPath})
 	} else {
@@ -85,7 +89,7 @@ func uninstallConnector(args []string) error {
 			return nil
 		}
 	}
-	for _, adapter := range []string{"claude", "claude-desktop", "codebuddy", "codex", "cursor", "dcode", "grok", "kiro", "omp", "pi", "qwenwork-cn", "workbuddy"} {
+	for _, adapter := range []string{"claude-desktop", "claude", "codebuddy", "codex", "cursor", "dcode", "grok", "kiro", "omp", "pi", "qwenwork-cn", "workbuddy"} {
 		selected := agent.ResolveForRemove([]agent.Definition{agent.Get(adapter)})
 		if len(selected) == 0 {
 			continue

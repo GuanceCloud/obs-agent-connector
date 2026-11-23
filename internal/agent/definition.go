@@ -10,7 +10,6 @@ const (
 type Definition struct {
 	Name                     string
 	Backend                  Backend
-	RequiresPluginImport     bool
 	BuiltinHookFile          string
 	PluginName               string
 	AgentCommand             string
@@ -23,6 +22,7 @@ type Definition struct {
 	PackageArgs              []string
 	PackageRootArg           bool
 	DiscoveryCommandOptional bool
+	DiscoverCommand          func(goos string) (string, bool)
 	Env                      []string
 	InstallArgs              []string
 	WindowsArgs              []string
@@ -40,7 +40,6 @@ type Definition struct {
 	ResolveRemove            func(Definition) Definition
 	ResolveDiscovery         func(Definition) (Definition, bool)
 	ResolveInstalled         func(Definition) (string, bool)
-	ResolveInstalledVersion  func(Definition) string
 	StatusDetails            func(Definition) [][2]string
 }
 

@@ -159,8 +159,8 @@ func TestDesktopConfigUsesOwnDestinationAndLegacyState(t *testing.T) {
 		"headers":   map[string]any{"X-Token": "legacy-token"},
 	})
 	desktopOptions := ResolveOptions{Desktop: true, Env: osOverride, Home: home, Cwd: cwd}
-	if cfg := Resolve(desktopOptions); cfg.Enabled || cfg.StateDir != stateDir {
-		t.Fatalf("Desktop without config should share state and remain inactive: enabled=%v state=%q", cfg.Enabled, cfg.StateDir)
+	if cfg := Resolve(desktopOptions); cfg.Enabled || cfg.StateDir != "" {
+		t.Fatalf("Desktop without config resolved telemetry settings: enabled=%v state=%q", cfg.Enabled, cfg.StateDir)
 	}
 
 	desktopPath := filepath.Join(home, ".obs-agent-connector", "claude-desktop", "gtrace.json")
@@ -191,8 +191,37 @@ func TestDesktopConfigSharesDefaultStateWithoutLegacyInstall(t *testing.T) {
 	options := ResolveOptions{Home: home, Cwd: t.TempDir(), Env: map[string]string{}}
 	legacy := Resolve(options)
 	options.Desktop = true
+	writeConfig(t, filepath.Join(home, ".obs-agent-connector", "claude-desktop", "gtrace.json"), map[string]any{"enabled": true})
 	desktop := Resolve(options)
 	if desktop.StateDir != legacy.StateDir || desktop.StateDir != filepath.Join(home, ".claude", "state", "gtrace-agent") {
 		t.Fatalf("unexpected Desktop state path %q", desktop.StateDir)
+	}
+}
+
+func TestManagedDesktopRequiresExplicitPerUserOptIn(t *testing.T) {
+	home := t.TempDir()
+	options := ResolveOptions{
+		Home: home, Cwd: t.TempDir(), Desktop: true,
+		Env: map[string]string{
+			"CLAUDE_OTEL_ENABLED":         "true",
+			"OTEL_EXPORTER_OTLP_ENDPOINT": "https://env.invalid",
+		},
+	}
+	writeConfig(t, filepath.Join(home, ".claude", "gtrace.json"), map[string]any{
+		"enabled": true, "endpoint": "https://legacy.invalid",
+	})
+	if cfg := Resolve(options); cfg.Enabled || cfg.Transport.Endpoint != "" || cfg.StateDir != "" {
+		t.Fatal("machine registration alone inherited legacy or environment transport")
+	}
+	path := filepath.Join(home, ".obs-agent-connector", "claude-desktop", "gtrace.json")
+	for _, value := range []any{nil, "true", false} {
+		writeConfig(t, path, map[string]any{"enabled": value, "endpoint": "https://desktop.invalid"})
+		if cfg := Resolve(options); cfg.Enabled || cfg.Transport.Endpoint != "" || cfg.StateDir != "" {
+			t.Fatalf("managed Hook unexpectedly opted in with enabled=%v", value)
+		}
+	}
+	writeConfig(t, path, map[string]any{"enabled": true, "endpoint": "https://desktop.invalid"})
+	if cfg := Resolve(options); !cfg.Enabled || cfg.Transport.Endpoint != "https://desktop.invalid" {
+		t.Fatal("an explicitly enabled Desktop configuration was not used")
 	}
 }

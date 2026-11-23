@@ -62,18 +62,11 @@ func SelectInstalled(target string) ([]Definition, error) {
 	for _, p := range selected {
 		p = Resolve(p)
 		_, installed := InstalledMarker(p)
-		if !installed && p.RequiresPluginImport {
-			// An imported plugin can keep using the managed runtime after its ZIP is moved.
-			installed = FirstExistingPath(p.Markers) != "" || FirstExistingPath(p.ConfigFiles) != ""
-		}
 		if installed {
 			out = append(out, p)
 			continue
 		}
 		if normalizedTarget != "" {
-			if p.RequiresPluginImport {
-				return nil, fmt.Errorf("%s setup files are missing", p.Name)
-			}
 			return nil, fmt.Errorf("%s plugin is not installed", p.Name)
 		}
 	}
@@ -127,7 +120,7 @@ func DiscoverCandidatesForOS(goos string) []Candidate {
 		} else {
 			p = Resolve(p)
 		}
-		command, ok := detectAgentCommand(p)
+		command, ok := detectAgentCommand(p, goos)
 		if !ok {
 			if !p.DiscoveryCommandOptional {
 				continue
@@ -205,9 +198,16 @@ func SupportsPlatform(p Definition, goos string) bool {
 	return true
 }
 
-func detectAgentCommand(p Definition) (string, bool) {
-	if _, err := exec.LookPath(p.AgentCommand); err == nil {
-		return p.AgentCommand, true
+func detectAgentCommand(p Definition, goos string) (string, bool) {
+	if p.DiscoverCommand != nil {
+		return p.DiscoverCommand(goos)
+	}
+	return lookupAgentCommand(p.AgentCommand)
+}
+
+func lookupAgentCommand(command string) (string, bool) {
+	if _, err := exec.LookPath(command); err == nil {
+		return command, true
 	}
 	return "", false
 }

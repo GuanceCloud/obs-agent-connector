@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/core/otlp"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/proto"
 )
 
@@ -33,7 +34,29 @@ func TestDesktopSurfaceRecognizesObservedSources(t *testing.T) {
 	}
 }
 
-func TestDesktopOnlyHooksUploadBothSurfacesAndSkipOthers(t *testing.T) {
+func TestClaudeHooksLabelRuntimeAndDeduplicateDesktopTurns(t *testing.T) {
+	wantUploads := []struct{ runtime, surface string }{
+		{"claude-desktop", "cowork"},
+		{"claude-desktop", "code"},
+		{"claude-desktop", "code"},
+		{"claude", ""},
+	}
+	checkResource := func(count int32, attributes []otlp.KeyValue) string {
+		t.Helper()
+		if int(count) > len(wantUploads) {
+			t.Errorf("unexpected upload %d", count)
+			return ""
+		}
+		want := wantUploads[count-1]
+		if got := stringAttribute(attributes, "agent_runtime"); got != want.runtime {
+			t.Errorf("upload %d runtime = %q, want %q", count, got, want.runtime)
+		}
+		if got := stringAttribute(attributes, "claude_surface"); got != want.surface {
+			t.Errorf("upload %d surface = %q, want %q", count, got, want.surface)
+		}
+		return want.runtime
+	}
+
 	var traces atomic.Int32
 	var metricRequests atomic.Int32
 	server := httptest.NewServer(http.HandlerFunc(func(writer http.ResponseWriter, request *http.Request) {
@@ -46,29 +69,39 @@ func TestDesktopOnlyHooksUploadBothSurfacesAndSkipOthers(t *testing.T) {
 		switch request.URL.Path {
 		case "/v1/traces":
 			count := traces.Add(1)
-			want := "cowork"
-			if count == 2 {
-				want = "code"
-			}
 			trace, err := proto.DecodeExportTraceServiceRequest(body)
 			if err != nil || len(trace.ResourceSpans) != 1 {
-				t.Errorf("decode Desktop trace %d: %v", count, err)
+				t.Errorf("decode Claude trace %d: %v", count, err)
 				break
 			}
-			attributes := map[string]string{}
-			for _, item := range trace.ResourceSpans[0].Resource.Attributes {
-				if item.Value.StringValue != nil {
-					attributes[item.Key] = *item.Value.StringValue
-				}
-			}
-			if attributes["claude_surface"] != want || attributes["agent_runtime"] != "claude" {
-				t.Errorf("trace %d attributes = %#v, want claude/%s", count, attributes, want)
-			}
+			checkResource(count, trace.ResourceSpans[0].Resource.Attributes)
 			if bytes.Contains(body, []byte("list files")) {
 				t.Error("capture none leaked prompt in trace")
 			}
 		case "/v1/metrics":
-			metricRequests.Add(1)
+			count := metricRequests.Add(1)
+			request, err := proto.DecodeExportMetricsServiceRequest(body)
+			if err != nil || len(request.ResourceMetrics) != 1 || len(request.ResourceMetrics[0].ScopeMetrics) != 1 {
+				t.Errorf("decode Claude metrics %d: %v", count, err)
+				break
+			}
+			resource := request.ResourceMetrics[0]
+			wantRuntime := checkResource(count, resource.Resource.Attributes)
+			foundDuration := false
+			for _, metric := range resource.ScopeMetrics[0].Metrics {
+				if metric.Name != "gen_ai.workflow.duration" || metric.Histogram == nil {
+					continue
+				}
+				for _, point := range metric.Histogram.DataPoints {
+					foundDuration = true
+					if got := stringAttribute(point.Attributes, "agent_runtime"); got != wantRuntime {
+						t.Errorf("upload %d workflow duration runtime = %q, want %q", count, got, wantRuntime)
+					}
+				}
+			}
+			if !foundDuration {
+				t.Errorf("upload %d has no workflow duration metric", count)
+			}
 		default:
 			t.Errorf("unexpected path %s", request.URL.Path)
 		}
@@ -93,12 +126,18 @@ func TestDesktopOnlyHooksUploadBothSurfacesAndSkipOthers(t *testing.T) {
 	run("local-agent", "cowork-session", "Stop")
 	run("local-agent", "cowork-session", "SessionEnd")
 	run("claude-desktop-3p", "code-session", "Stop")
+	options.Desktop = false
 	run("claude-desktop-3p", "code-session", "SessionEnd")
+	run("claude-desktop-3p", "legacy-first-code-session", "Stop")
+	options.Desktop = true
+	run("claude-desktop-3p", "legacy-first-code-session", "SessionEnd")
 	run("chat", "chat-session", "Stop")
 	run("cli", "terminal-session", "Stop")
 	run("local-agent", "unfinished-session", "UserPromptSubmit")
-	if traces.Load() != 2 || metricRequests.Load() != 2 {
-		t.Fatalf("uploads = traces %d metrics %d, want one of each per Desktop turn", traces.Load(), metricRequests.Load())
+	options.Desktop = false
+	run("cli", "terminal-session", "Stop")
+	if int(traces.Load()) != len(wantUploads) || int(metricRequests.Load()) != len(wantUploads) {
+		t.Fatalf("uploads = traces %d metrics %d, want %d of each", traces.Load(), metricRequests.Load(), len(wantUploads))
 	}
 	logBody, err := os.ReadFile(cfg.HookLogFile)
 	if err != nil || !strings.Contains(string(logBody), `"surface":"cowork"`) || !strings.Contains(string(logBody), `"surface":"code"`) {
@@ -106,7 +145,16 @@ func TestDesktopOnlyHooksUploadBothSurfacesAndSkipOthers(t *testing.T) {
 	}
 }
 
-func TestDesktopHookUsesInstallerHomeEvenWithDifferentProcessHome(t *testing.T) {
+func stringAttribute(attributes []otlp.KeyValue, key string) string {
+	for _, attribute := range attributes {
+		if attribute.Key == key && attribute.Value.StringValue != nil {
+			return *attribute.Value.StringValue
+		}
+	}
+	return ""
+}
+
+func TestDesktopHookIgnoresAnExplicitHomeArgument(t *testing.T) {
 	root := t.TempDir()
 	configDirectory := filepath.Join(root, ".obs-agent-connector", "claude-desktop")
 	if err := os.MkdirAll(configDirectory, 0o700); err != nil {
@@ -136,8 +184,7 @@ func TestDesktopHookUsesInstallerHomeEvenWithDifferentProcessHome(t *testing.T) 
 	if code := RunDesktopCLI([]string{root}); code != 0 {
 		t.Fatalf("hook did not fail open: exit %d", code)
 	}
-	body, err := os.ReadFile(filepath.Join(configDirectory, "gtrace-hooks.json"))
-	if err != nil || !strings.Contains(string(body), "hook input is empty") {
-		t.Fatalf("hook did not use the installer's per-user config: %v", err)
+	if _, err := os.Stat(filepath.Join(configDirectory, "gtrace-hooks.json")); !os.IsNotExist(err) {
+		t.Fatalf("Hook used an explicit home argument: %v", err)
 	}
 }

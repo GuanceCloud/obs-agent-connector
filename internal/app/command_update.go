@@ -42,6 +42,13 @@ func updatePlugins(args []string) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unrecognized update arguments: %s", strings.Join(fs.Args(), " "))
 	}
+	machine, err := managedDesktopTarget(target)
+	if err != nil {
+		return err
+	}
+	if machine {
+		return changeManagedDesktop("update", *yes, *dryRun)
+	}
 	if target != "" {
 		selectedTarget, err := agent.Select(target)
 		if err != nil {
@@ -60,7 +67,6 @@ func updatePlugins(args []string) error {
 		fmt.Println("No installed plugin found to update.")
 		return nil
 	}
-
 	var pluginDownload pluginDownloadConfig
 	if !selected[0].IsBuiltin() {
 		cfg, _, err := loadConnectorConfig()
@@ -100,9 +106,7 @@ func updatePlugins(args []string) error {
 		fmt.Println("Command preview:")
 		for _, p := range selected {
 			p = agent.Resolve(p)
-			if p.RequiresPluginImport {
-				fmt.Printf("refresh %s runtime and plugin ZIP\n", p.Name)
-			} else if p.IsBuiltin() {
+			if p.IsBuiltin() {
 				fmt.Printf("reconcile %s hook with the current obs-agent-connector runtime\n", p.Name)
 			} else {
 				fmt.Println(renderPluginUpdateCommand(pluginDownload, p))

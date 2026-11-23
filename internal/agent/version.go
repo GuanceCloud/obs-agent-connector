@@ -11,9 +11,6 @@ import (
 var semanticVersionPattern = regexp.MustCompile(`^v?\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$`)
 
 func InstalledVersion(p Definition) string {
-	if p.ResolveInstalledVersion != nil {
-		return p.ResolveInstalledVersion(p)
-	}
 	paths := append([]string{}, p.Markers...)
 	paths = append(paths, p.RemovePaths...)
 	for _, rawPath := range paths {
