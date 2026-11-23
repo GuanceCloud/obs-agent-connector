@@ -1,6 +1,6 @@
 # Plugin Matrix
 
-`obs-agent-connector` contains built-in adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, Pi, QwenWork CN, and WorkBuddy. Other Agents delegate installation and configuration generation to external plugin installers.
+`obs-agent-connector` contains built-in adapters for Claude, Claude Desktop, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, Pi, QwenWork CN, and WorkBuddy. Other Agents delegate installation and configuration generation to external plugin installers.
 
 Built-in `invoke_agent` spans do not carry token usage. Attributable token usage remains on `llm` spans and drives token metrics. Kiro's aggregate billing credit remains on `invoke_agent` because it has no per-call attribution. Turn-only token usage without supported per-call attribution is omitted from exported spans.
 
@@ -9,6 +9,7 @@ Built-in `invoke_agent` spans do not carry token usage. Attributable token usage
 | Agent | Edition | Installer | Default Config | Default Install Marker |
 | --- | --- | --- | --- | --- |
 | `claude` | Claude | Current connector | `~/.obs-agent-connector/claude/gtrace.json` | Managed Hooks in `~/.claude/settings.json` |
+| `claude-desktop` | Claude Desktop local Code and Cowork on macOS, Linux, and Windows | Current connector | `~/.obs-agent-connector/claude-desktop/gtrace.json` | OBS machine policy drop-in and runtime |
 | `codebuddy` | Tencent Cloud CodeBuddy / WorkBuddy Enterprise IDE Agent | Current connector | `~/.obs-agent-connector/codebuddy/gtrace.json` | Managed Hook in `~/.codebuddy/settings.json` |
 | `codex` | Codex | Current connector | `~/.obs-agent-connector/codex/gtrace.json` | Managed Hook and trust state in `$CODEX_HOME/hooks.json` / `$CODEX_HOME/config.toml` (defaults to `~/.codex`) |
 | `cursor` | Cursor with automatic `~/.cursor` or Cursor CLI-family detection, preferring `cursor-agent` | Current connector | `~/.obs-agent-connector/cursor/gtrace.json` | Managed Hooks in `~/.cursor/hooks.json` |
@@ -25,6 +26,84 @@ Built-in `invoke_agent` spans do not carry token usage. Attributable token usage
 | `qoder` | Qoder with automatic CN/global detection | Unix: `https://static.guance.com/agent_plugins/qoder-otel-plugin/qoder-otel-plugin.tar.gz`  Windows: `https://static.guance.com/agent_plugins/qoder-otel-plugin/install-release.ps1` | `~/.qoder/gtrace.json` or `~/.qoder-cn/gtrace.json` | `~/.qoder/plugins/cache/qoder-marketplace/qoder-otel-plugin` or `~/.qoder-cn/plugins/cache/qoder-marketplace/qoder-otel-plugin` |
 | `workbuddy` | WorkBuddy with automatic profile-directory detection | Built into `obs-agent-connector` | `~/.obs-agent-connector/workbuddy/gtrace.json` (legacy profile config remains readable) | `<profile>/settings.json` managed Hooks |
 | `qwenwork-cn` | QwenWork CN domestic desktop on macOS, Linux and Windows; Windows AMD64 user smoke test passed, Linux/Windows ARM64 runtime unverified; [local Hook contract](product-research/qwenwork-cn.md) | Built into `obs-agent-connector` | `~/.obs-agent-connector/qwenwork-cn/gtrace.json` | `~/.qwenworkcn/settings.json` managed Hooks |
+
+## Claude Desktop
+
+### Managed registration
+
+Run these commands from the account that uses Claude Desktop. OBS requests
+administrator authorization as needed for install, update, and removal. It uses
+sudo on macOS and Linux and a UAC prompt on Windows. `--yes` skips the OBS
+confirmation. Start a new local Code or Cowork session after installing or updating.
+
+```bash
+obs-agent-connector install claude-desktop
+obs-agent-connector status claude-desktop
+obs-agent-connector update claude-desktop
+obs-agent-connector remove claude-desktop
+```
+
+The machine registration uses the following directories.
+
+| Platform | Machine directory | Runtime |
+| --- | --- | --- |
+| macOS | `/Library/Application Support/ClaudeCode` | `obs-agent-connector-claude-desktop` |
+| Linux | `/etc/claude-code` | `obs-agent-connector-claude-desktop` |
+| Windows | `%ProgramFiles%\ClaudeCode` | `obs-agent-connector-claude-desktop.exe` |
+
+Within the machine directory, OBS writes
+`managed-settings.d/50-obs-claude-desktop.json`. The first file-based deployment
+opts into merging Claude Desktop's host policy. The CLI reports conflicts with
+known device policy, a custom `policyHelper`, or file settings that disable
+Hooks or prevent the required first-policy merge. Status reports machine-file
+presence and the current account's telemetry setting. `list` shows the
+policy path for a verified machine registration.
+[Anthropic managed settings documentation](https://code.claude.com/docs/en/managed-settings)
+
+Check a new local Code session and a new Cowork session to confirm Claude loads
+the policy. Native Linux and Windows validation is pending for the RC. Windows
+Cowork requires the Cowork service included in Anthropic's full Desktop
+installer and a compatible Windows device.
+[Anthropic Windows deployment requirements](https://support.claude.com/en/articles/12622703-deploy-claude-desktop-for-windows)
+
+The Hook runs as the OS account running the Desktop session and requires `enabled: true` in that
+account's Desktop `gtrace.json`. OBS writes this file with private account permissions.
+Additional accounts can configure their own
+destination and enable telemetry without administrator authorization after the
+machine registration is installed.
+
+```bash
+obs-agent-connector config claude-desktop edit --enabled=true \
+  --endpoint=https://llm-openway.guance.com --x-token=agent_xxx
+```
+
+`update claude-desktop` refreshes the machine files from the current OBS binary.
+`remove claude-desktop` deletes the machine files and keeps the user configuration
+and Claude upload ledger.
+Machine Hooks with an enabled user configuration can continue collecting after a
+plain `uninstall`. Run `remove claude-desktop` before uninstalling the
+connector when decommissioning the machine registration.
+
+### Telemetry
+
+The machine Hooks run on `Stop` and `SessionEnd`. Recognized Desktop sessions
+use `agent_runtime=claude-desktop` and a `claude_surface` resource attribute of
+`code` or `cowork`. Terminal Claude CLI sessions use `agent_runtime=claude`.
+The adapter reads only the Desktop configuration for its endpoint,
+headers, enabled state, and content capture. Use `disable claude-desktop` to stop
+Desktop exports for the current account.
+
+An existing `claude` installation and the Desktop machine Hook can handle the
+same local Code turn. Both adapters use the Claude upload ledger, including a
+`state_dir` override from the existing Claude configuration. The ledger locks each
+session and turn and records trace and metrics success separately.
+Configure both adapters for the same destination when they handle the same
+Code sessions. If the legacy Hook uploads first, it labels the recognized
+Desktop session as `claude-desktop` and uses the legacy Hook's configuration.
+
+Removing the legacy `claude` adapter while Desktop Hooks are present preserves
+the shared upload ledger, including any `state_dir` override from a discarded
+Claude config.
 
 ## Hermes Home Directory
 
@@ -95,6 +174,7 @@ This prevents the international and China editions from overwriting each other's
 Windows installation and update are currently supported only for:
 
 - `claude`
+- `claude-desktop`
 - `codex`
 - `cursor`
 - `dcode`
@@ -111,7 +191,7 @@ Windows installation and update are currently supported only for:
 - `qwenwork-cn`
 - `workbuddy`
 
-Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy register the current connector executable directly. External plugins download their PowerShell installer from the configured OSS or GitHub source.
+Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy register the current connector executable directly. Claude Desktop registers a machine-level policy and runtime with administrator authorization. External plugins download their PowerShell installer from the configured OSS or GitHub source.
 If a user tries `install` or `update` with an unsupported Agent, the CLI returns a friendly error with the supported Windows Agent list.
 
 ## Install Parameters
@@ -126,7 +206,7 @@ At plugin install time, the CLI uses:
 | `Agent ID` | auto-generated `agid_<uuidv4-without-dashes>` or `--agent-id` override | `--tag agent_id=<value>` |
 | `Agent Name` | `<hostname>_<agent>_<YYYYMMDD>` or `--agent-name` override | `--tag agent_name=<value>` |
 
-The built-in Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
+The built-in Claude, Claude Desktop, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro, OMP, Pi, QwenWork CN, and WorkBuddy adapters accept `--trace-path`, `--metrics-path`, one or more `--header` parameters, one or more `--tag` parameters, `--capture-content`, `--max-chars`, `--enable`, and `--disable`. Values are merged into the existing `gtrace.json`, and unknown fields remain unchanged.
 
 Each built-in adapter writes structured Hook logs to `~/.obs-agent-connector/<agent>/gtrace-hooks.json`. For adapters with a legacy configuration layout, Agent-local configs are read as a compatibility fallback and are migrated into the managed directory when an install or config edit writes new values.
 
@@ -154,6 +234,7 @@ contract and add a regression test for the generated command.
 | Agent | Updated JSON path |
 | --- | --- |
 | `claude` | `enabled` |
+| `claude-desktop` | `enabled` |
 | `codebuddy` | `enabled` |
 | `codex` | `enabled` |
 | `cursor` | `enabled` |

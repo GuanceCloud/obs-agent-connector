@@ -3,12 +3,14 @@ package app
 import (
 	"flag"
 	"fmt"
-	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
-	installpkg "github.com/GuanceCloud/obs-agent-connector/internal/install"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
+	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
+	installpkg "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
 func configCommand(args []string) error {
@@ -44,7 +46,7 @@ func listAgentConfig(target string, args []string) error {
 		return fmt.Errorf("unrecognized config list arguments: %s", strings.Join(fs.Args(), " "))
 	}
 
-	p, configPath, err := resolveEditableRuntimeConfig(target)
+	p, configPath, _, err := resolveEditableRuntimeConfig(target)
 	if err != nil {
 		return err
 	}
@@ -151,12 +153,12 @@ func editAgentConfig(target string, args []string) error {
 		return fmt.Errorf("config edit requires one or more parameters to update")
 	}
 
-	p, effectiveConfigPath, err := resolveEditableRuntimeConfig(target)
+	p, effectiveConfigPath, managed, err := resolveEditableRuntimeConfig(target)
 	if err != nil {
 		return err
 	}
 	configPath := effectiveConfigPath
-	if p.IsBuiltin() && len(p.ConfigFiles) > 0 {
+	if p.IsBuiltin() && !managed && len(p.ConfigFiles) > 0 {
 		configPath = agent.ExpandHome(p.ConfigFiles[0])
 	}
 	current, exists, err := installpkg.ReadRuntimeConfig(configPath)
@@ -173,7 +175,11 @@ func editAgentConfig(target string, args []string) error {
 	if err != nil {
 		return fmt.Errorf("merge %s runtime config: %w", p.Name, err)
 	}
-	if err := installpkg.WriteRuntimeConfig(configPath, next); err != nil {
+	writeConfig := installpkg.WriteRuntimeConfig
+	if managed {
+		writeConfig = installpkg.WriteClaudeDesktopUserConfig
+	}
+	if err := writeConfig(configPath, next); err != nil {
 		return fmt.Errorf("write %s runtime config: %w", p.Name, err)
 	}
 
@@ -181,18 +187,22 @@ func editAgentConfig(target string, args []string) error {
 	return nil
 }
 
-func resolveEditableRuntimeConfig(target string) (agent.Definition, string, error) {
+func resolveEditableRuntimeConfig(target string) (agent.Definition, string, bool, error) {
 	selected, err := agent.Select(target)
 	if err != nil {
-		return agent.Definition{}, "", err
+		return agent.Definition{}, "", false, err
 	}
 
 	p := agent.Resolve(selected[0])
 	if !agent.SupportsPlatform(p, currentGOOS) {
-		return agent.Definition{}, "", unsupportedPlatformError(p, currentGOOS)
+		return agent.Definition{}, "", false, unsupportedPlatformError(p, currentGOOS)
 	}
 	if !supportsEditableRuntimeConfig(p) {
-		return agent.Definition{}, "", fmt.Errorf("%s does not support config; its runtime config is not a managed gtrace.json file", p.Name)
+		return agent.Definition{}, "", false, fmt.Errorf("%s does not support config; its runtime config is not a managed gtrace.json file", p.Name)
+	}
+	if p.Name == desktop.Name {
+		path, err := editableDesktopConfigPath()
+		return p, path, true, err
 	}
 
 	configPath := agent.FirstExistingPath(p.ConfigFiles)
@@ -200,13 +210,13 @@ func resolveEditableRuntimeConfig(target string) (agent.Definition, string, erro
 		configPath = agent.ExpandHome(p.ConfigFiles[0])
 	}
 	if strings.TrimSpace(configPath) == "" {
-		return agent.Definition{}, "", fmt.Errorf("%s config file was not found; expected one of: %s", p.Name, strings.Join(p.ConfigFiles, ", "))
+		return agent.Definition{}, "", false, fmt.Errorf("%s config file was not found; expected one of: %s", p.Name, strings.Join(p.ConfigFiles, ", "))
 	}
 
 	if _, installed := agent.InstalledMarker(p); !installed && !agent.PathExists(configPath) {
-		return agent.Definition{}, "", fmt.Errorf("%s plugin is not installed", p.Name)
+		return agent.Definition{}, "", false, fmt.Errorf("%s plugin is not installed", p.Name)
 	}
-	return p, configPath, nil
+	return p, configPath, false, nil
 }
 
 func supportsEditableRuntimeConfig(p agent.Definition) bool {

@@ -10,6 +10,7 @@ This document is a compact reference for:
 | Agent | Integration | macOS | Linux | Windows | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `claude` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook adapter |
+| `claude-desktop` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Machine Hooks for local Code and Cowork |
 | `codebuddy` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook plus native `index.json` replay; Linux x64 is product-validated |
 | `codex` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop Hook adapter plus built-in Codex trust/config handling |
 | `cursor` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Detects `~/.cursor`, prefers `cursor-agent`, and manages user-level Cursor Hooks |
@@ -31,6 +32,7 @@ This document is a compact reference for:
 | Agent | Notes |
 | --- | --- |
 | `claude` | Uses the built-in adapter and writes managed runtime config under `~/.obs-agent-connector/claude/`. |
+| `claude-desktop` | Run `install claude-desktop` to register machine Hooks with administrator authorization. [Setup and lifecycle](plugins.md#claude-desktop) |
 | `codebuddy` | Uses the built-in adapter. The connector manages Hook entries in `~/.codebuddy/settings.json`. |
 | `cursor` | Uses the built-in adapter, detects the local Cursor CLI family, and prefers `cursor-agent` when available. |
 | `dcode` | Uses Hooks v2 in `~/.deepagents/hooks.json` and transcript JSONL under `~/.deepagents/transcripts/`. Start a new session or run `/reload` after installation. A failed `SessionEnd(reason=other)` produces an error root Trace without fabricated LLM or usage data. |
@@ -92,7 +94,7 @@ External plugin contract:
 
 ### Built-in adapter install parameters
 
-These parameters apply to the built-in `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `omp`, `pi`, and `workbuddy` adapters:
+These parameters apply to the built-in `claude`, `claude-desktop`, `codebuddy`, `codex`, `cursor`, `dcode`, `grok`, `kiro`, `omp`, `pi`, and `workbuddy` adapters:
 
 | Parameter | Meaning |
 | --- | --- |
@@ -140,6 +142,7 @@ Notes:
 Current JSON runtime toggle support:
 
 - `claude`
+- `claude-desktop`
 - `codebuddy`
 - `codex`
 - `cursor`

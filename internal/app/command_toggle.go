@@ -4,11 +4,12 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
+	agent "github.com/GuanceCloud/obs-agent-connector/internal/agent"
 	installpkg "github.com/GuanceCloud/obs-agent-connector/internal/install"
 )
 
@@ -48,26 +49,48 @@ func togglePlugin(args []string, enabled bool) error {
 		return fmt.Errorf("unrecognized %s arguments: %s", commandName, strings.Join(fs.Args(), " "))
 	}
 
-	selected, err := agent.SelectInstalled(target)
+	managed, err := managedDesktopTarget(target)
 	if err != nil {
 		return err
 	}
-	if len(selected) == 0 {
-		fmt.Printf("No installed plugin found to %s.\n", commandName)
-		return nil
+	managedConfig := ""
+	p := agent.Get(desktop.Name)
+	if managed {
+		managedConfig, err = desktopAccountConfigPath()
+		if err != nil {
+			return err
+		}
+		if _, err := os.Stat(managedConfig); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("Claude Desktop user config is absent at %s. Use config claude-desktop edit to set up telemetry", managedConfig)
+			}
+			return fmt.Errorf("inspect Claude Desktop user config: %w", err)
+		}
+	} else {
+		selected, err := agent.SelectInstalled(target)
+		if err != nil {
+			return err
+		}
+		if len(selected) == 0 {
+			fmt.Printf("No installed plugin found to %s.\n", commandName)
+			return nil
+		}
+		p = agent.Resolve(selected[0])
 	}
 
-	p := agent.Resolve(selected[0])
 	if len(p.EnabledJSONPath) == 0 {
 		return fmt.Errorf("%s does not support %s; its runtime config is not a supported JSON enabled switch", p.Name, commandName)
 	}
 
-	effectiveConfigPath := agent.FirstExistingPath(p.ConfigFiles)
+	effectiveConfigPath := managedConfig
+	if effectiveConfigPath == "" {
+		effectiveConfigPath = agent.FirstExistingPath(p.ConfigFiles)
+	}
 	if effectiveConfigPath == "" {
 		return fmt.Errorf("%s config file was not found; expected one of: %s", p.Name, strings.Join(p.ConfigFiles, ", "))
 	}
 	configPath := effectiveConfigPath
-	if p.IsBuiltin() && len(p.ConfigFiles) > 0 {
+	if p.IsBuiltin() && !managed && len(p.ConfigFiles) > 0 {
 		configPath = agent.ExpandHome(p.ConfigFiles[0])
 	}
 
@@ -77,17 +100,21 @@ func togglePlugin(args []string, enabled bool) error {
 		return nil
 	}
 
-	if effectiveConfigPath != configPath {
+	if managed || effectiveConfigPath != configPath {
 		current, exists, err := installpkg.ReadRuntimeConfig(effectiveConfigPath)
 		if err != nil {
-			return fmt.Errorf("failed to read legacy %s config: %w", p.Name, err)
+			return fmt.Errorf("failed to read %s config: %w", p.Name, err)
 		}
 		if !exists {
 			return fmt.Errorf("%s config file was not found: %s", p.Name, effectiveConfigPath)
 		}
 		setNestedJSONBool(current, p.EnabledJSONPath, enabled)
-		if err := installpkg.WriteRuntimeConfig(configPath, current); err != nil {
-			return fmt.Errorf("failed to migrate and %s %s: %w", commandName, p.Name, err)
+		writeConfig := installpkg.WriteRuntimeConfig
+		if managed {
+			writeConfig = installpkg.WriteClaudeDesktopUserConfig
+		}
+		if err := writeConfig(configPath, current); err != nil {
+			return fmt.Errorf("failed to %s %s: %w", commandName, p.Name, err)
 		}
 	} else if err := setJSONBoolPath(configPath, p.EnabledJSONPath, enabled); err != nil {
 		return fmt.Errorf("failed to %s %s: %w", commandName, p.Name, err)

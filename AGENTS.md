@@ -7,6 +7,7 @@ This repository contains the single `obs-agent-connector` Go binary for managing
 The CLI supports plugin lifecycle operations for:
 
 - `claude`
+- `claude-desktop`
 - `codebuddy`
 - `codex`
 - `hermes`

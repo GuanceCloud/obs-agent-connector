@@ -3,29 +3,33 @@ package agent
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
 )
 
 func TestRegisteredPluginNames(t *testing.T) {
 	expected := map[string]string{
-		"claude":    "claude-otel-plugin",
-		"codebuddy": "obs-agent-connector",
-		"codex":     "codex-otel-plugin",
-		"cursor":    "cursor-otel-plugin",
-		"dcode":     "obs-agent-connector",
-		"dsh":       "dsh-otel-plugin",
-		"grok":      "obs-agent-connector",
-		"hermes":    "hermes-otel-plugin",
-		"kiro":      "obs-agent-connector",
-		"omp":       "obs-agent-connector",
-		"mimo":      "opencode-otel-plugin",
-		"pi":        "obs-agent-connector",
-		"opencode":  "opencode-otel-plugin",
-		"openclaw":  "openclaw-otel-plugin",
-		"qoder":     "qoder-otel-plugin",
-		"qoder-cn":  "qoder-otel-plugin",
-		"workbuddy": "obs-agent-connector",
+		"claude":         "claude-otel-plugin",
+		"claude-desktop": "obs-agent-connector",
+		"codebuddy":      "obs-agent-connector",
+		"codex":          "codex-otel-plugin",
+		"cursor":         "cursor-otel-plugin",
+		"dcode":          "obs-agent-connector",
+		"dsh":            "dsh-otel-plugin",
+		"grok":           "obs-agent-connector",
+		"hermes":         "hermes-otel-plugin",
+		"kiro":           "obs-agent-connector",
+		"omp":            "obs-agent-connector",
+		"mimo":           "opencode-otel-plugin",
+		"pi":             "obs-agent-connector",
+		"opencode":       "opencode-otel-plugin",
+		"openclaw":       "openclaw-otel-plugin",
+		"qoder":          "qoder-otel-plugin",
+		"qoder-cn":       "qoder-otel-plugin",
+		"workbuddy":      "obs-agent-connector",
 	}
 
 	for name, pluginName := range expected {
@@ -41,7 +45,7 @@ func TestRegisteredPluginNames(t *testing.T) {
 }
 
 func TestSupportedNamesForWindows(t *testing.T) {
-	expected := []string{"claude", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn", "workbuddy"}
+	expected := []string{"claude", "claude-desktop", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn", "workbuddy"}
 	got := SupportedNames("windows")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Windows supported names %v, got %v", expected, got)
@@ -49,7 +53,7 @@ func TestSupportedNamesForWindows(t *testing.T) {
 }
 
 func TestSupportedNamesForLinux(t *testing.T) {
-	expected := []string{"claude", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "hermes", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn"}
+	expected := []string{"claude", "claude-desktop", "codebuddy", "codex", "cursor", "dcode", "dsh", "grok", "hermes", "kiro", "mimo", "omp", "openclaw", "opencode", "pi", "qoder", "qwenwork-cn"}
 	got := SupportedNames("linux")
 	if strings.Join(got, ",") != strings.Join(expected, ",") {
 		t.Fatalf("expected Linux supported names %v, got %v", expected, got)
@@ -317,6 +321,24 @@ func assertNoMigrationArtifact(t *testing.T, definition Definition) {
 	for _, value := range values {
 		if strings.Contains(value, "Definition") {
 			t.Fatalf("Agent %s contains invalid migrated value %q", definition.Name, value)
+		}
+	}
+}
+
+func TestClaudeDesktopUsesMachinePolicies(t *testing.T) {
+	definition := Get(desktop.Name)
+	if !definition.IsBuiltin() || SupportsPlatform(definition, "freebsd") || len(definition.Markers) != 0 {
+		t.Fatalf("unexpected Desktop definition: %#v", definition)
+	}
+	for _, goos := range []string{"darwin", "linux", "windows"} {
+		if !SupportsPlatform(definition, goos) {
+			t.Errorf("Claude Desktop is missing on %s", goos)
+		}
+	}
+	if desktop.SupportsManagedOS(runtime.GOOS) {
+		paths, err := desktop.ManagedPaths()
+		if err != nil || Resolve(definition).BuiltinHookFile != paths.PolicyPath {
+			t.Fatalf("Claude Desktop did not resolve its machine policy path: %v", err)
 		}
 	}
 }

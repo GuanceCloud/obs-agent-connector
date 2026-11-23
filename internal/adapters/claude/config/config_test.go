@@ -136,3 +136,92 @@ func writeConfig(t *testing.T, path string, value any) {
 		t.Fatal(err)
 	}
 }
+
+func TestDesktopConfigUsesOwnDestinationAndLegacyState(t *testing.T) {
+	home := t.TempDir()
+	cwd := t.TempDir()
+	osOverride := map[string]string{
+		"CLAUDE_OTEL_ENABLED":         "true",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "https://env.invalid",
+		"OTEL_EXPORTER_OTLP_HEADERS":  "Authorization=legacy-environment",
+	}
+	stateDir := filepath.Join(home, "custom-claude-state")
+	writeConfig(t, filepath.Join(home, ".claude", "gtrace.json"), map[string]any{
+		"state_dir": filepath.Join(home, "legacy-state"),
+	})
+	writeConfig(t, filepath.Join(cwd, ".claude", "gtrace.json"), map[string]any{
+		"state_dir": filepath.Join(home, "project-state"),
+	})
+	writeConfig(t, filepath.Join(home, ".obs-agent-connector", "claude", "gtrace.json"), map[string]any{
+		"enabled":   true,
+		"endpoint":  "https://legacy.invalid",
+		"state_dir": stateDir,
+		"headers":   map[string]any{"X-Token": "legacy-token"},
+	})
+	desktopOptions := ResolveOptions{Desktop: true, Env: osOverride, Home: home, Cwd: cwd}
+	if cfg := Resolve(desktopOptions); cfg.Enabled || cfg.StateDir != "" {
+		t.Fatalf("Desktop without config resolved telemetry settings: enabled=%v state=%q", cfg.Enabled, cfg.StateDir)
+	}
+
+	desktopPath := filepath.Join(home, ".obs-agent-connector", "claude-desktop", "gtrace.json")
+	config := map[string]any{
+		"enabled":        true,
+		"captureContent": "none",
+		"endpoint":       "https://desktop.invalid",
+		"headers":        map[string]any{"X-Token": "desktop-token"},
+	}
+	writeConfig(t, desktopPath, config)
+	desktop := Resolve(desktopOptions)
+	legacy := Resolve(ResolveOptions{Env: osOverride, Home: home, Cwd: cwd})
+	if !desktop.Enabled || desktop.Transport.Endpoint != "https://desktop.invalid" ||
+		desktop.Transport.Headers["X-Token"] != "desktop-token" || desktop.Transport.Headers["Authorization"] != "" ||
+		desktop.CaptureContent != "none" || desktop.StateDir != legacy.StateDir ||
+		desktop.HookLogFile != filepath.Join(home, ".obs-agent-connector", "claude-desktop", "gtrace-hooks.json") {
+		t.Fatalf("unexpected Desktop configuration: %#v", desktop)
+	}
+	config["enabled"] = false
+	writeConfig(t, desktopPath, config)
+	if Resolve(desktopOptions).Enabled {
+		t.Fatal("legacy or environment settings re-enabled the Desktop Hook")
+	}
+}
+
+func TestDesktopConfigSharesDefaultStateWithoutLegacyInstall(t *testing.T) {
+	home := t.TempDir()
+	options := ResolveOptions{Home: home, Cwd: t.TempDir(), Env: map[string]string{}}
+	legacy := Resolve(options)
+	options.Desktop = true
+	writeConfig(t, filepath.Join(home, ".obs-agent-connector", "claude-desktop", "gtrace.json"), map[string]any{"enabled": true})
+	desktop := Resolve(options)
+	if desktop.StateDir != legacy.StateDir || desktop.StateDir != filepath.Join(home, ".claude", "state", "gtrace-agent") {
+		t.Fatalf("unexpected Desktop state path %q", desktop.StateDir)
+	}
+}
+
+func TestManagedDesktopRequiresExplicitPerUserOptIn(t *testing.T) {
+	home := t.TempDir()
+	options := ResolveOptions{
+		Home: home, Cwd: t.TempDir(), Desktop: true,
+		Env: map[string]string{
+			"CLAUDE_OTEL_ENABLED":         "true",
+			"OTEL_EXPORTER_OTLP_ENDPOINT": "https://env.invalid",
+		},
+	}
+	writeConfig(t, filepath.Join(home, ".claude", "gtrace.json"), map[string]any{
+		"enabled": true, "endpoint": "https://legacy.invalid",
+	})
+	if cfg := Resolve(options); cfg.Enabled || cfg.Transport.Endpoint != "" || cfg.StateDir != "" {
+		t.Fatal("machine registration alone inherited legacy or environment transport")
+	}
+	path := filepath.Join(home, ".obs-agent-connector", "claude-desktop", "gtrace.json")
+	for _, value := range []any{nil, "true", false} {
+		writeConfig(t, path, map[string]any{"enabled": value, "endpoint": "https://desktop.invalid"})
+		if cfg := Resolve(options); cfg.Enabled || cfg.Transport.Endpoint != "" || cfg.StateDir != "" {
+			t.Fatalf("managed Hook unexpectedly opted in with enabled=%v", value)
+		}
+	}
+	writeConfig(t, path, map[string]any{"enabled": true, "endpoint": "https://desktop.invalid"})
+	if cfg := Resolve(options); !cfg.Enabled || cfg.Transport.Endpoint != "https://desktop.invalid" {
+		t.Fatal("an explicitly enabled Desktop configuration was not used")
+	}
+}

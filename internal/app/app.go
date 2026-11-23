@@ -1,6 +1,10 @@
 package app
 
-import "fmt"
+import (
+	"fmt"
+
+	telemetryinstall "github.com/GuanceCloud/obs-agent-connector/internal/install"
+)
 
 const (
 	appName            = "obs-agent-connector"
@@ -50,6 +54,9 @@ func Run(args []string) error {
 		if len(args) >= 2 && args[1] == "merge-config" {
 			return mergeConnectorConfig(args[2:])
 		}
+		if len(args) >= 2 && args[1] == telemetryinstall.ManagedDesktopAdminCommand {
+			return telemetryinstall.ApplyClaudeDesktopManaged(args[2:])
+		}
 		return fmt.Errorf("unknown internal command")
 	case "-h", "--help", "help":
 		printUsage()
@@ -78,6 +85,8 @@ Commands:
   remove <agent>        Remove an Agent plugin
   uninstall             Uninstall obs-agent-connector and its managed built-in Hooks
   version               Show version and check for updates
+
+On macOS, install, status, update, and remove manage Claude Desktop machine Hooks.
 
 `, appName)
 }

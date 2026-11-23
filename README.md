@@ -6,7 +6,7 @@ The current stable release is [v0.1.30](https://github.com/GuanceCloud/obs-agent
 
 ## Features
 
-- Built-in telemetry adapters for Claude, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, Pi, QwenWork CN, and WorkBuddy, with one binary and one version.
+- Built-in telemetry adapters for Claude, Claude Desktop, CodeBuddy, Codex, Cursor, Deep Agents Code, Grok Build, Kiro CLI, OMP, Pi, QwenWork CN, and WorkBuddy, with one binary and one version.
 - External plugin installation through standard OSS or GitHub Release installers.
 - Local Agent discovery, installation, updates, status, configuration, enable/disable, and removal.
 - Shared endpoint and X-Token defaults, automatically generated Agent identities, and configuration-preserving plugin updates.
@@ -47,6 +47,7 @@ For a specific version or GitHub download source, see the [distribution guide](d
 | Agent | Plugin | macOS | Linux | Windows | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `claude` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook adapter |
+| `claude-desktop` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Machine Hooks for local Code and Cowork. Linux and Windows native validation is pending for the RC. |
 | `codebuddy` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop / SessionEnd Hook plus native `index.json` replay; Linux x64 is product-validated |
 | `codex` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Stop Hook adapter plus built-in Codex trust/config handling |
 | `cursor` | Built into `obs-agent-connector` | `✅` | `✅` | `✅` | Detects `~/.cursor`, prefers `cursor-agent`, and manages user-level Cursor Hooks |
@@ -75,6 +76,7 @@ obs-agent-connector agents                 # List supported Agents and platforms
 obs-agent-connector discover               # Detect Agents and install missing plugins
 obs-agent-connector discover -u            # Sync all detected plugins
 obs-agent-connector install codex          # Install one Agent integration
+obs-agent-connector install claude-desktop  # Register machine Hooks
 obs-agent-connector install omp
 obs-agent-connector install pi
 obs-agent-connector install workbuddy
@@ -93,7 +95,11 @@ obs-agent-connector version -u             # Update the connector binary
 
 `install` and `discover` reuse stored endpoint and X-Token defaults and generate Agent ID and Agent Name unless explicitly supplied. `update` requires one Agent name and preserves configuration with `--no-config`.
 
-Built-in adapters store configuration, Hook logs, and replay state under `~/.obs-agent-connector/<agent>/`. External installers own their runtime configuration. Removing a built-in adapter deletes its managed Hooks and directory; legacy Agent-local configuration remains unless `--purge-config` is supplied. Use `uninstall --keep-config` to retain connector-managed configuration.
+Claude Desktop machine Hook installation requires administrator authorization through
+sudo on macOS and Linux or UAC on Windows.
+[Claude Desktop setup](docs/plugins.md#claude-desktop)
+
+Built-in adapters store their runtime files under `~/.obs-agent-connector/<agent>/`. External installers own their runtime configuration. Removing a built-in adapter clears its connector-owned files. Claude Desktop machine removal keeps per-user configuration and shared upload state. Use `--purge-config` to remove legacy Agent-local configuration and `uninstall --keep-config` to keep connector-managed configuration during uninstall.
 
 After migrating WorkBuddy from the external plugin, restart WorkBuddy to load the managed Hooks. See [WorkBuddy migration](docs/product-research/workbuddy.md). OMP uses a bundled native extension and the built-in Go collector; see [OMP setup and limitations](docs/product-research/omp.md).
 

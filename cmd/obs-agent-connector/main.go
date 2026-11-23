@@ -31,6 +31,8 @@ func main() {
 			os.Exit(qwenworkhook.RunCLI(os.Args[3:]))
 		case "claude":
 			os.Exit(claudehook.RunCLI())
+		case "claude-desktop":
+			os.Exit(claudehook.RunDesktopCLI(os.Args[3:]))
 		case "codebuddy":
 			os.Exit(codebuddyhook.RunCLI(os.Args[3:]))
 		case "codex":

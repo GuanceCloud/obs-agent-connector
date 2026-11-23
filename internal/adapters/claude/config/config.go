@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/agentfiles"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/transport"
 )
@@ -30,19 +31,27 @@ type Config struct {
 }
 
 type ResolveOptions struct {
-	Env  map[string]string
-	Home string
-	Cwd  string
+	Env     map[string]string
+	Home    string
+	Cwd     string
+	Desktop bool
 }
 
 func Resolve(options ResolveOptions) Config {
-	env := options.Env
-	if env == nil {
-		env = environment()
-	}
 	home := options.Home
 	if home == "" {
 		home, _ = os.UserHomeDir()
+	}
+	var desktopSettings map[string]any
+	if options.Desktop {
+		desktopSettings = readJSON(agentfiles.ConfigPath(home, desktop.Name))
+		if enabled, _ := desktopSettings["enabled"].(bool); !enabled {
+			return Config{}
+		}
+	}
+	env := options.Env
+	if env == nil {
+		env = environment()
 	}
 	cwd := options.Cwd
 	if cwd == "" {
@@ -70,6 +79,18 @@ func Resolve(options ResolveOptions) Config {
 		readJSON(filepath.Join(cwd, ".claude", "gtrace.json")),
 		readJSON(agentfiles.ConfigPath(home, "claude")),
 		ordinaryEnvironment(env),
+	}
+	adapter := "claude"
+	stateConfig := merged
+	if options.Desktop {
+		adapter = desktop.Name
+		// Reuse the ledger resolved by the Claude hook, with its existing
+		// precedence, but read Desktop transport and capture settings separately.
+		stateConfig = map[string]any{}
+		for _, source := range sources {
+			merge(stateConfig, source)
+		}
+		sources = []map[string]any{desktopSettings}
 	}
 	for _, source := range sources {
 		merge(merged, source)
@@ -113,8 +134,8 @@ func Resolve(options ResolveOptions) Config {
 		MaxChars:           maxChars,
 		Debug:              boolValue(merged["debug"]),
 		UserID:             firstString(merged, "user_id", "userId"),
-		HookLogFile:        agentfiles.HookLogPath(home, "claude"),
-		StateDir:           firstNonEmpty(firstString(merged, "state_dir"), filepath.Join(home, ".claude", "state", "gtrace-agent")),
+		HookLogFile:        agentfiles.HookLogPath(home, adapter),
+		StateDir:           firstNonEmpty(firstString(stateConfig, "state_dir"), filepath.Join(home, ".claude", "state", "gtrace-agent")),
 	}
 }
 

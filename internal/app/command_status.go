@@ -29,6 +29,13 @@ func status(args []string) error {
 	if fs.NArg() > 0 {
 		return fmt.Errorf("unrecognized status arguments: %s", strings.Join(fs.Args(), " "))
 	}
+	machine, err := managedDesktopTarget(target)
+	if err != nil {
+		return err
+	}
+	if machine {
+		return claudeDesktopManagedStatus()
+	}
 
 	selected, err := agent.Select(target)
 	if err != nil {

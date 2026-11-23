@@ -7,6 +7,7 @@
 Supported Agents:
 
 - `claude`
+- `claude-desktop`
 - `codebuddy`
 - `codex`
 - `cursor`
@@ -24,7 +25,7 @@ Supported Agents:
 Notes:
 
 - `qoder` automatically detects global vs CN layouts
-- Windows currently supports `claude`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `kiro`, `mimo`, `opencode`, `openclaw`, `pi`, `qoder`, and `workbuddy`
+- Windows currently supports `claude`, `claude-desktop`, `codebuddy`, `codex`, `cursor`, `dcode`, `dsh`, `kiro`, `mimo`, `opencode`, `openclaw`, `pi`, `qoder`, and `workbuddy`
 
 ## Install obs-agent-connector
 
@@ -334,8 +335,9 @@ Parameters:
 Behavior:
 
 - removes the current connector binary
-- removes all managed built-in adapters, including Pi, and compatible legacy plugin residue where applicable
+- removes per-user built-in adapters, including Pi, and compatible legacy plugin residue where applicable
 - removes connector-managed per-Agent config, Hook logs, and upload state by default
+- keeps Claude Desktop's account config and shared Claude upload state while its machine files are present. Run `remove claude-desktop` before uninstalling to remove the machine files.
 - removes the global connector config by default
 - with `--keep-config`, preserves global and per-Agent config while still removing Hooks, logs, and upload state
 - removes the PATH entry previously added by the installer when it can be identified
@@ -401,6 +403,7 @@ Notes:
 - if `--agent-name` is omitted, the CLI generates `<hostname>_<agent>_<YYYYMMDD>`
 - `install` accepts a single Agent target only
 - Claude installation replaces legacy `claude-otel-plugin` Hook entries and preserves unrelated `Stop` and `SessionEnd` Hooks
+- `install claude-desktop` registers machine Hooks for local Code and Cowork with administrator authorization on macOS, Linux, and Windows. [Claude Desktop setup](plugins.md#claude-desktop)
 - CodeBuddy installation replaces legacy `codebuddy-hook` entries and preserves unrelated `Stop` and `SessionEnd` Hooks
 - Codex installation replaces legacy `codex-otel-plugin` Hook entries, updates managed Stop Hooks, and preserves unrelated Hook entries
 - Codex installation, discovery, runtime state, trust, and removal use `CODEX_HOME`; when it is unset, they use `~/.codex`
@@ -456,6 +459,7 @@ Notes:
 - these commands update the Agent runtime config in place
 - currently supported:
   - `claude`
+  - `claude-desktop`
   - `codebuddy`
   - `codex`
   - `cursor`
@@ -489,10 +493,10 @@ Parameters:
 
 Notes:
 
-- built-in removal always deletes `~/.obs-agent-connector/<agent>/`, including its managed `gtrace.json` and `gtrace-hooks.json`
+- built-in removal deletes connector-owned user files. `remove claude-desktop` removes the machine policy and runtime and keeps the per-user configuration.
 - legacy Agent-local and external plugin configuration is kept unless `--purge-config` is supplied
 - `remove` accepts a single Agent target only
-- `remove claude` and `remove codebuddy` preserve unrelated entries in their settings files
+- `remove claude` and `remove codebuddy` preserve unrelated entries in their settings files. If Desktop Hooks remain, `remove claude` keeps Claude's shared upload ledger and `state_dir`.
 - `remove dcode` removes connector-owned handlers from `~/.deepagents/hooks.json` and preserves unrelated Hook groups and handlers
 - `remove kiro` removes connector-owned entries from `~/.kiro/hooks/obs-agent-connector.json` and preserves unrelated entries
 - `remove codex` removes connector-owned Codex Hooks and trust state and also attempts to clean legacy `codex-otel-plugin` residue without blocking removal on legacy cleanup failures
@@ -536,6 +540,7 @@ Notes:
 Supported Agents on Windows:
 
 - `claude`
+- `claude-desktop`
 - `codebuddy`
 - `codex`
 - `cursor`
@@ -551,7 +556,7 @@ Supported Agents on Windows:
 
 Notes:
 
-- built-in adapters register the current connector executable directly
+- built-in adapters register the current connector executable directly. Claude Desktop registers machine Hooks with administrator authorization.
 - external plugins use the PowerShell installer from the configured OSS or GitHub source
 - unsupported Agents return a friendly error
 

@@ -7,14 +7,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/buildinfo"
 	claudeconfig "github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/config"
+	"github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/desktop"
 	claudeparse "github.com/GuanceCloud/obs-agent-connector/internal/adapters/claude/parse"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/hooklog"
 	"github.com/GuanceCloud/obs-agent-connector/internal/core/metrics"
@@ -31,15 +34,35 @@ type RunOptions struct {
 	ReadInput  func() (map[string]any, error)
 	HTTPClient *http.Client
 	SkipWait   bool
+	Desktop    bool
+	Entrypoint string
 }
 
 func RunCLI() int {
-	cwd, _ := os.Getwd()
-	cfg := claudeconfig.Resolve(claudeconfig.ResolveOptions{Cwd: cwd})
+	return runCLI(claudeconfig.ResolveOptions{})
+}
+
+func RunDesktopCLI(args []string) int {
+	if len(args) != 1 || args[0] != desktop.ManagedArgument || !desktop.SupportsManagedOS(runtime.GOOS) {
+		return 0
+	}
+	home, err := desktop.ManagedHome()
+	if err != nil {
+		return 0
+	}
+	return runCLI(claudeconfig.ResolveOptions{Desktop: true, Home: home})
+}
+
+func runCLI(options claudeconfig.ResolveOptions) int {
+	cfg := claudeconfig.Resolve(options)
 	if !cfg.Enabled {
 		return 0
 	}
-	if err := RunWithOptions(RunOptions{Config: &cfg}); err != nil {
+	if err := RunWithOptions(RunOptions{
+		Config:     &cfg,
+		Desktop:    options.Desktop,
+		Entrypoint: os.Getenv("CLAUDE_CODE_ENTRYPOINT"),
+	}); err != nil {
 		appendLog(cfg, "failed", map[string]any{"error": err.Error()})
 		if cfg.Debug {
 			fmt.Fprintf(os.Stderr, "[gtrace-claude-hook] %v\n", err)
@@ -53,7 +76,7 @@ func RunWithOptions(options RunOptions) error {
 	if options.Config != nil {
 		cfg = *options.Config
 	} else {
-		cfg = claudeconfig.Resolve(claudeconfig.ResolveOptions{})
+		cfg = claudeconfig.Resolve(claudeconfig.ResolveOptions{Desktop: options.Desktop})
 	}
 	if !cfg.Enabled {
 		return nil
@@ -63,8 +86,11 @@ func RunWithOptions(options RunOptions) error {
 		return err
 	}
 	parsedPayload := parsePayload(payload)
+	if options.Desktop && parsedPayload.EventName != "Stop" && parsedPayload.EventName != "SessionEnd" {
+		return nil
+	}
 	if parsedPayload.Cwd != "" && options.Config == nil {
-		cfg = claudeconfig.Resolve(claudeconfig.ResolveOptions{Cwd: parsedPayload.Cwd})
+		cfg = claudeconfig.Resolve(claudeconfig.ResolveOptions{Cwd: parsedPayload.Cwd, Desktop: options.Desktop})
 		if !cfg.Enabled {
 			return nil
 		}
@@ -91,6 +117,18 @@ func RunWithOptions(options RunOptions) error {
 	messages, err := claudeparse.ReadTranscript(absoluteTranscript)
 	if err != nil {
 		return err
+	}
+	surface := desktopSurface(options.Entrypoint, messages)
+	if surface != "" {
+		parsedPayload.AgentRuntime = desktop.Name
+		cfg.ResourceAttributes = maps.Clone(cfg.ResourceAttributes)
+		if cfg.ResourceAttributes == nil {
+			cfg.ResourceAttributes = map[string]any{}
+		}
+		cfg.ResourceAttributes["claude_surface"] = surface
+	} else if options.Desktop {
+		appendLog(cfg, "unsupported Claude Desktop session", map[string]any{"event": parsedPayload.EventName})
+		return nil
 	}
 	turns := claudeparse.Normalize(parsedPayload, cfg, messages)
 	if len(turns) == 0 {
@@ -119,6 +157,7 @@ func RunWithOptions(options RunOptions) error {
 		"spans":           spanCount,
 		"metrics":         metricCount,
 		"session_id":      parsedPayload.SessionID,
+		"surface":         surface,
 	})
 	manager := state.Manager{
 		Root:       filepath.Join(cfg.StateDir, "uploads"),
@@ -208,6 +247,27 @@ func RunWithOptions(options RunOptions) error {
 		}()
 	}
 	return nil
+}
+
+func desktopSurface(entrypoint string, messages []map[string]any) string {
+	switch entrypoint {
+	case "local-agent":
+		return "cowork"
+	case "claude-desktop", "claude-desktop-3p":
+		return "code"
+	}
+	for _, message := range messages {
+		if message["clientPlatform"] != "desktop_app" {
+			continue
+		}
+		switch message["entrypoint"] {
+		case "local-agent":
+			return "cowork"
+		case "claude-desktop", "claude-desktop-3p":
+			return "code"
+		}
+	}
+	return ""
 }
 
 func resolvePayload(options RunOptions) (map[string]any, error) {

@@ -8,24 +8,25 @@ import (
 )
 
 var definitions = map[string]Definition{
-	"qwenwork-cn": qwenWorkPlugin(),
-	"claude":      claudePlugin(),
-	"codebuddy":   codeBuddyPlugin(),
-	"codex":       codexPlugin(),
-	"cursor":      cursorPlugin(),
-	"dcode":       dcodePlugin(),
-	"dsh":         dshPlugin(),
-	"grok":        grokPlugin(),
-	"hermes":      hermesPlugin(),
-	"kiro":        kiroPlugin(),
-	"omp":         ompPlugin(),
-	"mimo":        mimoPlugin(),
-	"pi":          piPlugin(),
-	"opencode":    opencodePlugin(),
-	"openclaw":    openClawPlugin(),
-	"qoder":       qoderPlugin(),
-	"qoder-cn":    qoderCNPlugin(),
-	"workbuddy":   workBuddyPlugin(),
+	"qwenwork-cn":    qwenWorkPlugin(),
+	"claude":         claudePlugin(),
+	"claude-desktop": claudeDesktopPlugin(),
+	"codebuddy":      codeBuddyPlugin(),
+	"codex":          codexPlugin(),
+	"cursor":         cursorPlugin(),
+	"dcode":          dcodePlugin(),
+	"dsh":            dshPlugin(),
+	"grok":           grokPlugin(),
+	"hermes":         hermesPlugin(),
+	"kiro":           kiroPlugin(),
+	"omp":            ompPlugin(),
+	"mimo":           mimoPlugin(),
+	"pi":             piPlugin(),
+	"opencode":       opencodePlugin(),
+	"openclaw":       openClawPlugin(),
+	"qoder":          qoderPlugin(),
+	"qoder-cn":       qoderCNPlugin(),
+	"workbuddy":      workBuddyPlugin(),
 }
 
 func Get(name string) Definition {
@@ -60,7 +61,8 @@ func SelectInstalled(target string) ([]Definition, error) {
 	out := make([]Definition, 0, len(selected))
 	for _, p := range selected {
 		p = Resolve(p)
-		if _, ok := InstalledMarker(p); ok {
+		_, installed := InstalledMarker(p)
+		if installed {
 			out = append(out, p)
 			continue
 		}
@@ -118,7 +120,7 @@ func DiscoverCandidatesForOS(goos string) []Candidate {
 		} else {
 			p = Resolve(p)
 		}
-		command, ok := detectAgentCommand(p)
+		command, ok := detectAgentCommand(p, goos)
 		if !ok {
 			if !p.DiscoveryCommandOptional {
 				continue
@@ -196,9 +198,16 @@ func SupportsPlatform(p Definition, goos string) bool {
 	return true
 }
 
-func detectAgentCommand(p Definition) (string, bool) {
-	if _, err := exec.LookPath(p.AgentCommand); err == nil {
-		return p.AgentCommand, true
+func detectAgentCommand(p Definition, goos string) (string, bool) {
+	if p.DiscoverCommand != nil {
+		return p.DiscoverCommand(goos)
+	}
+	return lookupAgentCommand(p.AgentCommand)
+}
+
+func lookupAgentCommand(command string) (string, bool) {
+	if _, err := exec.LookPath(command); err == nil {
+		return command, true
 	}
 	return "", false
 }
